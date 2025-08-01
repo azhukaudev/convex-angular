@@ -6,7 +6,7 @@
 
 The Angular client for Convex.
 
-## 🧩 Features
+## ✨ Features
 
 - 🔌 Core providers: `injectQuery`, `injectMutation`, `injectAction`, and `injectConvex`
 - 📡 Signal Integration: [Angular Signals](https://angular.dev/guide/signals) for reactive state
