@@ -1,5 +1,11 @@
 # convex-angular
 
+## [0.4.1](https://github.com/azhukaudev/convex-angular/compare/v0.4.0...v0.4.1) (2025-12-16)
+
+### 📖 Documentation
+
+- Update links
+
 ## [0.4.0](https://github.com/azhukaudev/convex-angular/compare/v0.3.0...v0.4.0) (2025-12-16)
 
 ### 🏡 Chore

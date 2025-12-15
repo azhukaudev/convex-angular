@@ -1,16 +1,16 @@
 {
   "name": "convex-angular",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "The Angular client for Convex",
   "keywords": [
     "angular",
     "convex"
   ],
-  "homepage": "https://github.com/azhukau-dev/convex-angular",
+  "homepage": "https://github.com/azhukaudev/convex-angular",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/azhukau-dev/convex-angular",
+    "url": "https://github.com/azhukaudev/convex-angular",
     "directory": "packages/convex-angular"
   },
   "author": {

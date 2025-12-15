@@ -1,7 +1,7 @@
 # convex-angular
 
 [![NPM version](https://img.shields.io/npm/v/convex-angular?color=limegreen&label=npm)](https://www.npmjs.com/package/convex-angular)
-[![GitHub license](https://img.shields.io/badge/license-MIT-limegreen.svg)](https://github.com/azhukau-dev/convex-angular/blob/main/LICENSE)
+[![GitHub license](https://img.shields.io/badge/license-MIT-limegreen.svg)](https://github.com/azhukaudev/convex-angular/blob/main/LICENSE)
 [![NPM downloads](https://img.shields.io/npm/dm/convex-angular?color=limegreen&label=downloads)](https://www.npmjs.com/package/convex-angular)
 
 The Angular client for Convex.
@@ -119,4 +119,4 @@ Contributions are welcome! Please feel free to submit a pull request.
 
 ## ⚖️ License
 
-[MIT](https://github.com/azhukau-dev/convex-angular/blob/main/LICENSE)
+[MIT](https://github.com/azhukaudev/convex-angular/blob/main/LICENSE)
