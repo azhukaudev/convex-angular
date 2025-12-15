@@ -1,6 +1,13 @@
 # convex-angular
 
-## [0.3.0](https://github.com/azhukau-dev/convex-angular/compare/v0.2.0...v0.3.0) (2025-08-01)
+## [0.4.0](https://github.com/azhukaudev/convex-angular/compare/v0.3.0...v0.4.0) (2025-12-16)
+
+### 🏡 Chore
+
+- Update Convex to v1.31.0
+- Update Nx to v22.2.4
+
+## [0.3.0](https://github.com/azhukaudev/convex-angular/compare/v0.2.0...v0.3.0) (2025-08-01)
 
 ### 📖 Documentation
 
@@ -11,7 +18,7 @@
 - Update Angular to v20.1.4
 - Update Nx to v21.3.10
 
-## [0.2.0](https://github.com/azhukau-dev/convex-angular/compare/0.1.0...v0.2.0) (2025-07-20)
+## [0.2.0](https://github.com/azhukaudev/convex-angular/compare/0.1.0...v0.2.0) (2025-07-20)
 
 ### 📖 Documentation
 
