@@ -8,7 +8,8 @@ The Angular client for Convex.
 
 ## ✨ Features
 
-- 🔌 Core providers: `injectQuery`, `injectMutation`, `injectAction`, and `injectConvex`
+- 🔌 Core providers: `injectQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, and `injectConvex`
+- 📄 Pagination: Built-in support for paginated queries with `loadMore` and `reset`
 - 📡 Signal Integration: [Angular Signals](https://angular.dev/guide/signals) for reactive state
 - 🛡️ Error Handling: Built-in error states and loading
 - 🧹 Auto Cleanup: Automatic lifecycle management
@@ -92,6 +93,51 @@ export class AppComponent {
   readonly resetTodos = injectAction(api.todoFunctions.resetTodos);
 }
 ```
+
+### Paginated queries
+
+Use `injectPaginatedQuery` for infinite scroll or "load more" patterns.
+
+```typescript
+import { injectPaginatedQuery } from 'convex-angular';
+
+@Component({
+  selector: 'app-root',
+  template: `
+    <ul>
+      @for (todo of todos.results(); track todo._id) {
+        <li>{{ todo.title }}</li>
+      }
+    </ul>
+
+    @if (todos.canLoadMore()) {
+      <button (click)="todos.loadMore(10)">Load More</button>
+    }
+
+    @if (todos.isExhausted()) {
+      <p>All items loaded</p>
+    }
+  `,
+})
+export class AppComponent {
+  readonly todos = injectPaginatedQuery(
+    api.todos.listTodosPaginated,
+    () => ({}),
+    () => ({ initialNumItems: 10 }),
+  );
+}
+```
+
+The paginated query returns:
+
+- `results()` - Accumulated results from all loaded pages
+- `isLoadingFirstPage()` - True when loading the first page
+- `isLoadingMore()` - True when loading additional pages
+- `canLoadMore()` - True when more items are available
+- `isExhausted()` - True when all items have been loaded
+- `error()` - Error if the query failed
+- `loadMore(n)` - Load `n` more items
+- `reset()` - Reset pagination and reload from the beginning
 
 ### Using the Convex client
 

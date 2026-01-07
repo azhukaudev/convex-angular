@@ -1,3 +1,4 @@
+import { paginationOptsValidator } from 'convex/server';
 import { v } from 'convex/values';
 
 import { internalMutation, mutation, query } from './_generated/server';
@@ -9,6 +10,18 @@ export const listTodos = query({
   handler: async (ctx, args) => {
     const { count } = args;
     return await ctx.db.query('todos').order('desc').take(count);
+  },
+});
+
+export const listTodosPaginated = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query('todos')
+      .order('desc')
+      .paginate(args.paginationOpts);
   },
 });
 

@@ -1,0 +1,119 @@
+<div class="mx-auto flex min-h-svh max-w-4xl flex-col gap-12 px-4 py-12">
+  <!-- Hero Section -->
+  <header class="flex flex-col items-center gap-6 text-center">
+    <h1 class="text-5xl font-extrabold tracking-tight">convex-angular</h1>
+    <p class="text-xl text-gray-600">The Angular client for Convex</p>
+
+    <div
+      class="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 font-mono text-sm"
+    >
+      <span class="text-gray-500">$</span>
+      <code>npm install convex convex-angular</code>
+    </div>
+
+    <div class="flex gap-3">
+      <a
+        href="https://github.com/azhukaudev/convex-angular"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <p-button icon="pi pi-github" label="GitHub" severity="secondary" />
+      </a>
+      <a
+        href="https://www.npmjs.com/package/convex-angular"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <p-button icon="pi pi-box" label="npm" severity="secondary" />
+      </a>
+    </div>
+  </header>
+
+  <!-- Features Section -->
+  <section class="flex flex-col gap-6">
+    <h2 class="text-center text-2xl font-bold">Features</h2>
+
+    <div class="grid gap-6 md:grid-cols-2">
+      @for (feature of features; track feature.name) {
+        <p-card>
+          <ng-template #header>
+            <div class="px-4 pt-4">
+              <h3 class="text-primary text-lg font-semibold">
+                {{ feature.name }}
+              </h3>
+              <p class="text-sm text-gray-600">{{ feature.description }}</p>
+            </div>
+          </ng-template>
+          <pre
+            class="overflow-x-auto rounded-md bg-gray-900 p-3 text-xs text-gray-100"
+          ><code>{{ feature.code }}</code></pre>
+        </p-card>
+      }
+    </div>
+  </section>
+
+  <!-- Examples Section -->
+  <section class="flex flex-col gap-6">
+    <h2 class="text-center text-2xl font-bold">Live Examples</h2>
+
+    <div class="grid gap-6 md:grid-cols-2">
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h3 class="text-lg font-semibold">Basic Example</h3>
+            <p class="text-sm text-gray-600">
+              Todo list using injectQuery, injectMutation, and injectAction
+            </p>
+          </div>
+        </ng-template>
+        <p class="mb-4 text-sm text-gray-500">
+          Demonstrates fetching data, adding/completing/deleting todos, and
+          running bulk actions.
+        </p>
+        <a routerLink="/examples/basic">
+          <p-button
+            icon="pi pi-arrow-right"
+            iconPos="right"
+            label="View Example"
+          />
+        </a>
+      </p-card>
+
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h3 class="text-lg font-semibold">Paginated Example</h3>
+            <p class="text-sm text-gray-600">
+              Todo list using injectPaginatedQuery with load more
+            </p>
+          </div>
+        </ng-template>
+        <p class="mb-4 text-sm text-gray-500">
+          Demonstrates paginated queries, loading more items, and resetting
+          pagination.
+        </p>
+        <a routerLink="/examples/paginated">
+          <p-button
+            icon="pi pi-arrow-right"
+            iconPos="right"
+            label="View Example"
+          />
+        </a>
+      </p-card>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="mt-auto text-center text-sm text-gray-500">
+    <p>
+      Made with ❤️ for the Angular community.
+      <a
+        href="https://github.com/azhukaudev/convex-angular/blob/main/LICENSE"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-primary hover:underline"
+        >MIT License</a
+      >
+    </p>
+  </footer>
+</div>
