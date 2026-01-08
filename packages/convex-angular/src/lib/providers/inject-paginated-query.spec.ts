@@ -3,6 +3,7 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, PaginationResult } from 'convex/server';
 
+import { skipToken } from '../skip-token';
 import { CONVEX } from '../tokens/convex';
 import {
   PaginatedQueryReference,
@@ -509,4 +510,253 @@ describe('injectPaginatedQuery', () => {
 
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
   }));
+
+  describe('skipToken', () => {
+    it('should not subscribe when skipToken is returned', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => skipToken,
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(
+        mockConvexClient.onPaginatedUpdate_experimental,
+      ).not.toHaveBeenCalled();
+    }));
+
+    it('should set isSkipped to true when skipToken is returned', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => skipToken,
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+    }));
+
+    it('should set results to empty array when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => skipToken,
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.results()).toEqual([]);
+    }));
+
+    it('should set all loading/status signals correctly when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => skipToken,
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(false);
+      expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
+      expect(fixture.componentInstance.todos.canLoadMore()).toBe(false);
+      expect(fixture.componentInstance.todos.isExhausted()).toBe(false);
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+    }));
+
+    it('should conditionally skip based on signal value', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly category = signal<string | null>(null);
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => (this.category() ? { category: this.category() } : skipToken),
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Initially skipped
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+      expect(
+        mockConvexClient.onPaginatedUpdate_experimental,
+      ).not.toHaveBeenCalled();
+
+      // Set category to enable query
+      fixture.componentInstance.category.set('work');
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+      expect(
+        mockConvexClient.onPaginatedUpdate_experimental,
+      ).toHaveBeenCalled();
+    }));
+
+    it('should clear results when transitioning to skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(false);
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => (this.shouldSkip() ? skipToken : {}),
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Load some data
+      onUpdateCallback({
+        results: [{ _id: '1', name: 'Todo 1' }],
+        status: 'CanLoadMore',
+        loadMore: jest.fn(),
+      });
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.todos.results().length).toBe(1);
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+
+      // Skip the query
+      fixture.componentInstance.shouldSkip.set(true);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.results()).toEqual([]);
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+    }));
+
+    it('should unsubscribe when transitioning to skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(false);
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => (this.shouldSkip() ? skipToken : {}),
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(
+        mockConvexClient.onPaginatedUpdate_experimental,
+      ).toHaveBeenCalled();
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+
+      // Skip the query
+      fixture.componentInstance.shouldSkip.set(true);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockUnsubscribe).toHaveBeenCalled();
+    }));
+
+    it('should resubscribe when transitioning from skipped to active', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(true);
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => (this.shouldSkip() ? skipToken : {}),
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(
+        mockConvexClient.onPaginatedUpdate_experimental,
+      ).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+
+      // Enable the query
+      fixture.componentInstance.shouldSkip.set(false);
+      fixture.detectChanges();
+      tick();
+
+      expect(
+        mockConvexClient.onPaginatedUpdate_experimental,
+      ).toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+      expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
+    }));
+
+    it('should return false from loadMore when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => skipToken,
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const result = fixture.componentInstance.todos.loadMore(5);
+      expect(result).toBe(false);
+    }));
+  });
 });

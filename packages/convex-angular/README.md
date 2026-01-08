@@ -10,6 +10,7 @@ The Angular client for Convex.
 
 - 🔌 Core providers: `injectQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, and `injectConvex`
 - 📄 Pagination: Built-in support for paginated queries with `loadMore` and `reset`
+- ⏭️ Conditional Queries: Use `skipToken` to conditionally skip queries
 - 📡 Signal Integration: [Angular Signals](https://angular.dev/guide/signals) for reactive state
 - 🛡️ Error Handling: Built-in error states and loading
 - 🧹 Auto Cleanup: Automatic lifecycle management
@@ -54,7 +55,7 @@ import { injectQuery } from 'convex-angular';
   `,
 })
 export class AppComponent {
-  readonly todos = injectQuery(api.todo.listTodos);
+  readonly todos = injectQuery(api.todo.listTodos, () => ({}));
 }
 ```
 
@@ -135,9 +136,46 @@ The paginated query returns:
 - `isLoadingMore()` - True when loading additional pages
 - `canLoadMore()` - True when more items are available
 - `isExhausted()` - True when all items have been loaded
+- `isSkipped()` - True when the query is skipped via `skipToken`
 - `error()` - Error if the query failed
 - `loadMore(n)` - Load `n` more items
 - `reset()` - Reset pagination and reload from the beginning
+
+### Conditional queries with skipToken
+
+Use `skipToken` to conditionally skip a query when certain conditions aren't met.
+
+```typescript
+import { signal } from '@angular/core';
+import { injectQuery, skipToken } from 'convex-angular';
+
+@Component({
+  selector: 'app-root',
+  template: `
+    @if (user.isSkipped()) {
+      <p>Select a user to view profile</p>
+    } @else if (user.isLoading()) {
+      <p>Loading...</p>
+    } @else {
+      <p>{{ user.data()?.name }}</p>
+    }
+  `,
+})
+export class AppComponent {
+  readonly userId = signal<string | null>(null);
+
+  // Query is skipped when userId is null
+  readonly user = injectQuery(api.users.getProfile, () =>
+    this.userId() ? { userId: this.userId() } : skipToken,
+  );
+}
+```
+
+This is useful when:
+
+- Query arguments depend on user selection
+- You need to wait for authentication before fetching data
+- A parent query must complete before running a dependent query
 
 ### Using the Convex client
 

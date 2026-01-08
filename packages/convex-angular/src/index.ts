@@ -1,4 +1,5 @@
 export * from './lib/tokens/convex';
+export * from './lib/skip-token';
 export * from './lib/providers/inject-action';
 export * from './lib/providers/inject-convex';
 export * from './lib/providers/inject-mutation';

@@ -12,24 +12,13 @@ import {
   getFunctionName,
 } from 'convex/server';
 
+import { SkipToken, skipToken } from '../skip-token';
 import { injectConvex } from './inject-convex';
 
 /**
  * A FunctionReference that refers to a Convex query.
  */
 export type QueryReference = FunctionReference<'query'>;
-
-/**
- * Options for injectQuery.
- */
-export interface QueryOptions {
-  /**
-   * Whether the query subscription is enabled.
-   * When false, the query will not subscribe and data will be undefined.
-   * Defaults to true.
-   */
-  enabled?: boolean;
-}
 
 /**
  * The result of calling injectQuery.
@@ -52,6 +41,12 @@ export interface QueryResult<Query extends QueryReference> {
    * Becomes false once data or error is received.
    */
   isLoading: Signal<boolean>;
+
+  /**
+   * True when the query is skipped via skipToken.
+   * When skipped, data is undefined and no subscription is active.
+   */
+  isSkipped: Signal<boolean>;
 }
 
 /**
@@ -72,17 +67,18 @@ export interface QueryResult<Query extends QueryReference> {
  *   () => ({ category: category() }),
  * );
  *
- * // Conditionally enabled query
+ * // Conditionally skipped query using skipToken
  * const userId = signal<string | null>(null);
  * const userProfile = injectQuery(
  *   api.users.getProfile,
- *   () => ({ userId: userId()! }),
- *   () => ({ enabled: userId() !== null }),
+ *   () => userId() ? { userId: userId() } : skipToken,
  * );
  *
  * // In template:
  * // @if (todos.isLoading()) {
  * //   <span>Loading...</span>
+ * // } @else if (todos.isSkipped()) {
+ * //   <span>Select a user to view profile</span>
  * // } @else if (todos.error()) {
  * //   <span>Error: {{ todos.error()?.message }}</span>
  * // } @else {
@@ -93,51 +89,59 @@ export interface QueryResult<Query extends QueryReference> {
  * ```
  *
  * @param query - A FunctionReference to the query function
- * @param argsFn - A reactive function returning the query arguments
- * @param optionsFn - Optional reactive function returning query options
- * @returns A QueryResult with reactive data, error, and loading signals
+ * @param argsFn - A reactive function returning the query arguments, or skipToken to skip the query
+ * @returns A QueryResult with reactive data, error, loading, and skipped signals
  */
 export function injectQuery<Query extends QueryReference>(
   query: Query,
-  argsFn: () => Query['_args'],
-  optionsFn?: () => QueryOptions,
+  argsFn: () => Query['_args'] | SkipToken,
 ): QueryResult<Query> {
   assertInInjectionContext(injectQuery);
   const convex = injectConvex();
   const destroyRef = inject(DestroyRef);
 
-  // Initialize with cached data if available
-  const data = signal<FunctionReturnType<Query>>(
-    convex.client.localQueryResult(getFunctionName(query), argsFn()),
-  );
+  // Initialize signals
+  const data = signal<FunctionReturnType<Query>>(undefined);
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
+  const isSkipped = signal(false);
 
   // Track current subscription for cleanup
   let unsubscribe: (() => void) | undefined;
 
-  // Effect to reactively subscribe when args or options change
+  // Effect to reactively subscribe when args change
   effect(() => {
-    const options = optionsFn?.();
-    const enabled = options?.enabled ?? true;
+    const args = argsFn();
 
     // Cleanup previous subscription
     unsubscribe?.();
 
-    // If disabled, reset state and don't subscribe
-    if (!enabled) {
+    // If skipToken, reset state and don't subscribe
+    if (args === skipToken) {
       data.set(undefined);
       error.set(undefined);
       isLoading.set(false);
+      isSkipped.set(true);
       return;
     }
 
+    // Not skipped - try to get cached data and start subscription
+    isSkipped.set(false);
     isLoading.set(true);
+
+    // Initialize with cached data if available
+    const cachedData = convex.client.localQueryResult(
+      getFunctionName(query),
+      args,
+    );
+    if (cachedData !== undefined) {
+      data.set(cachedData);
+    }
 
     // Subscribe to the query
     unsubscribe = convex.onUpdate(
       query,
-      argsFn(),
+      args,
       (result: FunctionReturnType<Query>) => {
         data.set(result);
         error.set(undefined);
@@ -158,5 +162,6 @@ export function injectQuery<Query extends QueryReference>(
     data: data.asReadonly(),
     error: error.asReadonly(),
     isLoading: isLoading.asReadonly(),
+    isSkipped: isSkipped.asReadonly(),
   };
 }

@@ -14,6 +14,7 @@ import {
   PaginationResult,
 } from 'convex/server';
 
+import { SkipToken, skipToken } from '../skip-token';
 import { injectConvex } from './inject-convex';
 
 /**
@@ -112,6 +113,12 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
   isExhausted: Signal<boolean>;
 
   /**
+   * True when the query is skipped via skipToken.
+   * When skipped, results is empty and no subscription is active.
+   */
+  isSkipped: Signal<boolean>;
+
+  /**
    * Load more items.
    * @param numItems - Number of items to load
    * @returns true if loading was initiated, false if already loading or exhausted
@@ -137,21 +144,33 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
  *   () => ({ initialNumItems: 10 })
  * );
  *
+ * // Conditionally skipped query using skipToken
+ * const category = signal<string | null>(null);
+ * const filteredTodos = injectPaginatedQuery(
+ *   api.todos.listTodos,
+ *   () => category() ? { category: category() } : skipToken,
+ *   () => ({ initialNumItems: 10 })
+ * );
+ *
  * // In template:
- * // @for (todo of todos.results(); track todo._id) { ... }
- * // <button (click)="todos.loadMore(10)" [disabled]="!todos.canLoadMore()">
- * //   Load More
- * // </button>
+ * // @if (todos.isSkipped()) {
+ * //   <span>Select a category</span>
+ * // } @else {
+ * //   @for (todo of todos.results(); track todo._id) { ... }
+ * //   <button (click)="todos.loadMore(10)" [disabled]="!todos.canLoadMore()">
+ * //     Load More
+ * //   </button>
+ * // }
  * ```
  *
  * @param query - A FunctionReference to the paginated query function
- * @param argsFn - A function returning the arguments object for the query (excluding paginationOpts)
+ * @param argsFn - A function returning the arguments object for the query (excluding paginationOpts), or skipToken to skip
  * @param optionsFn - A function returning the pagination options including initialNumItems
  * @returns A PaginatedQueryResult with signals for results, status, and methods for loadMore/reset
  */
 export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   query: Query,
-  argsFn: () => PaginatedQueryArgs<Query>,
+  argsFn: () => PaginatedQueryArgs<Query> | SkipToken,
   optionsFn: () => PaginatedQueryOptions,
 ): PaginatedQueryResult<Query> {
   assertInInjectionContext(injectPaginatedQuery);
@@ -165,6 +184,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   const isLoadingMore = signal(false);
   const canLoadMore = signal(false);
   const isExhausted = signal(false);
+  const isSkipped = signal(false);
 
   // Track the loadMore function from the current subscription
   let currentLoadMore: ((numItems: number) => boolean) | undefined;
@@ -173,10 +193,9 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   // Version counter to trigger reset
   const resetVersion = signal(0);
 
-  const subscribe = () => {
+  const subscribe = (args: PaginatedQueryArgs<Query>) => {
     unsubscribe?.();
 
-    const args = argsFn();
     const options = optionsFn();
 
     // Reset state for new subscription
@@ -186,6 +205,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     isLoadingMore.set(false);
     canLoadMore.set(false);
     isExhausted.set(false);
+    isSkipped.set(false);
     currentLoadMore = undefined;
 
     unsubscribe = convex.onPaginatedUpdate_experimental(
@@ -248,11 +268,27 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   // Effect to reactively subscribe when args or options change
   effect(() => {
     // Track dependencies
-    argsFn();
+    const args = argsFn();
     optionsFn();
     resetVersion();
 
-    subscribe();
+    // Cleanup previous subscription
+    unsubscribe?.();
+
+    // If skipToken, reset state and don't subscribe
+    if (args === skipToken) {
+      results.set([]);
+      error.set(undefined);
+      isLoadingFirstPage.set(false);
+      isLoadingMore.set(false);
+      canLoadMore.set(false);
+      isExhausted.set(false);
+      isSkipped.set(true);
+      currentLoadMore = undefined;
+      return;
+    }
+
+    subscribe(args);
   });
 
   destroyRef.onDestroy(() => unsubscribe?.());
@@ -275,6 +311,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     isLoadingMore: isLoadingMore.asReadonly(),
     canLoadMore: canLoadMore.asReadonly(),
     isExhausted: isExhausted.asReadonly(),
+    isSkipped: isSkipped.asReadonly(),
     loadMore,
     reset,
   };

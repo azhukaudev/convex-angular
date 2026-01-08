@@ -3,6 +3,7 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
 
+import { skipToken } from '../skip-token';
 import { CONVEX } from '../tokens/convex';
 import { QueryReference, injectQuery } from './inject-query';
 
@@ -120,6 +121,22 @@ describe('injectQuery', () => {
       tick();
 
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
+    }));
+
+    it('should initialize with isSkipped false', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
     }));
   });
 
@@ -271,63 +288,125 @@ describe('injectQuery', () => {
     }));
   });
 
-  describe('enabled option', () => {
-    it('should subscribe when enabled is true (default)', fakeAsync(() => {
+  describe('skipToken', () => {
+    it('should not subscribe when skipToken is returned', fakeAsync(() => {
       @Component({
         template: '',
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectQuery(
-          mockQuery,
-          () => ({ count: 10 }),
-          () => ({ enabled: true }),
-        );
+        readonly todos = injectQuery(mockQuery, () => skipToken);
       }
 
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
     }));
 
-    it('should not subscribe when enabled is false', fakeAsync(() => {
+    it('should set isSkipped to true when skipToken is returned', fakeAsync(() => {
       @Component({
         template: '',
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectQuery(
-          mockQuery,
-          () => ({ count: 10 }),
-          () => ({ enabled: false }),
-        );
+        readonly todos = injectQuery(mockQuery, () => skipToken);
       }
 
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
       tick();
 
-      // onUpdate is called but immediately unsubscribed due to enabled: false
-      // Actually, looking at the code, it returns early before calling onUpdate
-      // Let me check the implementation again...
-      // The effect runs, checks enabled, and if false, it doesn't call onUpdate
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+    }));
+
+    it('should set data to undefined when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => skipToken);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
       expect(fixture.componentInstance.todos.data()).toBeUndefined();
+    }));
+
+    it('should set error to undefined when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => skipToken);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+    }));
+
+    it('should set isLoading to false when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => skipToken);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
       expect(fixture.componentInstance.todos.isLoading()).toBe(false);
     }));
 
-    it('should clear data/error/loading when disabled', fakeAsync(() => {
+    it('should conditionally skip based on signal value', fakeAsync(() => {
       @Component({
         template: '',
         standalone: true,
       })
       class TestComponent {
-        readonly enabled = signal(true);
-        readonly todos = injectQuery(
-          mockQuery,
-          () => ({ count: 10 }),
-          () => ({ enabled: this.enabled() }),
+        readonly userId = signal<string | null>(null);
+        readonly todos = injectQuery(mockQuery, () =>
+          this.userId() ? { count: 10 } : skipToken,
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Initially skipped
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+
+      // Set userId to enable query
+      fixture.componentInstance.userId.set('user-123');
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+    }));
+
+    it('should clear data/error when transitioning to skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(false);
+        readonly todos = injectQuery(mockQuery, () =>
+          this.shouldSkip() ? skipToken : { count: 10 },
         );
       }
 
@@ -338,28 +417,28 @@ describe('injectQuery', () => {
       // Set some data
       onUpdateCallback([{ _id: '1', title: 'Todo' }]);
       expect(fixture.componentInstance.todos.data()).toBeDefined();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
 
-      // Disable
-      fixture.componentInstance.enabled.set(false);
+      // Skip the query
+      fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
 
       expect(fixture.componentInstance.todos.data()).toBeUndefined();
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
       expect(fixture.componentInstance.todos.isLoading()).toBe(false);
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
     }));
 
-    it('should resubscribe when enabled changes to true', fakeAsync(() => {
+    it('should unsubscribe when transitioning to skipped', fakeAsync(() => {
       @Component({
         template: '',
         standalone: true,
       })
       class TestComponent {
-        readonly enabled = signal(false);
-        readonly todos = injectQuery(
-          mockQuery,
-          () => ({ count: 10 }),
-          () => ({ enabled: this.enabled() }),
+        readonly shouldSkip = signal(false);
+        readonly todos = injectQuery(mockQuery, () =>
+          this.shouldSkip() ? skipToken : { count: 10 },
         );
       }
 
@@ -367,17 +446,44 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      // Initially disabled, onUpdate not called for subscription
-      const initialCallCount = mockConvexClient.onUpdate.mock.calls.length;
+      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
 
-      // Enable
-      fixture.componentInstance.enabled.set(true);
+      // Skip the query
+      fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate.mock.calls.length).toBeGreaterThan(
-        initialCallCount,
-      );
+      expect(mockUnsubscribe).toHaveBeenCalled();
+    }));
+
+    it('should resubscribe when transitioning from skipped to active', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(true);
+        readonly todos = injectQuery(mockQuery, () =>
+          this.shouldSkip() ? skipToken : { count: 10 },
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+
+      // Enable the query
+      fixture.componentInstance.shouldSkip.set(false);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
     }));
   });
 
