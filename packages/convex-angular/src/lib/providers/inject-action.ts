@@ -1,6 +1,12 @@
-import { Signal, assertInInjectionContext, signal } from '@angular/core';
+import {
+  Signal,
+  assertInInjectionContext,
+  computed,
+  signal,
+} from '@angular/core';
 import { FunctionReference, FunctionReturnType } from 'convex/server';
 
+import { ActionStatus } from '../types';
 import { injectConvex } from './inject-convex';
 
 /**
@@ -52,6 +58,27 @@ export interface ActionResult<Action extends ActionReference> {
    * True while the action is running.
    */
   isLoading: Signal<boolean>;
+
+  /**
+   * True when the action completed successfully.
+   * False when idle, loading, or when there's an error.
+   */
+  isSuccess: Signal<boolean>;
+
+  /**
+   * The current status of the action.
+   * - 'idle': Action has not been called yet or was reset
+   * - 'pending': Action is in progress
+   * - 'success': Action completed successfully
+   * - 'error': Action failed with an error
+   */
+  status: Signal<ActionStatus>;
+
+  /**
+   * Reset the action state (data, error, isLoading).
+   * Useful for resetting state after navigation or form reset.
+   */
+  reset: () => void;
 }
 
 /**
@@ -72,8 +99,10 @@ export interface ActionResult<Action extends ActionReference> {
  * //   Send Email
  * // </button>
  * //
- * // @if (sendEmail.isLoading()) {
- * //   <span>Sending...</span>
+ * // @switch (sendEmail.status()) {
+ * //   @case ('pending') { <span>Sending...</span> }
+ * //   @case ('success') { <span>Sent!</span> }
+ * //   @case ('error') { <span>Error: {{ sendEmail.error()?.message }}</span> }
  * // }
  * ```
  *
@@ -93,13 +122,26 @@ export function injectAction<Action extends ActionReference>(
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
 
+  // Track if action has been called (to distinguish idle from success)
+  const hasCompleted = signal(false);
+
+  // Computed signals
+  const isSuccess = computed(() => hasCompleted() && !isLoading() && !error());
+  const status = computed<ActionStatus>(() => {
+    if (isLoading()) return 'pending';
+    if (error()) return 'error';
+    if (hasCompleted()) return 'success';
+    return 'idle';
+  });
+
   /**
-   * Reset all state before a new action call.
+   * Reset all state.
    */
   const reset = () => {
     data.set(undefined);
     error.set(undefined);
     isLoading.set(false);
+    hasCompleted.set(false);
   };
 
   /**
@@ -109,16 +151,21 @@ export function injectAction<Action extends ActionReference>(
     args: Action['_args'],
   ): Promise<FunctionReturnType<Action>> => {
     try {
-      reset();
+      // Reset state before new action, but keep hasCompleted false until done
+      data.set(undefined);
+      error.set(undefined);
+      hasCompleted.set(false);
       isLoading.set(true);
 
       const result = await convex.action(action, args);
       data.set(result);
+      hasCompleted.set(true);
       options?.onSuccess?.(result);
       return result;
     } catch (err) {
       const errorObj = err instanceof Error ? err : new Error(String(err));
       error.set(errorObj);
+      hasCompleted.set(true);
       options?.onError?.(errorObj);
       return undefined;
     } finally {
@@ -131,5 +178,8 @@ export function injectAction<Action extends ActionReference>(
     data: data.asReadonly(),
     error: error.asReadonly(),
     isLoading: isLoading.asReadonly(),
+    isSuccess,
+    status,
+    reset,
   };
 }

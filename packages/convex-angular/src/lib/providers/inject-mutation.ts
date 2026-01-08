@@ -1,4 +1,9 @@
-import { Signal, assertInInjectionContext, signal } from '@angular/core';
+import {
+  Signal,
+  assertInInjectionContext,
+  computed,
+  signal,
+} from '@angular/core';
 import { OptimisticUpdate } from 'convex/browser';
 import {
   FunctionArgs,
@@ -6,6 +11,7 @@ import {
   FunctionReturnType,
 } from 'convex/server';
 
+import { MutationStatus } from '../types';
 import { injectConvex } from './inject-convex';
 
 /**
@@ -65,6 +71,27 @@ export interface MutationResult<Mutation extends MutationReference> {
    * True while the mutation is running.
    */
   isLoading: Signal<boolean>;
+
+  /**
+   * True when the mutation completed successfully.
+   * False when idle, loading, or when there's an error.
+   */
+  isSuccess: Signal<boolean>;
+
+  /**
+   * The current status of the mutation.
+   * - 'idle': Mutation has not been called yet or was reset
+   * - 'pending': Mutation is in progress
+   * - 'success': Mutation completed successfully
+   * - 'error': Mutation failed with an error
+   */
+  status: Signal<MutationStatus>;
+
+  /**
+   * Reset the mutation state (data, error, isLoading).
+   * Useful for resetting form state after navigation.
+   */
+  reset: () => void;
 }
 
 /**
@@ -92,8 +119,10 @@ export interface MutationResult<Mutation extends MutationReference> {
  * //   Add Todo
  * // </button>
  * //
- * // @if (createTodo.isLoading()) {
- * //   <span>Saving...</span>
+ * // @switch (createTodo.status()) {
+ * //   @case ('pending') { <span>Saving...</span> }
+ * //   @case ('success') { <span>Saved!</span> }
+ * //   @case ('error') { <span>Error: {{ createTodo.error()?.message }}</span> }
  * // }
  * ```
  *
@@ -113,13 +142,26 @@ export function injectMutation<Mutation extends MutationReference>(
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
 
+  // Track if mutation has been called (to distinguish idle from success)
+  const hasCompleted = signal(false);
+
+  // Computed signals
+  const isSuccess = computed(() => hasCompleted() && !isLoading() && !error());
+  const status = computed<MutationStatus>(() => {
+    if (isLoading()) return 'pending';
+    if (error()) return 'error';
+    if (hasCompleted()) return 'success';
+    return 'idle';
+  });
+
   /**
-   * Reset all state before a new mutation call.
+   * Reset all state.
    */
   const reset = () => {
     data.set(undefined);
     error.set(undefined);
     isLoading.set(false);
+    hasCompleted.set(false);
   };
 
   /**
@@ -129,18 +171,23 @@ export function injectMutation<Mutation extends MutationReference>(
     args: FunctionArgs<Mutation>,
   ): Promise<FunctionReturnType<Mutation>> => {
     try {
-      reset();
+      // Reset state before new mutation, but keep hasCompleted false until done
+      data.set(undefined);
+      error.set(undefined);
+      hasCompleted.set(false);
       isLoading.set(true);
 
       const result = await convex.mutation(mutation, args, {
         optimisticUpdate: options?.optimisticUpdate,
       });
       data.set(result);
+      hasCompleted.set(true);
       options?.onSuccess?.(result);
       return result;
     } catch (err) {
       const errorObj = err instanceof Error ? err : new Error(String(err));
       error.set(errorObj);
+      hasCompleted.set(true);
       options?.onError?.(errorObj);
       return undefined;
     } finally {
@@ -153,5 +200,8 @@ export function injectMutation<Mutation extends MutationReference>(
     data: data.asReadonly(),
     error: error.asReadonly(),
     isLoading: isLoading.asReadonly(),
+    isSuccess,
+    status,
+    reset,
   };
 }

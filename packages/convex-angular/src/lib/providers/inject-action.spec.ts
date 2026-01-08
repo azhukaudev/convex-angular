@@ -396,4 +396,221 @@ describe('injectAction', () => {
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
     }));
   });
+
+  describe('status signal', () => {
+    it('should return idle status initially', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.sendEmail.status()).toBe('idle');
+    });
+
+    it('should return pending status while action is running', fakeAsync(() => {
+      mockConvexClient.action.mockImplementation(
+        () => new Promise(() => {}), // Never resolves
+      );
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+
+      expect(fixture.componentInstance.sendEmail.status()).toBe('pending');
+    }));
+
+    it('should return success status after successful action', fakeAsync(() => {
+      mockConvexClient.action.mockResolvedValue({ success: true });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.sendEmail.status()).toBe('success');
+    }));
+
+    it('should return error status after failed action', fakeAsync(() => {
+      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.sendEmail.status()).toBe('error');
+    }));
+  });
+
+  describe('isSuccess signal', () => {
+    it('should be false initially', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(false);
+    });
+
+    it('should be false while action is running', fakeAsync(() => {
+      mockConvexClient.action.mockImplementation(
+        () => new Promise(() => {}), // Never resolves
+      );
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+
+      expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(false);
+    }));
+
+    it('should be true after successful action', fakeAsync(() => {
+      mockConvexClient.action.mockResolvedValue({ success: true });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(true);
+    }));
+
+    it('should be false after failed action', fakeAsync(() => {
+      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(false);
+    }));
+  });
+
+  describe('reset', () => {
+    it('should reset all state to initial values', fakeAsync(() => {
+      mockConvexClient.action.mockResolvedValue({ success: true });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      // Run an action
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.sendEmail.data()).toBeDefined();
+      expect(fixture.componentInstance.sendEmail.status()).toBe('success');
+
+      // Reset
+      fixture.componentInstance.sendEmail.reset();
+
+      expect(fixture.componentInstance.sendEmail.data()).toBeUndefined();
+      expect(fixture.componentInstance.sendEmail.error()).toBeUndefined();
+      expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
+      expect(fixture.componentInstance.sendEmail.status()).toBe('idle');
+      expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(false);
+    }));
+
+    it('should reset error state', fakeAsync(() => {
+      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      // Run a failing action
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.sendEmail.error()).toBeDefined();
+      expect(fixture.componentInstance.sendEmail.status()).toBe('error');
+
+      // Reset
+      fixture.componentInstance.sendEmail.reset();
+
+      expect(fixture.componentInstance.sendEmail.error()).toBeUndefined();
+      expect(fixture.componentInstance.sendEmail.status()).toBe('idle');
+    }));
+  });
 });

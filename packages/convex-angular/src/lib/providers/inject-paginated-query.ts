@@ -2,6 +2,7 @@ import {
   DestroyRef,
   Signal,
   assertInInjectionContext,
+  computed,
   effect,
   inject,
   signal,
@@ -15,13 +16,14 @@ import {
 } from 'convex/server';
 
 import { SkipToken, skipToken } from '../skip-token';
+import { PaginatedQueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 
 /**
  * Pagination status returned by the Convex client.
  * @internal
  */
-type PaginationStatus =
+type ClientPaginationStatus =
   | 'LoadingFirstPage'
   | 'CanLoadMore'
   | 'LoadingMore'
@@ -34,7 +36,7 @@ type PaginationStatus =
  */
 interface ClientPaginatedResult<T> {
   results: T[];
-  status: PaginationStatus;
+  status: ClientPaginationStatus;
   loadMore: (numItems: number) => boolean;
 }
 
@@ -71,11 +73,24 @@ export type PaginatedQueryItem<Query extends PaginatedQueryReference> =
 /**
  * Options for injectPaginatedQuery.
  */
-export interface PaginatedQueryOptions {
+export interface PaginatedQueryOptions<Query extends PaginatedQueryReference> {
   /**
    * Number of items to load initially.
    */
   initialNumItems: number;
+
+  /**
+   * Callback invoked when the query receives data.
+   * Called on initial load and every subsequent update.
+   * @param results - The accumulated results from all pages
+   */
+  onSuccess?: (results: PaginatedQueryItem<Query>[]) => void;
+
+  /**
+   * Callback invoked when the query fails.
+   * @param err - The error that occurred
+   */
+  onError?: (err: Error) => void;
 }
 
 /**
@@ -119,6 +134,21 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
   isSkipped: Signal<boolean>;
 
   /**
+   * True when first page has been successfully loaded.
+   * False during loading, when skipped, or when there's an error.
+   */
+  isSuccess: Signal<boolean>;
+
+  /**
+   * The current status of the paginated query.
+   * - 'pending': Loading the first page
+   * - 'success': First page loaded successfully (may still load more)
+   * - 'error': Query failed with an error
+   * - 'skipped': Query is skipped via skipToken
+   */
+  status: Signal<PaginatedQueryStatus>;
+
+  /**
    * Load more items.
    * @param numItems - Number of items to load
    * @returns true if loading was initiated, false if already loading or exhausted
@@ -152,26 +182,40 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
  *   () => ({ initialNumItems: 10 })
  * );
  *
+ * // With callbacks
+ * const todos = injectPaginatedQuery(
+ *   api.todos.listTodos,
+ *   () => ({}),
+ *   () => ({
+ *     initialNumItems: 10,
+ *     onSuccess: (results) => console.log('Loaded', results.length, 'items'),
+ *     onError: (err) => console.error('Failed to load', err),
+ *   })
+ * );
+ *
  * // In template:
- * // @if (todos.isSkipped()) {
- * //   <span>Select a category</span>
- * // } @else {
- * //   @for (todo of todos.results(); track todo._id) { ... }
- * //   <button (click)="todos.loadMore(10)" [disabled]="!todos.canLoadMore()">
- * //     Load More
- * //   </button>
+ * // @switch (todos.status()) {
+ * //   @case ('pending') { <span>Loading...</span> }
+ * //   @case ('skipped') { <span>Select a category</span> }
+ * //   @case ('error') { <span>Error: {{ todos.error()?.message }}</span> }
+ * //   @case ('success') {
+ * //     @for (todo of todos.results(); track todo._id) { ... }
+ * //     <button (click)="todos.loadMore(10)" [disabled]="!todos.canLoadMore()">
+ * //       Load More
+ * //     </button>
+ * //   }
  * // }
  * ```
  *
  * @param query - A FunctionReference to the paginated query function
  * @param argsFn - A function returning the arguments object for the query (excluding paginationOpts), or skipToken to skip
- * @param optionsFn - A function returning the pagination options including initialNumItems
+ * @param optionsFn - A function returning the pagination options including initialNumItems and optional callbacks
  * @returns A PaginatedQueryResult with signals for results, status, and methods for loadMore/reset
  */
 export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   query: Query,
   argsFn: () => PaginatedQueryArgs<Query> | SkipToken,
-  optionsFn: () => PaginatedQueryOptions,
+  optionsFn: () => PaginatedQueryOptions<Query>,
 ): PaginatedQueryResult<Query> {
   assertInInjectionContext(injectPaginatedQuery);
   const convex = injectConvex();
@@ -186,6 +230,17 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   const isExhausted = signal(false);
   const isSkipped = signal(false);
 
+  // Computed signals
+  const isSuccess = computed(
+    () => !isLoadingFirstPage() && !isSkipped() && !error(),
+  );
+  const status = computed<PaginatedQueryStatus>(() => {
+    if (isSkipped()) return 'skipped';
+    if (isLoadingFirstPage()) return 'pending';
+    if (error()) return 'error';
+    return 'success';
+  });
+
   // Track the loadMore function from the current subscription
   let currentLoadMore: ((numItems: number) => boolean) | undefined;
   let unsubscribe: (() => void) | undefined;
@@ -193,10 +248,11 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   // Version counter to trigger reset
   const resetVersion = signal(0);
 
-  const subscribe = (args: PaginatedQueryArgs<Query>) => {
+  const subscribe = (
+    args: PaginatedQueryArgs<Query>,
+    options: PaginatedQueryOptions<Query>,
+  ) => {
     unsubscribe?.();
-
-    const options = optionsFn();
 
     // Reset state for new subscription
     results.set([]);
@@ -252,6 +308,11 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
             isExhausted.set(true);
             break;
         }
+
+        // Call success callback (not during LoadingFirstPage as we don't have complete results yet)
+        if (result.status !== 'LoadingFirstPage') {
+          options.onSuccess?.(result.results);
+        }
       },
       (err: Error) => {
         // Keep existing results on error
@@ -261,6 +322,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         // Allow retry via loadMore
         canLoadMore.set(true);
         isExhausted.set(false);
+        options.onError?.(err);
       },
     );
   };
@@ -269,7 +331,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   effect(() => {
     // Track dependencies
     const args = argsFn();
-    optionsFn();
+    const options = optionsFn();
     resetVersion();
 
     // Cleanup previous subscription
@@ -288,7 +350,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       return;
     }
 
-    subscribe(args);
+    subscribe(args, options);
   });
 
   destroyRef.onDestroy(() => unsubscribe?.());
@@ -312,6 +374,8 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     canLoadMore: canLoadMore.asReadonly(),
     isExhausted: isExhausted.asReadonly(),
     isSkipped: isSkipped.asReadonly(),
+    isSuccess,
+    status,
     loadMore,
     reset,
   };

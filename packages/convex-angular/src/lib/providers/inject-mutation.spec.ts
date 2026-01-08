@@ -425,4 +425,221 @@ describe('injectMutation', () => {
       expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
     }));
   });
+
+  describe('status signal', () => {
+    it('should return idle status initially', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+    });
+
+    it('should return pending status while mutation is running', fakeAsync(() => {
+      mockConvexClient.mutation.mockImplementation(
+        () => new Promise(() => {}), // Never resolves
+      );
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+
+      expect(fixture.componentInstance.addTodo.status()).toBe('pending');
+    }));
+
+    it('should return success status after successful mutation', fakeAsync(() => {
+      mockConvexClient.mutation.mockResolvedValue({ id: '123' });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.status()).toBe('success');
+    }));
+
+    it('should return error status after failed mutation', fakeAsync(() => {
+      mockConvexClient.mutation.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.status()).toBe('error');
+    }));
+  });
+
+  describe('isSuccess signal', () => {
+    it('should be false initially', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.addTodo.isSuccess()).toBe(false);
+    });
+
+    it('should be false while mutation is running', fakeAsync(() => {
+      mockConvexClient.mutation.mockImplementation(
+        () => new Promise(() => {}), // Never resolves
+      );
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+
+      expect(fixture.componentInstance.addTodo.isSuccess()).toBe(false);
+    }));
+
+    it('should be true after successful mutation', fakeAsync(() => {
+      mockConvexClient.mutation.mockResolvedValue({ id: '123' });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.isSuccess()).toBe(true);
+    }));
+
+    it('should be false after failed mutation', fakeAsync(() => {
+      mockConvexClient.mutation.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.isSuccess()).toBe(false);
+    }));
+  });
+
+  describe('reset', () => {
+    it('should reset all state to initial values', fakeAsync(() => {
+      mockConvexClient.mutation.mockResolvedValue({ id: '123' });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      // Run a mutation
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.data()).toBeDefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('success');
+
+      // Reset
+      fixture.componentInstance.addTodo.reset();
+
+      expect(fixture.componentInstance.addTodo.data()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+      expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+      expect(fixture.componentInstance.addTodo.isSuccess()).toBe(false);
+    }));
+
+    it('should reset error state', fakeAsync(() => {
+      mockConvexClient.mutation.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      // Run a failing mutation
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.error()).toBeDefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('error');
+
+      // Reset
+      fixture.componentInstance.addTodo.reset();
+
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+    }));
+  });
 });

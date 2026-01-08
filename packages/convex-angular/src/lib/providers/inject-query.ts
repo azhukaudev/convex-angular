@@ -2,6 +2,7 @@ import {
   DestroyRef,
   Signal,
   assertInInjectionContext,
+  computed,
   effect,
   inject,
   signal,
@@ -13,6 +14,7 @@ import {
 } from 'convex/server';
 
 import { SkipToken, skipToken } from '../skip-token';
+import { QueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 
 /**
@@ -21,12 +23,31 @@ import { injectConvex } from './inject-convex';
 export type QueryReference = FunctionReference<'query'>;
 
 /**
+ * Options for injectQuery.
+ */
+export interface QueryOptions<Query extends QueryReference> {
+  /**
+   * Callback invoked when the query receives data.
+   * Called on initial load and every subsequent update.
+   * @param data - The return value of the query
+   */
+  onSuccess?: (data: FunctionReturnType<Query>) => void;
+
+  /**
+   * Callback invoked when the query fails.
+   * @param err - The error that occurred
+   */
+  onError?: (err: Error) => void;
+}
+
+/**
  * The result of calling injectQuery.
  */
 export interface QueryResult<Query extends QueryReference> {
   /**
    * The current data from the query subscription.
    * Initially populated from local cache if available, then updated reactively.
+   * Data is preserved during refetch for better UX.
    */
   data: Signal<FunctionReturnType<Query>>;
 
@@ -47,6 +68,27 @@ export interface QueryResult<Query extends QueryReference> {
    * When skipped, data is undefined and no subscription is active.
    */
   isSkipped: Signal<boolean>;
+
+  /**
+   * True when data has been successfully received.
+   * False during loading, when skipped, or when there's an error.
+   */
+  isSuccess: Signal<boolean>;
+
+  /**
+   * The current status of the query.
+   * - 'pending': Loading initial data or resubscribing
+   * - 'success': Data received successfully
+   * - 'error': Query failed with an error
+   * - 'skipped': Query is skipped via skipToken
+   */
+  status: Signal<QueryStatus>;
+
+  /**
+   * Force the query to refetch by resubscribing.
+   * Existing data is preserved during refetch for better UX.
+   */
+  refetch: () => void;
 }
 
 /**
@@ -74,27 +116,38 @@ export interface QueryResult<Query extends QueryReference> {
  *   () => userId() ? { userId: userId() } : skipToken,
  * );
  *
+ * // With callbacks
+ * const todos = injectQuery(
+ *   api.todos.list,
+ *   () => ({}),
+ *   {
+ *     onSuccess: (data) => console.log('Loaded', data.length, 'todos'),
+ *     onError: (err) => console.error('Failed to load todos', err),
+ *   }
+ * );
+ *
  * // In template:
- * // @if (todos.isLoading()) {
- * //   <span>Loading...</span>
- * // } @else if (todos.isSkipped()) {
- * //   <span>Select a user to view profile</span>
- * // } @else if (todos.error()) {
- * //   <span>Error: {{ todos.error()?.message }}</span>
- * // } @else {
- * //   @for (todo of todos.data(); track todo._id) {
- * //     <div>{{ todo.title }}</div>
+ * // @switch (todos.status()) {
+ * //   @case ('pending') { <span>Loading...</span> }
+ * //   @case ('skipped') { <span>Select a user</span> }
+ * //   @case ('error') { <span>Error: {{ todos.error()?.message }}</span> }
+ * //   @case ('success') {
+ * //     @for (todo of todos.data(); track todo._id) {
+ * //       <div>{{ todo.title }}</div>
+ * //     }
  * //   }
  * // }
  * ```
  *
  * @param query - A FunctionReference to the query function
  * @param argsFn - A reactive function returning the query arguments, or skipToken to skip the query
+ * @param options - Optional callbacks for success and error handling
  * @returns A QueryResult with reactive data, error, loading, and skipped signals
  */
 export function injectQuery<Query extends QueryReference>(
   query: Query,
   argsFn: () => Query['_args'] | SkipToken,
+  options?: QueryOptions<Query>,
 ): QueryResult<Query> {
   assertInInjectionContext(injectQuery);
   const convex = injectConvex();
@@ -106,12 +159,25 @@ export function injectQuery<Query extends QueryReference>(
   const isLoading = signal(false);
   const isSkipped = signal(false);
 
+  // Version counter for manual refetch
+  const refetchVersion = signal(0);
+
+  // Computed signals
+  const isSuccess = computed(() => !isLoading() && !isSkipped() && !error());
+  const status = computed<QueryStatus>(() => {
+    if (isSkipped()) return 'skipped';
+    if (isLoading()) return 'pending';
+    if (error()) return 'error';
+    return 'success';
+  });
+
   // Track current subscription for cleanup
   let unsubscribe: (() => void) | undefined;
 
   // Effect to reactively subscribe when args change
   effect(() => {
     const args = argsFn();
+    refetchVersion(); // Track for manual refetch
 
     // Cleanup previous subscription
     unsubscribe?.();
@@ -128,14 +194,17 @@ export function injectQuery<Query extends QueryReference>(
     // Not skipped - try to get cached data and start subscription
     isSkipped.set(false);
     isLoading.set(true);
+    // Note: We preserve existing data during refetch for better UX
 
-    // Initialize with cached data if available
-    const cachedData = convex.client.localQueryResult(
-      getFunctionName(query),
-      args,
-    );
-    if (cachedData !== undefined) {
-      data.set(cachedData);
+    // Initialize with cached data if available (only if no existing data)
+    if (data() === undefined) {
+      const cachedData = convex.client.localQueryResult(
+        getFunctionName(query),
+        args,
+      );
+      if (cachedData !== undefined) {
+        data.set(cachedData);
+      }
     }
 
     // Subscribe to the query
@@ -146,11 +215,13 @@ export function injectQuery<Query extends QueryReference>(
         data.set(result);
         error.set(undefined);
         isLoading.set(false);
+        options?.onSuccess?.(result);
       },
       (err: Error) => {
-        data.set(undefined);
+        // Preserve existing data on error for better UX
         error.set(err);
         isLoading.set(false);
+        options?.onError?.(err);
       },
     );
   });
@@ -158,10 +229,18 @@ export function injectQuery<Query extends QueryReference>(
   // Cleanup subscription when component is destroyed
   destroyRef.onDestroy(() => unsubscribe?.());
 
+  // Refetch function
+  const refetch = () => {
+    refetchVersion.update((v) => v + 1);
+  };
+
   return {
     data: data.asReadonly(),
     error: error.asReadonly(),
     isLoading: isLoading.asReadonly(),
     isSkipped: isSkipped.asReadonly(),
+    isSuccess,
+    status,
+    refetch,
   };
 }

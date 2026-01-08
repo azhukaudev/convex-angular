@@ -246,7 +246,7 @@ describe('injectQuery', () => {
       expect(fixture.componentInstance.todos.error()).toBe(error);
     }));
 
-    it('should clear data on error', fakeAsync(() => {
+    it('should preserve existing data on error for better UX', fakeAsync(() => {
       @Component({
         template: '',
         standalone: true,
@@ -260,13 +260,14 @@ describe('injectQuery', () => {
       tick();
 
       // First, set some data
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      const mockData = [{ _id: '1', title: 'Todo' }];
+      onUpdateCallback(mockData);
       expect(fixture.componentInstance.todos.data()).toBeDefined();
 
-      // Then, error
+      // Then, error - data should be preserved
       onErrorCallback(new Error('Query failed'));
 
-      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(fixture.componentInstance.todos.data()).toEqual(mockData);
     }));
 
     it('should set isLoading to false on error', fakeAsync(() => {
@@ -601,6 +602,405 @@ describe('injectQuery', () => {
       // Third update
       onUpdateCallback([]);
       expect(fixture.componentInstance.todos.data()?.length).toBe(0);
+    }));
+  });
+
+  describe('status signal', () => {
+    it('should return pending status while loading', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.status()).toBe('pending');
+    }));
+
+    it('should return success status after data is received', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+    }));
+
+    it('should return error status after error', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onErrorCallback(new Error('Query failed'));
+
+      expect(fixture.componentInstance.todos.status()).toBe('error');
+    }));
+
+    it('should return skipped status when skipToken is used', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => skipToken);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.status()).toBe('skipped');
+    }));
+
+    it('should transition through statuses correctly', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(true);
+        readonly todos = injectQuery(mockQuery, () =>
+          this.shouldSkip() ? skipToken : { count: 10 },
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Initially skipped
+      expect(fixture.componentInstance.todos.status()).toBe('skipped');
+
+      // Enable query -> pending
+      fixture.componentInstance.shouldSkip.set(false);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.status()).toBe('pending');
+
+      // Data received -> success
+      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+
+      // Error -> error
+      onErrorCallback(new Error('Query failed'));
+
+      expect(fixture.componentInstance.todos.status()).toBe('error');
+    }));
+  });
+
+  describe('isSuccess signal', () => {
+    it('should be false while loading', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isSuccess()).toBe(false);
+    }));
+
+    it('should be true after successful data load', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+
+      expect(fixture.componentInstance.todos.isSuccess()).toBe(true);
+    }));
+
+    it('should be false when there is an error', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onErrorCallback(new Error('Query failed'));
+
+      expect(fixture.componentInstance.todos.isSuccess()).toBe(false);
+    }));
+
+    it('should be false when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => skipToken);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isSuccess()).toBe(false);
+    }));
+  });
+
+  describe('refetch', () => {
+    it('should trigger resubscription when refetch is called', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+
+      // Refetch
+      fixture.componentInstance.todos.refetch();
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+    }));
+
+    it('should unsubscribe from previous subscription on refetch', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+
+      // Refetch
+      fixture.componentInstance.todos.refetch();
+      fixture.detectChanges();
+      tick();
+
+      expect(mockUnsubscribe).toHaveBeenCalled();
+    }));
+
+    it('should preserve existing data during refetch', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Set initial data
+      const initialData = [{ _id: '1', title: 'Todo' }];
+      onUpdateCallback(initialData);
+
+      expect(fixture.componentInstance.todos.data()).toEqual(initialData);
+
+      // Refetch - data should be preserved
+      fixture.componentInstance.todos.refetch();
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toEqual(initialData);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+    }));
+
+    it('should set isLoading to true on refetch', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(false);
+
+      // Refetch
+      fixture.componentInstance.todos.refetch();
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+    }));
+  });
+
+  describe('options callbacks', () => {
+    it('should call onSuccess callback when data is received', fakeAsync(() => {
+      const onSuccess = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          onSuccess,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const mockData = [{ _id: '1', title: 'Todo' }];
+      onUpdateCallback(mockData);
+
+      expect(onSuccess).toHaveBeenCalledWith(mockData);
+    }));
+
+    it('should call onSuccess callback on every update', fakeAsync(() => {
+      const onSuccess = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          onSuccess,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onUpdateCallback([{ _id: '1', title: 'Todo 1' }]);
+      onUpdateCallback([
+        { _id: '1', title: 'Todo 1' },
+        { _id: '2', title: 'Todo 2' },
+      ]);
+
+      expect(onSuccess).toHaveBeenCalledTimes(2);
+    }));
+
+    it('should call onError callback when error occurs', fakeAsync(() => {
+      const onError = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          onError,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const error = new Error('Query failed');
+      onErrorCallback(error);
+
+      expect(onError).toHaveBeenCalledWith(error);
+    }));
+
+    it('should work without options parameter', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Should not throw
+      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      onErrorCallback(new Error('Query failed'));
+
+      expect(fixture.componentInstance.todos.error()).toBeDefined();
+    }));
+  });
+
+  describe('preserve data on error', () => {
+    it('should preserve existing data when error occurs', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Set initial data
+      const initialData = [{ _id: '1', title: 'Todo' }];
+      onUpdateCallback(initialData);
+
+      expect(fixture.componentInstance.todos.data()).toEqual(initialData);
+
+      // Error occurs - data should be preserved
+      onErrorCallback(new Error('Query failed'));
+
+      expect(fixture.componentInstance.todos.data()).toEqual(initialData);
+      expect(fixture.componentInstance.todos.error()).toBeDefined();
     }));
   });
 });
