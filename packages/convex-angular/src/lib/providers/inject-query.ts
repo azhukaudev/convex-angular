@@ -6,6 +6,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import {
   FunctionReference,
@@ -197,7 +198,8 @@ export function injectQuery<Query extends QueryReference>(
     // Note: We preserve existing data during refetch for better UX
 
     // Initialize with cached data if available (only if no existing data)
-    if (data() === undefined) {
+    // Use untracked to avoid creating a reactive dependency on data
+    if (untracked(data) === undefined) {
       const cachedData = convex.client.localQueryResult(
         getFunctionName(query),
         args,
