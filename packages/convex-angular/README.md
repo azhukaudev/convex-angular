@@ -9,6 +9,7 @@ The Angular client for Convex.
 ## ✨ Features
 
 - 🔌 Core providers: `injectQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, and `injectConvex`
+- 🔐 Authentication: Full auth integration with `injectAuth`, Clerk, and Auth0 support
 - 📄 Pagination: Built-in support for paginated queries with `loadMore` and `reset`
 - ⏭️ Conditional Queries: Use `skipToken` to conditionally skip queries
 - 📡 Signal Integration: [Angular Signals](https://angular.dev/guide/signals) for reactive state
@@ -195,6 +196,208 @@ export class AppComponent {
     this.convex.mutation(api.todoFunctions.completeAllTodos, {});
   }
 }
+```
+
+## 🔐 Authentication
+
+### Custom Auth Provider
+
+Use `provideConvexAuth` to integrate any auth provider with Convex.
+
+```typescript
+import { Injectable, signal } from '@angular/core';
+import {
+  CONVEX_AUTH,
+  ConvexAuthProvider,
+  provideConvex,
+  provideConvexAuth,
+} from 'convex-angular';
+
+// 1. Create your auth service implementing ConvexAuthProvider
+@Injectable({ providedIn: 'root' })
+export class MyAuthService implements ConvexAuthProvider {
+  readonly isLoading = signal(true);
+  readonly isAuthenticated = signal(false);
+
+  constructor() {
+    // Initialize your auth provider
+    myAuthProvider.onStateChange((state) => {
+      this.isLoading.set(false);
+      this.isAuthenticated.set(state.loggedIn);
+    });
+  }
+
+  async fetchAccessToken({
+    forceRefreshToken,
+  }: {
+    forceRefreshToken: boolean;
+  }) {
+    return myAuthProvider.getToken({ refresh: forceRefreshToken });
+  }
+}
+
+// 2. Register in app.config.ts
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideConvex(environment.convexUrl),
+    { provide: CONVEX_AUTH, useClass: MyAuthService },
+    provideConvexAuth(),
+  ],
+};
+```
+
+### Using Auth State
+
+Use `injectAuth` to access the authentication state.
+
+```typescript
+import { injectAuth } from 'convex-angular';
+
+@Component({
+  selector: 'app-root',
+  template: `
+    @switch (auth.status()) {
+      @case ('loading') {
+        <p>Loading...</p>
+      }
+      @case ('authenticated') {
+        <p>Welcome back!</p>
+      }
+      @case ('unauthenticated') {
+        <button (click)="login()">Sign In</button>
+      }
+    }
+  `,
+})
+export class AppComponent {
+  readonly auth = injectAuth();
+}
+```
+
+The auth state provides:
+
+- `isLoading()` - True while auth is initializing
+- `isAuthenticated()` - True when fully authenticated with Convex
+- `error()` - The last authentication error, if any
+- `status()` - `'loading'` | `'authenticated'` | `'unauthenticated'`
+
+### Auth Directives
+
+Use structural directives for conditional rendering based on auth state.
+
+```typescript
+import {
+  CvaAuthLoadingDirective,
+  CvaAuthenticatedDirective,
+  CvaUnauthenticatedDirective,
+} from 'convex-angular';
+
+@Component({
+  imports: [
+    CvaAuthenticatedDirective,
+    CvaUnauthenticatedDirective,
+    CvaAuthLoadingDirective,
+  ],
+  template: `
+    <div *cvaAuthLoading>Loading...</div>
+    <div *cvaAuthenticated>Welcome back!</div>
+    <div *cvaUnauthenticated>Please sign in</div>
+  `,
+})
+export class AppComponent {}
+```
+
+### Route Guards
+
+Protect routes with authentication guards.
+
+```typescript
+import { convexAuthGuard } from 'convex-angular';
+
+export const routes: Routes = [
+  {
+    path: 'dashboard',
+    loadComponent: () => import('./dashboard/dashboard.component'),
+    canActivate: [convexAuthGuard], // Require authentication
+  },
+];
+```
+
+Configure guard redirect routes:
+
+```typescript
+import { CONVEX_AUTH_GUARD_CONFIG } from 'convex-angular';
+
+providers: [
+  {
+    provide: CONVEX_AUTH_GUARD_CONFIG,
+    useValue: {
+      loginRoute: '/auth/signin',
+    },
+  },
+];
+```
+
+### Clerk Integration
+
+Use `provideClerkAuth` for Clerk authentication.
+
+```typescript
+// 2. Register in app.config.ts
+import { CLERK_AUTH, provideClerkAuth } from 'convex-angular';
+
+// 1. Create your Clerk auth service
+@Injectable({ providedIn: 'root' })
+export class ClerkAuthService implements ClerkAuthProvider {
+  private clerk = inject(Clerk);
+
+  readonly isLoaded = computed(() => this.clerk.loaded());
+  readonly isSignedIn = computed(() => !!this.clerk.user());
+
+  async getToken(options?: { template?: string; skipCache?: boolean }) {
+    return this.clerk.session?.getToken(options) ?? null;
+  }
+}
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideConvex(environment.convexUrl),
+    { provide: CLERK_AUTH, useClass: ClerkAuthService },
+    provideClerkAuth(),
+  ],
+};
+```
+
+### Auth0 Integration
+
+Use `provideAuth0Auth` for Auth0 authentication.
+
+```typescript
+// 2. Register in app.config.ts
+import { AUTH0_AUTH, provideAuth0Auth } from 'convex-angular';
+
+// 1. Create your Auth0 auth service
+@Injectable({ providedIn: 'root' })
+export class Auth0AuthService implements Auth0AuthProvider {
+  private auth0 = inject(AuthService); // from @auth0/auth0-angular
+
+  readonly isLoading = toSignal(this.auth0.isLoading$, { initialValue: true });
+  readonly isAuthenticated = toSignal(this.auth0.isAuthenticated$, {
+    initialValue: false,
+  });
+
+  async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
+    return firstValueFrom(this.auth0.getAccessTokenSilently(options));
+  }
+}
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideConvex(environment.convexUrl),
+    { provide: AUTH0_AUTH, useClass: Auth0AuthService },
+    provideAuth0Auth(),
+  ],
+};
 ```
 
 ## 🤝 Contributing

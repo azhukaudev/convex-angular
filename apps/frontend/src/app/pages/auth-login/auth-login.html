@@ -1,0 +1,64 @@
+<div
+  class="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-8 px-4 py-12"
+>
+  <header class="text-center">
+    <h1 class="text-3xl font-bold">Authentication Demo</h1>
+    <p class="mt-2 text-gray-600">
+      Sign in with custom auth provider integration
+    </p>
+  </header>
+
+  <p-card>
+    <form
+      [formGroup]="loginForm"
+      (ngSubmit)="onSubmit()"
+      class="flex flex-col gap-4"
+    >
+      <div class="flex flex-col gap-2">
+        <label for="username" class="font-medium">Username</label>
+        <input
+          pInputText
+          id="username"
+          formControlName="username"
+          placeholder="Enter username"
+          class="w-full"
+        />
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <label for="password" class="font-medium">Password</label>
+        <p-password
+          id="password"
+          formControlName="password"
+          [feedback]="false"
+          [toggleMask]="true"
+          placeholder="Enter password"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </div>
+
+      @if (authService.error()) {
+        <p-message severity="error" [text]="authService.error()!" />
+      }
+
+      <p-button
+        type="submit"
+        label="Sign In"
+        icon="pi pi-sign-in"
+        styleClass="w-full"
+      />
+
+      <p class="text-center text-sm text-gray-500">
+        Hint: Use <code class="rounded bg-gray-100 px-1">admin</code> /
+        <code class="rounded bg-gray-100 px-1">admin</code>
+      </p>
+    </form>
+  </p-card>
+
+  <div class="text-center">
+    <a routerLink="/" class="text-primary text-sm hover:underline">
+      ← Back to Home
+    </a>
+  </div>
+</div>

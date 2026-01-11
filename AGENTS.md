@@ -14,11 +14,14 @@ convex-angular/
 │   └── convex-angular/     # The main library (published to npm)
 │       └── src/
 │           ├── lib/
-│           │   ├── providers/    # Injectable functions (injectQuery, etc.)
-│           │   ├── tokens/       # Dependency injection tokens
-│           │   ├── types.ts      # Shared type definitions
-│           │   └── skip-token.ts # skipToken for conditional queries
-│           └── index.ts          # Public API exports
+│           │   ├── providers/        # Injectable functions (injectQuery, etc.)
+│           │   │   └── integrations/ # Auth provider integrations (Clerk, Auth0)
+│           │   ├── tokens/           # Dependency injection tokens
+│           │   ├── guards/           # Route guards (convexAuthGuard)
+│           │   ├── directives/       # Auth helper directives
+│           │   ├── types.ts          # Shared type definitions
+│           │   └── skip-token.ts     # skipToken for conditional queries
+│           └── index.ts              # Public API exports
 ├── apps/
 │   └── frontend/           # Demo todo application
 │       └── src/
@@ -63,15 +66,16 @@ nx build convex-angular # Build library
 
 ### Provider Functions
 
-The library exposes five main injectable functions:
+The library exposes six main injectable functions:
 
-| Function | Purpose | Returns |
-|----------|---------|---------|
-| `injectQuery` | Subscribe to reactive queries | `QueryResult` with `data`, `error`, `isLoading`, `status` signals |
-| `injectMutation` | Execute database mutations | `MutationResult` with `mutate()`, `data`, `error`, `status` signals |
-| `injectAction` | Run server actions | `ActionResult` with `run()`, `data`, `error`, `status` signals |
-| `injectPaginatedQuery` | Load paginated data | `PaginatedQueryResult` with `results`, `loadMore()`, `canLoadMore` signals |
-| `injectConvex` | Access raw Convex client | `ConvexClient` instance |
+| Function               | Purpose                       | Returns                                                                          |
+| ---------------------- | ----------------------------- | -------------------------------------------------------------------------------- |
+| `injectQuery`          | Subscribe to reactive queries | `QueryResult` with `data`, `error`, `isLoading`, `status` signals                |
+| `injectMutation`       | Execute database mutations    | `MutationResult` with `mutate()`, `data`, `error`, `status`, `reset()` signals   |
+| `injectAction`         | Run server actions            | `ActionResult` with `run()`, `data`, `error`, `status`, `reset()` signals        |
+| `injectPaginatedQuery` | Load paginated data           | `PaginatedQueryResult` with `results`, `loadMore()`, `canLoadMore` signals       |
+| `injectConvex`         | Access raw Convex client      | `ConvexClient` instance                                                          |
+| `injectAuth`           | Access authentication state   | `ConvexAuthState` with `isLoading`, `isAuthenticated`, `error`, `status` signals |
 
 ### Dependency Flow
 
@@ -102,23 +106,23 @@ export function injectSomething<T extends SomeReference>(
 ): SomeResult<T> {
   // 1. Assert injection context
   assertInInjectionContext(injectSomething);
-  
+
   // 2. Inject dependencies
   const convex = injectConvex();
   const destroyRef = inject(DestroyRef);
-  
+
   // 3. Create internal signals
   const data = signal<ReturnType>(undefined);
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
-  
+
   // 4. Create computed signals for derived state
   const status = computed<Status>(() => {
     if (isLoading()) return 'pending';
     if (error()) return 'error';
     return 'success';
   });
-  
+
   // 5. Set up reactive subscription with effect()
   effect(() => {
     const args = argsFn?.();
@@ -130,10 +134,10 @@ export function injectSomething<T extends SomeReference>(
     // Subscribe to Convex
     unsubscribe = convex.onUpdate(reference, args, onSuccess, onError);
   });
-  
+
   // 6. Register cleanup
   destroyRef.onDestroy(() => unsubscribe?.());
-  
+
   // 7. Return readonly signals
   return {
     data: data.asReadonly(),
@@ -291,12 +295,12 @@ Arguments must be accessed inside the reactive function:
 
 ```typescript
 // ✅ Correct - reactive
-readonly todos = injectQuery(api.todos.list, () => ({ 
+readonly todos = injectQuery(api.todos.list, () => ({
   category: this.category() // Signal accessed inside function
 }));
 
 // ❌ Wrong - not reactive
-readonly todos = injectQuery(api.todos.list, () => ({ 
+readonly todos = injectQuery(api.todos.list, () => ({
   category: this.category // Signal not called
 }));
 ```
@@ -326,14 +330,33 @@ readonly user = injectQuery(api.users.get, skipToken);
 All public APIs must be exported through `packages/convex-angular/src/index.ts`:
 
 ```typescript
+// Tokens
 export * from './lib/tokens/convex';
+export * from './lib/tokens/auth';
+
+// Types and utilities
 export * from './lib/skip-token';
 export * from './lib/types';
+
+// Core providers
 export * from './lib/providers/inject-action';
 export * from './lib/providers/inject-convex';
 export * from './lib/providers/inject-mutation';
 export * from './lib/providers/inject-paginated-query';
 export * from './lib/providers/inject-query';
+
+// Auth providers
+export * from './lib/providers/inject-auth';
+
+// Auth integrations
+export * from './lib/providers/integrations/clerk';
+export * from './lib/providers/integrations/auth0';
+
+// Auth directives
+export * from './lib/directives/auth-helpers';
+
+// Auth guards
+export * from './lib/guards/auth-guards';
 ```
 
 When adding new exports, add them here.

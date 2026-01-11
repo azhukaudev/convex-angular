@@ -100,6 +100,28 @@
           />
         </a>
       </p-card>
+
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h3 class="text-lg font-semibold">Authentication Example</h3>
+            <p class="text-sm text-gray-600">
+              Custom auth provider with injectAuth and route guards
+            </p>
+          </div>
+        </ng-template>
+        <p class="mb-4 text-sm text-gray-500">
+          Demonstrates provideConvexAuth, injectAuth, and convexAuthGuard with a
+          mock auth provider.
+        </p>
+        <a routerLink="/auth/login">
+          <p-button
+            icon="pi pi-arrow-right"
+            iconPos="right"
+            label="View Example"
+          />
+        </a>
+      </p-card>
     </div>
   </section>
 

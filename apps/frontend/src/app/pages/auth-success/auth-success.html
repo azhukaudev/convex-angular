@@ -1,0 +1,36 @@
+<div
+  class="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-8 px-4 py-12"
+>
+  <p-card>
+    <div class="flex flex-col items-center gap-6 text-center">
+      <div
+        class="flex h-20 w-20 items-center justify-center rounded-full bg-green-100"
+      >
+        <i class="pi pi-check text-4xl text-green-600"></i>
+      </div>
+
+      <div>
+        <h1 class="text-2xl font-bold">Authentication Successful!</h1>
+        <p class="mt-2 text-gray-600">
+          You are now logged in. This page is protected by
+          <code class="rounded bg-gray-100 px-1 text-sm">convexAuthGuard</code>.
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <p-button
+          (onClick)="onLogout()"
+          label="Sign Out"
+          icon="pi pi-sign-out"
+          severity="secondary"
+        />
+      </div>
+    </div>
+  </p-card>
+
+  <div class="text-center">
+    <a routerLink="/" class="text-primary text-sm hover:underline">
+      ← Back to Home
+    </a>
+  </div>
+</div>
