@@ -174,6 +174,14 @@ export function injectQuery<Query extends QueryReference>(
 
   // Track current subscription for cleanup
   let unsubscribe: (() => void) | undefined;
+  const cleanupSubscription = () => {
+    const currentUnsubscribe = unsubscribe;
+    if (!currentUnsubscribe) {
+      return;
+    }
+    unsubscribe = undefined;
+    currentUnsubscribe();
+  };
 
   // Effect to reactively subscribe when args change
   effect(() => {
@@ -181,7 +189,7 @@ export function injectQuery<Query extends QueryReference>(
     refetchVersion(); // Track for manual refetch
 
     // Cleanup previous subscription
-    unsubscribe?.();
+    cleanupSubscription();
 
     // If skipToken, reset state and don't subscribe
     if (args === skipToken) {
@@ -229,7 +237,7 @@ export function injectQuery<Query extends QueryReference>(
   });
 
   // Cleanup subscription when component is destroyed
-  destroyRef.onDestroy(() => unsubscribe?.());
+  destroyRef.onDestroy(() => cleanupSubscription());
 
   // Refetch function
   const refetch = () => {

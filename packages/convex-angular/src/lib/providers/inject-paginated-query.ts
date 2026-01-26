@@ -244,6 +244,14 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   // Track the loadMore function from the current subscription
   let currentLoadMore: ((numItems: number) => boolean) | undefined;
   let unsubscribe: (() => void) | undefined;
+  const cleanupSubscription = () => {
+    const currentUnsubscribe = unsubscribe;
+    if (!currentUnsubscribe) {
+      return;
+    }
+    unsubscribe = undefined;
+    currentUnsubscribe();
+  };
 
   // Version counter to trigger reset
   const resetVersion = signal(0);
@@ -252,7 +260,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     args: PaginatedQueryArgs<Query>,
     options: PaginatedQueryOptions<Query>,
   ) => {
-    unsubscribe?.();
+    cleanupSubscription();
 
     // Reset state for new subscription
     results.set([]);
@@ -335,7 +343,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     resetVersion();
 
     // Cleanup previous subscription
-    unsubscribe?.();
+    cleanupSubscription();
 
     // If skipToken, reset state and don't subscribe
     if (args === skipToken) {
@@ -353,7 +361,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     subscribe(args, options);
   });
 
-  destroyRef.onDestroy(() => unsubscribe?.());
+  destroyRef.onDestroy(() => cleanupSubscription());
 
   const loadMore = (numItems: number): boolean => {
     if (!currentLoadMore) {

@@ -458,6 +458,43 @@ describe('injectQuery', () => {
       expect(mockUnsubscribe).toHaveBeenCalled();
     }));
 
+    it('should not double-unsubscribe when toggling skipToken', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(false);
+        readonly todos = injectQuery(mockQuery, () =>
+          this.shouldSkip() ? skipToken : { count: 10 },
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+
+      // Skip the query - should unsubscribe once
+      fixture.componentInstance.shouldSkip.set(true);
+      fixture.detectChanges();
+      tick();
+      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+
+      // Resume the query - should not unsubscribe again
+      fixture.componentInstance.shouldSkip.set(false);
+      fixture.detectChanges();
+      tick();
+      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+
+      // Skip again - should unsubscribe once more
+      fixture.componentInstance.shouldSkip.set(true);
+      fixture.detectChanges();
+      tick();
+      expect(mockUnsubscribe).toHaveBeenCalledTimes(2);
+    }));
+
     it('should resubscribe when transitioning from skipped to active', fakeAsync(() => {
       @Component({
         template: '',
