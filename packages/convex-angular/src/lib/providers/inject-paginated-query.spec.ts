@@ -5,10 +5,7 @@ import { FunctionReference, PaginationResult } from 'convex/server';
 
 import { skipToken } from '../skip-token';
 import { CONVEX } from '../tokens/convex';
-import {
-  PaginatedQueryReference,
-  injectPaginatedQuery,
-} from './inject-paginated-query';
+import { PaginatedQueryReference, injectPaginatedQuery } from './inject-paginated-query';
 
 // Mock paginated query function reference
 const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
@@ -736,6 +733,41 @@ describe('injectPaginatedQuery', () => {
       ).toHaveBeenCalled();
       expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
       expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
+    }));
+
+    it('should correctly handle skipToken changes', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(true);
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => (this.shouldSkip() ? skipToken : {}),
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Initially skipped
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+
+      for (let i = 0; i < 3; i++) {
+        fixture.componentInstance.shouldSkip.set(false);
+        fixture.detectChanges();
+        tick();
+        expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+
+        fixture.componentInstance.shouldSkip.set(true);
+        fixture.detectChanges();
+        tick();
+        expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+      }
     }));
 
     it('should return false from loadMore when skipped', fakeAsync(() => {

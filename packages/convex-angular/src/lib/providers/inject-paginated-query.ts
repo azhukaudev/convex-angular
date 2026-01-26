@@ -336,6 +336,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
     // Cleanup previous subscription
     unsubscribe?.();
+    unsubscribe = undefined;
 
     // If skipToken, reset state and don't subscribe
     if (args === skipToken) {
