@@ -1,5 +1,11 @@
 # convex-angular
 
+## [1.0.1](https://github.com/azhukaudev/convex-angular/compare/v1.0.0...v1.0.1) (2026-01-26)
+
+### 🐛 Bug Fixes
+
+- Prevent double unsubscribe when toggling `skipToken`, avoiding Convex `numSubscribers` errors in `injectQuery` and `injectPaginatedQuery`
+
 ## [1.0.0](https://github.com/azhukaudev/convex-angular/compare/v0.4.1...v1.0.0) (2026-01-11)
 
 ### ✨ Features
