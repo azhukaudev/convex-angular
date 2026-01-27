@@ -1,5 +1,16 @@
 # convex-angular
 
+## [1.0.2](https://github.com/azhukaudev/convex-angular/compare/v1.0.1...v1.0.2) (2026-01-27)
+
+### 🐛 Bug Fixes
+
+- Clear Convex auth when the provider is loading or unauthenticated to avoid stale tokens
+- Auto-initialize auth sync when registering auth providers so queries refresh on sign-in/out
+
+### 📖 Documentation
+
+- Document automatic auth sync initialization and logout behavior
+
 ## [1.0.1](https://github.com/azhukaudev/convex-angular/compare/v1.0.0...v1.0.1) (2026-01-26)
 
 ### 🐛 Bug Fixes
