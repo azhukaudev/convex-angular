@@ -1,11 +1,13 @@
 import {
   DestroyRef,
   EnvironmentInjector,
-  Provider,
+  EnvironmentProviders,
   assertInInjectionContext,
   computed,
   effect,
   inject,
+  makeEnvironmentProviders,
+  provideEnvironmentInitializer,
   runInInjectionContext,
   signal,
 } from '@angular/core';
@@ -71,6 +73,12 @@ function initializeAuthSync(
     // Track the current auth setup to handle cleanup
     let currentAuthCleanup: (() => void) | undefined;
 
+    const clearAuthIfNeeded = () => {
+      if (convex.client.hasAuth()) {
+        convex.client.clearAuth();
+      }
+    };
+
     // Effect to sync auth state with Convex client
     effect(() => {
       const providerLoading = authConfig.isLoading();
@@ -82,6 +90,7 @@ function initializeAuthSync(
 
       // If provider is loading, reset Convex auth state to null (loading)
       if (providerLoading) {
+        clearAuthIfNeeded();
         state.isConvexAuthenticated.set(null);
         state.error.set(undefined);
         return;
@@ -89,6 +98,7 @@ function initializeAuthSync(
 
       // If provider says not authenticated, reflect that immediately
       if (!providerAuthenticated) {
+        clearAuthIfNeeded();
         state.isConvexAuthenticated.set(false);
         state.error.set(undefined);
         return;
@@ -112,8 +122,7 @@ function initializeAuthSync(
 
       // Store cleanup function
       currentAuthCleanup = () => {
-        // Note: ConvexClient doesn't expose a clearAuth in the same way,
-        // but we reset our internal state when auth changes
+        clearAuthIfNeeded();
       };
     });
 
@@ -269,20 +278,25 @@ export function injectAuth(): ConvexAuthState {
  * }
  * ```
  *
- * @returns Provider to add to your application providers
+ * @returns EnvironmentProviders to add to your application providers
  *
  * @public
  */
-export function provideConvexAuth(): Provider {
-  return {
-    provide: CONVEX_AUTH_CONFIG,
-    useFactory: (): ConvexAuthConfig => {
-      const provider = inject(CONVEX_AUTH);
-      return {
-        isLoading: provider.isLoading,
-        isAuthenticated: provider.isAuthenticated,
-        fetchAccessToken: provider.fetchAccessToken,
-      };
+export function provideConvexAuth(): EnvironmentProviders {
+  return makeEnvironmentProviders([
+    {
+      provide: CONVEX_AUTH_CONFIG,
+      useFactory: (): ConvexAuthConfig => {
+        const provider = inject(CONVEX_AUTH);
+        return {
+          isLoading: provider.isLoading,
+          isAuthenticated: provider.isAuthenticated,
+          fetchAccessToken: provider.fetchAccessToken,
+        };
+      },
     },
-  };
+    provideEnvironmentInitializer(() => {
+      injectAuth();
+    }),
+  ]);
 }

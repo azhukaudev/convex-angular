@@ -1,12 +1,15 @@
 import {
+  EnvironmentProviders,
   InjectionToken,
-  Provider,
   Signal,
   computed,
   inject,
+  makeEnvironmentProviders,
+  provideEnvironmentInitializer,
 } from '@angular/core';
 
 import { CONVEX_AUTH_CONFIG, ConvexAuthConfig } from '../../tokens/auth';
+import { injectAuth } from '../inject-auth';
 
 /**
  * Interface that your Clerk auth service must implement.
@@ -130,49 +133,56 @@ export const CLERK_AUTH = new InjectionToken<ClerkAuthProvider>('CLERK_AUTH');
  * }
  * ```
  *
- * @returns Provider to add to your application providers
+ * @returns EnvironmentProviders to add to your application providers
  *
  * @public
  */
-export function provideClerkAuth(): Provider {
-  return {
-    provide: CONVEX_AUTH_CONFIG,
-    useFactory: (): ConvexAuthConfig => {
-      const clerk = inject(CLERK_AUTH);
+export function provideClerkAuth(): EnvironmentProviders {
+  return makeEnvironmentProviders([
+    {
+      provide: CONVEX_AUTH_CONFIG,
+      useFactory: (): ConvexAuthConfig => {
+        const clerk = inject(CLERK_AUTH);
 
-      // Create computed signals that bridge Clerk to Convex
-      const isLoading = computed(() => !clerk.isLoaded());
-      const isAuthenticated = computed(() => clerk.isSignedIn() ?? false);
+        // Create computed signals that bridge Clerk to Convex
+        const isLoading = computed(() => !clerk.isLoaded());
+        const isAuthenticated = computed(() => clerk.isSignedIn() ?? false);
 
-      // Create a version signal that changes when org context changes
-      // This triggers a token refresh when organization changes
-      const tokenVersion = computed(() => {
-        // Access org signals to create dependency (if they exist)
-        clerk.orgId?.();
-        clerk.orgRole?.();
-        // Return a new object each time to trigger change detection
-        return {};
-      });
+        // Create a version signal that changes when org context changes
+        // This triggers a token refresh when organization changes
+        const tokenVersion = computed(() => {
+          // Access org signals to create dependency (if they exist)
+          clerk.orgId?.();
+          clerk.orgRole?.();
+          // Return a new object each time to trigger change detection
+          return {};
+        });
 
-      const fetchAccessToken = async (args: { forceRefreshToken: boolean }) => {
-        // Track token version for reactivity (read the signal)
-        tokenVersion();
+        const fetchAccessToken = async (args: {
+          forceRefreshToken: boolean;
+        }) => {
+          // Track token version for reactivity (read the signal)
+          tokenVersion();
 
-        try {
-          return await clerk.getToken({
-            template: 'convex',
-            skipCache: args.forceRefreshToken,
-          });
-        } catch {
-          return null;
-        }
-      };
+          try {
+            return await clerk.getToken({
+              template: 'convex',
+              skipCache: args.forceRefreshToken,
+            });
+          } catch {
+            return null;
+          }
+        };
 
-      return {
-        isLoading,
-        isAuthenticated,
-        fetchAccessToken,
-      };
+        return {
+          isLoading,
+          isAuthenticated,
+          fetchAccessToken,
+        };
+      },
     },
-  };
+    provideEnvironmentInitializer(() => {
+      injectAuth();
+    }),
+  ]);
 }

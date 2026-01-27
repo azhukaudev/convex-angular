@@ -236,6 +236,11 @@ The auth state provides:
 - `error()` - Authentication error, if any
 - `status()` - `'loading' | 'authenticated' | 'unauthenticated'`
 
+Auth synchronization with Convex starts automatically once you register an auth
+provider via `provideConvexAuth`, `provideClerkAuth`, or `provideAuth0Auth`.
+When the user signs out, Convex auth is cleared so queries and actions run
+unauthenticated. Make sure your `fetchAccessToken` returns `null` when logged out.
+
 ### Clerk Integration
 
 To integrate with Clerk, create a service that implements `ClerkAuthProvider` and register it with `provideClerkAuth()`.
