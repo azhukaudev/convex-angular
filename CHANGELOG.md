@@ -1,5 +1,17 @@
 # convex-angular
 
+## [1.0.3](https://github.com/azhukaudev/convex-angular/compare/v1.0.2...v1.0.3) (2026-02-14)
+
+### ✨ Features
+
+- Add `provideConvexAuthFromExisting(...)` to wire `CONVEX_AUTH` to an existing injectable auth provider instance (avoids accidental duplicate instances)
+
+### 📖 Documentation
+
+- Update Custom Auth Provider examples to use `useExisting` and warn that `useClass` can create a second instance so auth signal changes won’t reach Convex auth sync
+- Add a `@convex-dev/auth` integration snippet and clarify that `provideConvexAuth()` handles `setAuth`/`clearAuth` automatically when `isAuthenticated` changes
+- Align JSDoc auth provider/token examples to prefer `useExisting`
+
 ## [1.0.2](https://github.com/azhukaudev/convex-angular/compare/v1.0.1...v1.0.2) (2026-01-27)
 
 ### 🐛 Bug Fixes
