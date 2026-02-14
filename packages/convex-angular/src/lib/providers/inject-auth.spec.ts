@@ -4,7 +4,11 @@ import { ConvexClient } from 'convex/browser';
 
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import { CONVEX } from '../tokens/convex';
-import { injectAuth, provideConvexAuth } from './inject-auth';
+import {
+  injectAuth,
+  provideConvexAuth,
+  provideConvexAuthFromExisting,
+} from './inject-auth';
 
 /**
  * Mock auth provider for testing
@@ -19,6 +23,27 @@ class MockAuthProvider implements ConvexAuthProvider {
     forceRefreshToken: boolean;
   }): Promise<string | null> {
     return this.tokenToReturn;
+  }
+}
+
+@Injectable()
+class ExistingAuthProvider implements ConvexAuthProvider {
+  readonly isLoading = signal(false);
+  readonly isAuthenticated = signal(false);
+  readonly fetchAccessToken = jest.fn(
+    async (_args: { forceRefreshToken: boolean }) => 'token',
+  );
+}
+
+@Injectable()
+class MethodFetchAuthProvider implements ConvexAuthProvider {
+  readonly isLoading = signal(false);
+  readonly isAuthenticated = signal(true);
+
+  async fetchAccessToken(_args: {
+    forceRefreshToken: boolean;
+  }): Promise<string | null> {
+    return this.isAuthenticated() ? 'method-token' : null;
   }
 }
 
@@ -228,7 +253,7 @@ describe('injectAuth', () => {
       tick();
 
       expect(mockSetAuth).toHaveBeenCalledWith(
-        fetchAccessToken,
+        expect.any(Function),
         expect.any(Function),
       );
     }));
@@ -592,9 +617,58 @@ describe('provideConvexAuth', () => {
     tick();
 
     expect(mockConvexClient.setAuth).toHaveBeenCalledWith(
-      fetchAccessToken,
+      expect.any(Function),
       expect.any(Function),
     );
+  }));
+
+  it('should preserve provider context for method-based fetchAccessToken', fakeAsync(() => {
+    let setAuthFetcher: ConvexAuthProvider['fetchAccessToken'] | undefined;
+
+    const mockConvexClient = {
+      setAuth: jest.fn((fetchToken: ConvexAuthProvider['fetchAccessToken']) => {
+        setAuthFetcher = fetchToken;
+      }),
+      client: {
+        clearAuth: jest.fn(),
+        hasAuth: jest.fn().mockReturnValue(false),
+      },
+    } as unknown as jest.Mocked<ConvexClient>;
+
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CONVEX, useValue: mockConvexClient },
+        { provide: CONVEX_AUTH, useClass: MethodFetchAuthProvider },
+        provideConvexAuth(),
+      ],
+    });
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {}
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    expect(setAuthFetcher).toBeDefined();
+
+    let token: string | null | undefined;
+    let error: unknown;
+    setAuthFetcher!({ forceRefreshToken: false }).then(
+      (value) => {
+        token = value;
+      },
+      (err) => {
+        error = err;
+      },
+    );
+    tick();
+
+    expect(error).toBeUndefined();
+    expect(token).toBe('method-token');
   }));
 
   it('should work with TestBed using CONVEX_AUTH token', fakeAsync(() => {
@@ -664,6 +738,64 @@ describe('provideConvexAuth', () => {
     fixture.detectChanges();
     tick();
 
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+  }));
+});
+
+describe('provideConvexAuthFromExisting', () => {
+  it('should reuse the existing provider instance and sync auth transitions', fakeAsync(() => {
+    const mockHasAuth = jest.fn().mockReturnValue(false);
+
+    const mockConvexClient = {
+      setAuth: jest.fn(),
+      client: {
+        clearAuth: jest.fn(),
+        hasAuth: mockHasAuth,
+      },
+    } as unknown as jest.Mocked<ConvexClient>;
+
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CONVEX, useValue: mockConvexClient },
+        ExistingAuthProvider,
+        provideConvexAuthFromExisting(ExistingAuthProvider),
+      ],
+    });
+
+    const existingProvider = TestBed.inject(ExistingAuthProvider);
+    const providerViaToken = TestBed.inject(CONVEX_AUTH);
+
+    expect(providerViaToken).toBe(existingProvider);
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    expect(mockConvexClient.setAuth).not.toHaveBeenCalled();
+
+    existingProvider.isAuthenticated.set(true);
+    fixture.detectChanges();
+    tick();
+
+    expect(mockConvexClient.setAuth).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.any(Function),
+    );
+
+    mockHasAuth.mockReturnValue(true);
+    existingProvider.isAuthenticated.set(false);
+    fixture.detectChanges();
+    tick();
+
+    expect(mockConvexClient.client.clearAuth).toHaveBeenCalled();
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
   }));
 });

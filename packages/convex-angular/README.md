@@ -342,7 +342,7 @@ import {
   CONVEX_AUTH,
   ConvexAuthProvider,
   provideConvex,
-  provideConvexAuth,
+  provideConvexAuthFromExisting,
 } from 'convex-angular';
 
 @Injectable({ providedIn: 'root' })
@@ -370,11 +370,42 @@ export class CustomAuthService implements ConvexAuthProvider {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideConvex('https://<your-convex-deployment>.convex.cloud'),
-    { provide: CONVEX_AUTH, useClass: CustomAuthService },
-    provideConvexAuth(),
+    provideConvexAuthFromExisting(CustomAuthService),
   ],
 };
 ```
+
+If you wire `CONVEX_AUTH` manually, use `useExisting` (not `useClass`) when the
+auth provider is also injected elsewhere, otherwise you can end up with two
+instances and auth signal updates won’t reach Convex auth sync.
+
+### Convex Auth (`@convex-dev/auth`)
+
+When integrating `@convex-dev/auth`, implement `fetchAccessToken` to return the
+Convex-auth JWT (return `null` when signed out).
+
+```typescript
+import { Injectable, signal } from '@angular/core';
+import { ConvexAuthProvider } from 'convex-angular';
+
+@Injectable({ providedIn: 'root' })
+export class ConvexAuthService implements ConvexAuthProvider {
+  readonly isLoading = signal(true);
+  readonly isAuthenticated = signal(false);
+
+  async fetchAccessToken({
+    forceRefreshToken,
+  }: {
+    forceRefreshToken: boolean;
+  }) {
+    return myAuthProvider.getToken({ refresh: forceRefreshToken });
+  }
+}
+```
+
+With `provideConvexAuth()` registered, convex-angular will call
+`convex.setAuth(...)` / `convex.client.clearAuth()` automatically when your
+provider’s `isAuthenticated` changes.
 
 ### Auth Directives
 

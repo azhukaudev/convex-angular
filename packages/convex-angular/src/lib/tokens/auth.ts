@@ -161,7 +161,7 @@ export interface ConvexAuthProvider {
  * // In app.config.ts
  * providers: [
  *   provideConvex(environment.convexUrl),
- *   { provide: CONVEX_AUTH, useClass: MyAuthService },
+ *   { provide: CONVEX_AUTH, useExisting: MyAuthService },
  *   provideConvexAuth(),
  * ]
  * ```

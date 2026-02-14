@@ -2,6 +2,7 @@ import {
   DestroyRef,
   EnvironmentInjector,
   EnvironmentProviders,
+  Type,
   assertInInjectionContext,
   computed,
   effect,
@@ -16,6 +17,7 @@ import {
   CONVEX_AUTH,
   CONVEX_AUTH_CONFIG,
   ConvexAuthConfig,
+  ConvexAuthProvider,
   ConvexAuthState,
   ConvexAuthStatus,
 } from '../tokens/auth';
@@ -238,6 +240,10 @@ export function injectAuth(): ConvexAuthState {
  * that implements `ConvexAuthProvider`, then provide it using the `CONVEX_AUTH`
  * token, and finally call `provideConvexAuth()`.
  *
+ * If your auth provider is an injectable service that you also inject elsewhere
+ * (for example to call `signIn()` or `signOut()`), register it with
+ * `useExisting` to avoid creating two service instances.
+ *
  * This pattern ensures your auth service is created within Angular's injection
  * context, avoiding race conditions that can occur when signals are created
  * outside of DI.
@@ -267,7 +273,7 @@ export function injectAuth(): ConvexAuthState {
  * export const appConfig: ApplicationConfig = {
  *   providers: [
  *     provideConvex(environment.convexUrl),
- *     { provide: CONVEX_AUTH, useClass: MyAuthService },
+ *     { provide: CONVEX_AUTH, useExisting: MyAuthService },
  *     provideConvexAuth(),
  *   ],
  * };
@@ -291,12 +297,44 @@ export function provideConvexAuth(): EnvironmentProviders {
         return {
           isLoading: provider.isLoading,
           isAuthenticated: provider.isAuthenticated,
-          fetchAccessToken: provider.fetchAccessToken,
+          fetchAccessToken: (args) => provider.fetchAccessToken(args),
         };
       },
     },
     provideEnvironmentInitializer(() => {
       injectAuth();
     }),
+  ]);
+}
+
+/**
+ * Provide Convex auth using an existing injectable auth service instance.
+ *
+ * This registers `{ provide: CONVEX_AUTH, useExisting: authProviderType }` and
+ * enables auth sync via `provideConvexAuth()`. Prefer this helper when the auth
+ * provider is also injected elsewhere in your app (to avoid creating two
+ * instances).
+ *
+ * @example
+ * ```typescript
+ * export const appConfig: ApplicationConfig = {
+ *   providers: [
+ *     provideConvex(environment.convexUrl),
+ *     provideConvexAuthFromExisting(MyAuthService),
+ *   ],
+ * };
+ * ```
+ *
+ * @param authProviderType - Injectable service implementing ConvexAuthProvider
+ * @returns EnvironmentProviders to add to your application providers
+ *
+ * @public
+ */
+export function provideConvexAuthFromExisting(
+  authProviderType: Type<ConvexAuthProvider>,
+): EnvironmentProviders {
+  return makeEnvironmentProviders([
+    { provide: CONVEX_AUTH, useExisting: authProviderType },
+    provideConvexAuth(),
   ]);
 }

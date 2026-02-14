@@ -14,6 +14,8 @@ import {
 describe('Auth Helper Directives', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
   let mockSetAuth: jest.Mock;
+  let mockClearAuth: jest.Mock;
+  let mockHasAuth: jest.Mock;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
   let isLoading: ReturnType<typeof signal<boolean>>;
   let isAuthenticated: ReturnType<typeof signal<boolean>>;
@@ -22,9 +24,15 @@ describe('Auth Helper Directives', () => {
     mockSetAuth = jest.fn((_fetchToken, onChange) => {
       setAuthOnChange = onChange;
     });
+    mockClearAuth = jest.fn();
+    mockHasAuth = jest.fn().mockReturnValue(false);
 
     mockConvexClient = {
       setAuth: mockSetAuth,
+      client: {
+        clearAuth: mockClearAuth,
+        hasAuth: mockHasAuth,
+      },
     } as unknown as jest.Mocked<ConvexClient>;
 
     isLoading = signal(true);

@@ -66,9 +66,6 @@ export class MockAuthService implements ConvexAuthProvider {
    * @param args.forceRefreshToken - Whether to force a token refresh
    * @returns A mock JWT token if authenticated, null otherwise
    */
-  async fetchAccessToken(_args: {
-    forceRefreshToken: boolean;
-  }): Promise<string | null> {
-    return this.isAuthenticated() ? 'mock-jwt-token-for-demo' : null;
-  }
+  readonly fetchAccessToken = async (): Promise<string | null> =>
+    this.isAuthenticated() ? 'mock-jwt-token-for-demo' : null;
 }

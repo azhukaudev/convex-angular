@@ -1,4 +1,9 @@
-import { Component, signal } from '@angular/core';
+import {
+  Component,
+  EnvironmentProviders,
+  Provider,
+  signal,
+} from '@angular/core';
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { Router, Routes, provideRouter } from '@angular/router';
 import { ConvexClient } from 'convex/browser';
@@ -11,6 +16,8 @@ import { CONVEX_AUTH_GUARD_CONFIG, convexAuthGuard } from './auth-guards';
 describe('Auth Guards', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
   let mockSetAuth: jest.Mock;
+  let mockClearAuth: jest.Mock;
+  let mockHasAuth: jest.Mock;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
   let isLoading: ReturnType<typeof signal<boolean>>;
   let isAuthenticated: ReturnType<typeof signal<boolean>>;
@@ -19,9 +26,15 @@ describe('Auth Guards', () => {
     mockSetAuth = jest.fn((_fetchToken, onChange) => {
       setAuthOnChange = onChange;
     });
+    mockClearAuth = jest.fn();
+    mockHasAuth = jest.fn().mockReturnValue(false);
 
     mockConvexClient = {
       setAuth: mockSetAuth,
+      client: {
+        clearAuth: mockClearAuth,
+        hasAuth: mockHasAuth,
+      },
     } as unknown as jest.Mocked<ConvexClient>;
 
     isLoading = signal(false);
@@ -69,7 +82,7 @@ describe('Auth Guards', () => {
         fetchAccessToken: async () => 'token',
       };
 
-      const providers = [
+      const providers: Array<Provider | EnvironmentProviders> = [
         { provide: CONVEX, useValue: mockConvexClient },
         { provide: CONVEX_AUTH, useValue: mockProvider },
         provideConvexAuth(),

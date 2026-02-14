@@ -206,6 +206,19 @@ beforeEach(() => {
 });
 ```
 
+For auth-related tests (`injectAuth()` / `provideConvexAuth()`), the mock must also include
+`setAuth` and the nested `client.hasAuth` / `client.clearAuth` methods (used during cleanup):
+
+```typescript
+mockConvexClient = {
+  setAuth: jest.fn(),
+  client: {
+    hasAuth: jest.fn().mockReturnValue(false),
+    clearAuth: jest.fn(),
+  },
+} as unknown as jest.Mocked<ConvexClient>;
+```
+
 ### Test Component Pattern
 
 Create inline test components to test providers:
@@ -287,6 +300,31 @@ class MyComponent {
     this.todos = injectQuery(...); // Error!
   }
 }
+```
+
+### Auth Provider Wiring
+
+If your custom `ConvexAuthProvider` is an injectable service that you also inject elsewhere
+(e.g. for `signIn()` / `signOut()`), avoid wiring `CONVEX_AUTH` with `useClass` or you can
+end up with two instances and auth signal updates won’t reach Convex auth sync.
+
+Prefer:
+
+```typescript
+providers: [
+  provideConvex(environment.convexUrl),
+  provideConvexAuthFromExisting(MyAuthService),
+];
+```
+
+Or, if wiring manually:
+
+```typescript
+providers: [
+  provideConvex(environment.convexUrl),
+  { provide: CONVEX_AUTH, useExisting: MyAuthService },
+  provideConvexAuth(),
+];
 ```
 
 ### Signal Reactivity
