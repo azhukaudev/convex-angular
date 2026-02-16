@@ -1,5 +1,11 @@
 # convex-angular
 
+## [1.0.4](https://github.com/azhukaudev/convex-angular/compare/v1.0.3...v1.0.4) (2026-02-16)
+
+### 📖 Documentation
+
+- Refresh README examples and fix inconsistencies (requirements note, safer `injectQuery`, updated pagination/guard snippets, auth examples now use `useExisting`, repo dev commands).
+
 ## [1.0.3](https://github.com/azhukaudev/convex-angular/compare/v1.0.2...v1.0.3) (2026-02-14)
 
 ### ✨ Features
