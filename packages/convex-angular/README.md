@@ -8,7 +8,7 @@ The Angular client for Convex.
 
 ## ✨ Features
 
-- 🔌 Core providers: `injectQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, and `injectConvex`
+- 🔌 Core providers: `provideConvex`, `injectQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, and `injectConvex`
 - 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`
 - 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`
@@ -19,6 +19,8 @@ The Angular client for Convex.
 
 ## 🚀 Getting Started
 
+> Requirements: Angular >= 20, Convex >= 1.31, RxJS >= 7.8.
+
 1. Install the dependencies:
 
 ```bash
@@ -28,6 +30,7 @@ npm install convex convex-angular
 2. Add `provideConvex` to your `app.config.ts` file:
 
 ```typescript
+import { ApplicationConfig } from '@angular/core';
 import { provideConvex } from 'convex-angular';
 
 export const appConfig: ApplicationConfig = {
@@ -39,25 +42,39 @@ export const appConfig: ApplicationConfig = {
 
 ## 📖 Usage
 
+> Note: In the examples below, `api` refers to your generated Convex function references (usually from `convex/_generated/api`). Adjust the import path to match your project structure.
+
 ### Fetching data
 
 Use `injectQuery` to fetch data from the database.
 
 ```typescript
+import { Component } from '@angular/core';
 import { injectQuery } from 'convex-angular';
+
+// Adjust the import path to match your project structure.
+import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
   template: `
+    @if (todos.isLoading()) {
+      <p>Loading...</p>
+    }
+
+    @if (todos.error()) {
+      <p>Error: {{ todos.error()?.message }}</p>
+    }
+
     <ul>
-      @for (todo of todos.data(); track todo._id) {
-        <li>{{ todo.name }}</li>
+      @for (todo of todos.data() ?? []; track todo._id) {
+        <li>{{ todo.title }}</li>
       }
     </ul>
   `,
 })
 export class AppComponent {
-  readonly todos = injectQuery(api.todo.listTodos, () => ({}));
+  readonly todos = injectQuery(api.todos.listTodos, () => ({ count: 10 }));
 }
 ```
 
@@ -66,18 +83,21 @@ export class AppComponent {
 Use `injectMutation` to mutate the database.
 
 ```typescript
+import { Component } from '@angular/core';
 import { injectMutation } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
   template: `
-    <button (click)="addTodo.mutate({ id: '1', name: 'Buy groceries' })">
+    <button (click)="addTodo.mutate({ title: 'Buy groceries' })">
       Add Todo
     </button>
   `,
 })
 export class AppComponent {
-  readonly addTodo = injectMutation(api.todo.addTodo);
+  readonly addTodo = injectMutation(api.todos.addTodo);
 }
 ```
 
@@ -86,23 +106,32 @@ export class AppComponent {
 Use `injectAction` to run actions.
 
 ```typescript
+import { Component } from '@angular/core';
 import { injectAction } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
-  template: `<button (click)="resetTodos.run({})">Reset Todos</button>`,
+  template: `<button (click)="completeAllTodos.run({})">
+    Complete All Todos
+  </button>`,
 })
 export class AppComponent {
-  readonly resetTodos = injectAction(api.todoFunctions.resetTodos);
+  readonly completeAllTodos = injectAction(api.todoFunctions.completeAllTodos);
 }
 ```
 
 ### Paginated queries
 
 Use `injectPaginatedQuery` for infinite scroll or "load more" patterns.
+Your Convex query must accept a `paginationOpts` argument.
 
 ```typescript
+import { Component } from '@angular/core';
 import { injectPaginatedQuery } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
@@ -139,6 +168,8 @@ The paginated query returns:
 - `canLoadMore()` - True when more items are available
 - `isExhausted()` - True when all items have been loaded
 - `isSkipped()` - True when the query is skipped via `skipToken`
+- `isSuccess()` - True when the first page has loaded successfully
+- `status()` - `'pending' | 'success' | 'error' | 'skipped'`
 - `error()` - Error if the query failed
 - `loadMore(n)` - Load `n` more items
 - `reset()` - Reset pagination and reload from the beginning
@@ -148,8 +179,10 @@ The paginated query returns:
 Use `skipToken` to conditionally skip a query when certain conditions aren't met.
 
 ```typescript
-import { signal } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { injectQuery, skipToken } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
@@ -184,7 +217,10 @@ This is useful when:
 Use `injectConvex` to get full flexibility of the Convex client.
 
 ```typescript
+import { Component } from '@angular/core';
 import { injectConvex } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
@@ -194,7 +230,7 @@ export class AppComponent {
   readonly convex = injectConvex();
 
   completeAllTodos() {
-    this.convex.mutation(api.todoFunctions.completeAllTodos, {});
+    this.convex.action(api.todoFunctions.completeAllTodos, {});
   }
 }
 ```
@@ -206,6 +242,7 @@ export class AppComponent {
 Use `injectAuth` to access the authentication state in your components.
 
 ```typescript
+import { Component } from '@angular/core';
 import { injectAuth } from 'convex-angular';
 
 @Component({
@@ -216,10 +253,10 @@ import { injectAuth } from 'convex-angular';
         <p>Loading...</p>
       }
       @case ('authenticated') {
-        <app-dashboard />
+        <app-dashboard></app-dashboard>
       }
       @case ('unauthenticated') {
-        <app-login />
+        <app-login></app-login>
       }
     }
   `,
@@ -235,11 +272,6 @@ The auth state provides:
 - `isAuthenticated()` - True when user is authenticated
 - `error()` - Authentication error, if any
 - `status()` - `'loading' | 'authenticated' | 'unauthenticated'`
-
-Auth synchronization with Convex starts automatically once you register an auth
-provider via `provideConvexAuth`, `provideClerkAuth`, or `provideAuth0Auth`.
-When the user signs out, Convex auth is cleared so queries and actions run
-unauthenticated. Make sure your `fetchAccessToken` returns `null` when logged out.
 
 ### Clerk Integration
 
@@ -281,7 +313,7 @@ export class ClerkAuthService implements ClerkAuthProvider {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideConvex('https://<your-convex-deployment>.convex.cloud'),
-    { provide: CLERK_AUTH, useClass: ClerkAuthService },
+    { provide: CLERK_AUTH, useExisting: ClerkAuthService },
     provideClerkAuth(),
   ],
 };
@@ -324,7 +356,7 @@ export class Auth0AuthService implements Auth0AuthProvider {
 export const appConfig: ApplicationConfig = {
   providers: [
     provideConvex('https://<your-convex-deployment>.convex.cloud'),
-    { provide: AUTH0_AUTH, useClass: Auth0AuthService },
+    { provide: AUTH0_AUTH, useExisting: Auth0AuthService },
     provideAuth0Auth(),
   ],
 };
@@ -374,6 +406,8 @@ export const appConfig: ApplicationConfig = {
   ],
 };
 ```
+
+`provideConvexAuthFromExisting(...)` registers `CONVEX_AUTH` with `useExisting` and includes `provideConvexAuth()` internally.
 
 If you wire `CONVEX_AUTH` manually, use `useExisting` (not `useClass`) when the
 auth provider is also injected elsewhere, otherwise you can end up with two
@@ -462,17 +496,22 @@ import { convexAuthGuard } from 'convex-angular';
 export const routes: Routes = [
   {
     path: 'dashboard',
-    loadComponent: () => import('./dashboard/dashboard.component'),
+    loadComponent: () =>
+      import('./dashboard/dashboard.component').then(
+        (m) => m.DashboardComponent,
+      ),
     canActivate: [convexAuthGuard],
   },
   {
     path: 'profile',
-    loadComponent: () => import('./profile/profile.component'),
+    loadComponent: () =>
+      import('./profile/profile.component').then((m) => m.ProfileComponent),
     canActivate: [convexAuthGuard],
   },
   {
     path: 'login',
-    loadComponent: () => import('./login/login.component'),
+    loadComponent: () =>
+      import('./login/login.component').then((m) => m.LoginComponent),
   },
 ];
 ```
@@ -497,6 +536,16 @@ export const appConfig: ApplicationConfig = {
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a pull request.
+
+### Repo development
+
+```bash
+pnpm install
+pnpm dev:backend
+pnpm dev:frontend
+pnpm test:library
+pnpm build:library
+```
 
 ## ⚖️ License
 
