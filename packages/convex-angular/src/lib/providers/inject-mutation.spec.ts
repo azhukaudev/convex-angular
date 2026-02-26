@@ -599,6 +599,91 @@ describe('injectMutation', () => {
     }));
   });
 
+  describe('isError signal', () => {
+    it('should be false initially', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.addTodo.isError()).toBe(false);
+    });
+
+    it('should be true after failed mutation', fakeAsync(() => {
+      mockConvexClient.mutation.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'test' })
+        .catch(() => {});
+      tick();
+
+      expect(fixture.componentInstance.addTodo.isError()).toBe(true);
+    }));
+
+    it('should be false after successful mutation', fakeAsync(() => {
+      mockConvexClient.mutation.mockResolvedValue({ id: '123' });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.isError()).toBe(false);
+    }));
+
+    it('should be false after reset', fakeAsync(() => {
+      mockConvexClient.mutation.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'test' })
+        .catch(() => {});
+      tick();
+
+      expect(fixture.componentInstance.addTodo.isError()).toBe(true);
+
+      fixture.componentInstance.addTodo.reset();
+
+      expect(fixture.componentInstance.addTodo.isError()).toBe(false);
+    }));
+  });
+
   describe('reset', () => {
     it('should reset all state to initial values', fakeAsync(() => {
       mockConvexClient.mutation.mockResolvedValue({ id: '123' });

@@ -50,6 +50,11 @@ export interface CallableProviderState<TData> {
   isSuccess: Signal<boolean>;
 
   /**
+   * True when the operation failed with an error.
+   */
+  isError: Signal<boolean>;
+
+  /**
    * The current status of the operation.
    */
   status: Signal<CallableStatus>;
@@ -93,6 +98,7 @@ export function createCallableProvider<TData>(
 
   // Computed signals
   const isSuccess = computed(() => hasCompleted() && !isLoading() && !error());
+  const isError = computed(() => error() !== undefined);
   const status = computed<CallableStatus>(() => {
     if (isLoading()) return 'pending';
     if (error()) return 'error';
@@ -143,6 +149,7 @@ export function createCallableProvider<TData>(
     error: error.asReadonly(),
     isLoading: isLoading.asReadonly(),
     isSuccess,
+    isError,
     status,
     reset,
     execute,

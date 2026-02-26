@@ -819,6 +819,76 @@ describe('injectQuery', () => {
     }));
   });
 
+  describe('isError signal', () => {
+    it('should be false while loading', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isError()).toBe(false);
+    }));
+
+    it('should be false after successful data load', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+
+      expect(fixture.componentInstance.todos.isError()).toBe(false);
+    }));
+
+    it('should be true when there is an error', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onErrorCallback(new Error('Query failed'));
+
+      expect(fixture.componentInstance.todos.isError()).toBe(true);
+    }));
+
+    it('should be false when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => skipToken);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isError()).toBe(false);
+    }));
+  });
+
   describe('refetch', () => {
     it('should trigger resubscription when refetch is called', fakeAsync(() => {
       @Component({

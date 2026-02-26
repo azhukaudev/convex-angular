@@ -1,10 +1,8 @@
 import {
-  DestroyRef,
   Signal,
   assertInInjectionContext,
   computed,
   effect,
-  inject,
   signal,
 } from '@angular/core';
 import {
@@ -140,6 +138,12 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
   isSuccess: Signal<boolean>;
 
   /**
+   * True when the query has an error.
+   * False during loading, when skipped, or when data is received successfully.
+   */
+  isError: Signal<boolean>;
+
+  /**
    * The current status of the paginated query.
    * - 'pending': Loading the first page
    * - 'success': First page loaded successfully (may still load more)
@@ -219,7 +223,6 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 ): PaginatedQueryResult<Query> {
   assertInInjectionContext(injectPaginatedQuery);
   const convex = injectConvex();
-  const destroyRef = inject(DestroyRef);
 
   // Internal signals
   const results = signal<PaginatedQueryItem<Query>[]>([]);
@@ -234,6 +237,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   const isSuccess = computed(
     () => !isLoadingFirstPage() && !isSkipped() && !error(),
   );
+  const isError = computed(() => error() !== undefined);
   const status = computed<PaginatedQueryStatus>(() => {
     if (isSkipped()) return 'skipped';
     if (isLoadingFirstPage()) return 'pending';
@@ -243,26 +247,14 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
   // Track the loadMore function from the current subscription
   let currentLoadMore: ((numItems: number) => boolean) | undefined;
-  let unsubscribe: (() => void) | undefined;
-  const cleanupSubscription = () => {
-    const currentUnsubscribe = unsubscribe;
-    if (!currentUnsubscribe) {
-      return;
-    }
-    unsubscribe = undefined;
-    currentUnsubscribe();
-  };
 
   // Version counter to trigger reset
   const resetVersion = signal(0);
 
-  const subscribe = (
-    args: PaginatedQueryArgs<Query>,
-    options: PaginatedQueryOptions<Query>,
-  ) => {
-    cleanupSubscription();
-
-    // Reset state for new subscription
+  /**
+   * Reset all state to initial values.
+   */
+  const resetState = () => {
     results.set([]);
     error.set(undefined);
     isLoadingFirstPage.set(true);
@@ -271,8 +263,27 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     isExhausted.set(false);
     isSkipped.set(false);
     currentLoadMore = undefined;
+  };
 
-    unsubscribe = convex.onPaginatedUpdate_experimental(
+  // Effect to reactively subscribe when args or options change
+  effect((onCleanup) => {
+    // Track dependencies
+    const args = argsFn();
+    const options = optionsFn();
+    resetVersion();
+
+    // If skipToken, reset state and don't subscribe
+    if (args === skipToken) {
+      resetState();
+      isLoadingFirstPage.set(false);
+      isSkipped.set(true);
+      return;
+    }
+
+    // Reset state for new subscription
+    resetState();
+
+    const unsub = convex.onPaginatedUpdate_experimental(
       query,
       args as FunctionArgs<Query>,
       { initialNumItems: options.initialNumItems },
@@ -333,35 +344,9 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         options.onError?.(err);
       },
     );
-  };
 
-  // Effect to reactively subscribe when args or options change
-  effect(() => {
-    // Track dependencies
-    const args = argsFn();
-    const options = optionsFn();
-    resetVersion();
-
-    // Cleanup previous subscription
-    cleanupSubscription();
-
-    // If skipToken, reset state and don't subscribe
-    if (args === skipToken) {
-      results.set([]);
-      error.set(undefined);
-      isLoadingFirstPage.set(false);
-      isLoadingMore.set(false);
-      canLoadMore.set(false);
-      isExhausted.set(false);
-      isSkipped.set(true);
-      currentLoadMore = undefined;
-      return;
-    }
-
-    subscribe(args, options);
+    onCleanup(() => unsub());
   });
-
-  destroyRef.onDestroy(() => cleanupSubscription());
 
   const loadMore = (numItems: number): boolean => {
     if (!currentLoadMore) {
@@ -383,6 +368,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     isExhausted: isExhausted.asReadonly(),
     isSkipped: isSkipped.asReadonly(),
     isSuccess,
+    isError,
     status,
     loadMore,
     reset,

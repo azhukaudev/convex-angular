@@ -1,8 +1,9 @@
 import {
   DestroyRef,
-  FactoryProvider,
+  EnvironmentProviders,
   InjectionToken,
   inject,
+  makeEnvironmentProviders,
 } from '@angular/core';
 import { ConvexClient, ConvexClientOptions } from 'convex/browser';
 
@@ -59,16 +60,18 @@ function convexClientFactory(
  *
  * @param convexUrl - The URL of your Convex deployment
  * @param options - Optional ConvexClient configuration options
- * @returns A provider to add to your application providers
+ * @returns EnvironmentProviders to add to your application providers
  *
  * @public
  */
 export function provideConvex(
   convexUrl: string,
   options?: ConvexClientOptions,
-): FactoryProvider {
-  return {
-    provide: CONVEX,
-    useFactory: () => convexClientFactory(convexUrl, options),
-  };
+): EnvironmentProviders {
+  return makeEnvironmentProviders([
+    {
+      provide: CONVEX,
+      useFactory: () => convexClientFactory(convexUrl, options),
+    },
+  ]);
 }

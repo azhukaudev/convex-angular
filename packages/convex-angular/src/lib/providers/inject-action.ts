@@ -63,6 +63,12 @@ export interface ActionResult<Action extends ActionReference> {
   isSuccess: Signal<boolean>;
 
   /**
+   * True when the action failed with an error.
+   * False when idle, loading, or when completed successfully.
+   */
+  isError: Signal<boolean>;
+
+  /**
    * The current status of the action.
    * - 'idle': Action has not been called yet or was reset
    * - 'pending': Action is in progress
@@ -132,6 +138,7 @@ export function injectAction<Action extends ActionReference>(
     error: provider.error,
     isLoading: provider.isLoading,
     isSuccess: provider.isSuccess,
+    isError: provider.isError,
     status: provider.status as Signal<ActionStatus>,
     reset: provider.reset,
   };

@@ -76,6 +76,12 @@ export interface MutationResult<Mutation extends MutationReference> {
   isSuccess: Signal<boolean>;
 
   /**
+   * True when the mutation failed with an error.
+   * False when idle, loading, or when completed successfully.
+   */
+  isError: Signal<boolean>;
+
+  /**
    * The current status of the mutation.
    * - 'idle': Mutation has not been called yet or was reset
    * - 'pending': Mutation is in progress
@@ -158,6 +164,7 @@ export function injectMutation<Mutation extends MutationReference>(
     error: provider.error,
     isLoading: provider.isLoading,
     isSuccess: provider.isSuccess,
+    isError: provider.isError,
     status: provider.status as Signal<MutationStatus>,
     reset: provider.reset,
   };

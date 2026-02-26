@@ -1010,6 +1010,98 @@ describe('injectPaginatedQuery', () => {
     }));
   });
 
+  describe('isError signal', () => {
+    it('should be false while loading first page', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => ({}),
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isError()).toBe(false);
+    }));
+
+    it('should be true when there is an error', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => ({}),
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onErrorCallback(new Error('Query failed'));
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.todos.isError()).toBe(true);
+    }));
+
+    it('should be false after successful data load', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => ({}),
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onUpdateCallback({
+        results: [{ _id: '1', name: 'Todo 1' }],
+        status: 'CanLoadMore',
+        loadMore: jest.fn(),
+      });
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.todos.isError()).toBe(false);
+    }));
+
+    it('should be false when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => skipToken,
+          () => ({ initialNumItems: 10 }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isError()).toBe(false);
+    }));
+  });
+
   describe('options callbacks', () => {
     it('should call onSuccess callback when data is received', fakeAsync(() => {
       const onSuccess = jest.fn();

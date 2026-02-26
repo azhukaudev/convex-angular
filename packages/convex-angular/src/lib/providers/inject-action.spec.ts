@@ -570,6 +570,91 @@ describe('injectAction', () => {
     }));
   });
 
+  describe('isError signal', () => {
+    it('should be false initially', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.sendEmail.isError()).toBe(false);
+    });
+
+    it('should be true after failed action', fakeAsync(() => {
+      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
+      tick();
+
+      expect(fixture.componentInstance.sendEmail.isError()).toBe(true);
+    }));
+
+    it('should be false after successful action', fakeAsync(() => {
+      mockConvexClient.action.mockResolvedValue({ success: true });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      tick();
+
+      expect(fixture.componentInstance.sendEmail.isError()).toBe(false);
+    }));
+
+    it('should be false after reset', fakeAsync(() => {
+      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
+      tick();
+
+      expect(fixture.componentInstance.sendEmail.isError()).toBe(true);
+
+      fixture.componentInstance.sendEmail.reset();
+
+      expect(fixture.componentInstance.sendEmail.isError()).toBe(false);
+    }));
+  });
+
   describe('reset', () => {
     it('should reset all state to initial values', fakeAsync(() => {
       mockConvexClient.action.mockResolvedValue({ success: true });

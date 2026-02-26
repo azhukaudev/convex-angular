@@ -1,10 +1,8 @@
 import {
-  DestroyRef,
   Signal,
   assertInInjectionContext,
   computed,
   effect,
-  inject,
   signal,
   untracked,
 } from '@angular/core';
@@ -75,6 +73,12 @@ export interface QueryResult<Query extends QueryReference> {
    * False during loading, when skipped, or when there's an error.
    */
   isSuccess: Signal<boolean>;
+
+  /**
+   * True when the query has an error.
+   * False during loading, when skipped, or when data is received successfully.
+   */
+  isError: Signal<boolean>;
 
   /**
    * The current status of the query.
@@ -152,7 +156,6 @@ export function injectQuery<Query extends QueryReference>(
 ): QueryResult<Query> {
   assertInInjectionContext(injectQuery);
   const convex = injectConvex();
-  const destroyRef = inject(DestroyRef);
 
   // Initialize signals
   const data = signal<FunctionReturnType<Query>>(undefined);
@@ -165,6 +168,7 @@ export function injectQuery<Query extends QueryReference>(
 
   // Computed signals
   const isSuccess = computed(() => !isLoading() && !isSkipped() && !error());
+  const isError = computed(() => error() !== undefined);
   const status = computed<QueryStatus>(() => {
     if (isSkipped()) return 'skipped';
     if (isLoading()) return 'pending';
@@ -172,24 +176,10 @@ export function injectQuery<Query extends QueryReference>(
     return 'success';
   });
 
-  // Track current subscription for cleanup
-  let unsubscribe: (() => void) | undefined;
-  const cleanupSubscription = () => {
-    const currentUnsubscribe = unsubscribe;
-    if (!currentUnsubscribe) {
-      return;
-    }
-    unsubscribe = undefined;
-    currentUnsubscribe();
-  };
-
   // Effect to reactively subscribe when args change
-  effect(() => {
+  effect((onCleanup) => {
     const args = argsFn();
     refetchVersion(); // Track for manual refetch
-
-    // Cleanup previous subscription
-    cleanupSubscription();
 
     // If skipToken, reset state and don't subscribe
     if (args === skipToken) {
@@ -218,7 +208,7 @@ export function injectQuery<Query extends QueryReference>(
     }
 
     // Subscribe to the query
-    unsubscribe = convex.onUpdate(
+    const unsub = convex.onUpdate(
       query,
       args,
       (result: FunctionReturnType<Query>) => {
@@ -234,10 +224,9 @@ export function injectQuery<Query extends QueryReference>(
         options?.onError?.(err);
       },
     );
-  });
 
-  // Cleanup subscription when component is destroyed
-  destroyRef.onDestroy(() => cleanupSubscription());
+    onCleanup(() => unsub());
+  });
 
   // Refetch function
   const refetch = () => {
@@ -250,6 +239,7 @@ export function injectQuery<Query extends QueryReference>(
     isLoading: isLoading.asReadonly(),
     isSkipped: isSkipped.asReadonly(),
     isSuccess,
+    isError,
     status,
     refetch,
   };
