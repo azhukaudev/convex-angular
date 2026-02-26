@@ -1,9 +1,4 @@
-import {
-  Signal,
-  assertInInjectionContext,
-  computed,
-  signal,
-} from '@angular/core';
+import { Signal, assertInInjectionContext } from '@angular/core';
 import { OptimisticUpdate } from 'convex/browser';
 import {
   FunctionArgs,
@@ -12,6 +7,7 @@ import {
 } from 'convex/server';
 
 import { MutationStatus } from '../types';
+import { createCallableProvider } from './create-callable-provider';
 import { injectConvex } from './inject-convex';
 
 /**
@@ -50,6 +46,7 @@ export interface MutationResult<Mutation extends MutationReference> {
    * Execute the mutation with the given arguments.
    * @param args - The arguments to pass to the mutation
    * @returns A promise that resolves with the mutation's return value
+   * @throws Error if the mutation fails (after updating error state and calling onError)
    */
   mutate: (
     args: FunctionArgs<Mutation>,
@@ -137,71 +134,31 @@ export function injectMutation<Mutation extends MutationReference>(
   assertInInjectionContext(injectMutation);
   const convex = injectConvex();
 
-  // Internal signals for tracking state
-  const data = signal<FunctionReturnType<Mutation>>(undefined);
-  const error = signal<Error | undefined>(undefined);
-  const isLoading = signal(false);
-
-  // Track if mutation has been called (to distinguish idle from success)
-  const hasCompleted = signal(false);
-
-  // Computed signals
-  const isSuccess = computed(() => hasCompleted() && !isLoading() && !error());
-  const status = computed<MutationStatus>(() => {
-    if (isLoading()) return 'pending';
-    if (error()) return 'error';
-    if (hasCompleted()) return 'success';
-    return 'idle';
+  const provider = createCallableProvider<FunctionReturnType<Mutation>>({
+    onSuccess: options?.onSuccess,
+    onError: options?.onError,
   });
-
-  /**
-   * Reset all state.
-   */
-  const reset = () => {
-    data.set(undefined);
-    error.set(undefined);
-    isLoading.set(false);
-    hasCompleted.set(false);
-  };
 
   /**
    * Execute the mutation with the given arguments.
    */
-  const mutate = async (
+  const mutate = (
     args: FunctionArgs<Mutation>,
   ): Promise<FunctionReturnType<Mutation>> => {
-    try {
-      // Reset state before new mutation, but keep hasCompleted false until done
-      data.set(undefined);
-      error.set(undefined);
-      hasCompleted.set(false);
-      isLoading.set(true);
-
-      const result = await convex.mutation(mutation, args, {
+    return provider.execute(() =>
+      convex.mutation(mutation, args, {
         optimisticUpdate: options?.optimisticUpdate,
-      });
-      data.set(result);
-      hasCompleted.set(true);
-      options?.onSuccess?.(result);
-      return result;
-    } catch (err) {
-      const errorObj = err instanceof Error ? err : new Error(String(err));
-      error.set(errorObj);
-      hasCompleted.set(true);
-      options?.onError?.(errorObj);
-      return undefined;
-    } finally {
-      isLoading.set(false);
-    }
+      }),
+    );
   };
 
   return {
     mutate,
-    data: data.asReadonly(),
-    error: error.asReadonly(),
-    isLoading: isLoading.asReadonly(),
-    isSuccess,
-    status,
-    reset,
+    data: provider.data,
+    error: provider.error,
+    isLoading: provider.isLoading,
+    isSuccess: provider.isSuccess,
+    status: provider.status as Signal<MutationStatus>,
+    reset: provider.reset,
   };
 }

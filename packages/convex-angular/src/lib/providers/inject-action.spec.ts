@@ -164,7 +164,9 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       // First call - error
-      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
       tick();
 
       expect(fixture.componentInstance.sendEmail.error()).toBeDefined();
@@ -215,7 +217,9 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
       tick();
 
       expect(fixture.componentInstance.sendEmail.error()).toBe(error);
@@ -235,7 +239,9 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
       tick();
 
       const error = fixture.componentInstance.sendEmail.error();
@@ -243,8 +249,9 @@ describe('injectAction', () => {
       expect(error?.message).toBe('string error');
     }));
 
-    it('should return undefined on error', fakeAsync(() => {
-      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
+    it('should re-throw error from run()', fakeAsync(() => {
+      const error = new Error('Failed');
+      mockConvexClient.action.mockRejectedValue(error);
 
       @Component({
         template: '',
@@ -257,13 +264,13 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      let result: unknown = 'not-undefined';
+      let caughtError: unknown;
       fixture.componentInstance.sendEmail
         .run({ message: 'test' })
-        .then((r) => (result = r));
+        .catch((e) => (caughtError = e));
       tick();
 
-      expect(result).toBeUndefined();
+      expect(caughtError).toBe(error);
     }));
   });
 
@@ -306,7 +313,9 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
       tick();
 
       expect(onError).toHaveBeenCalledWith(error);
@@ -327,7 +336,9 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
       tick();
 
       expect(onSuccess).not.toHaveBeenCalled();
@@ -390,7 +401,9 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
       tick();
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
@@ -468,7 +481,9 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
       tick();
 
       expect(fixture.componentInstance.sendEmail.status()).toBe('error');
@@ -546,7 +561,9 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
       tick();
 
       expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(false);
@@ -600,7 +617,9 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       // Run a failing action
-      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
       tick();
 
       expect(fixture.componentInstance.sendEmail.error()).toBeDefined();
