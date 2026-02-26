@@ -14,9 +14,17 @@ import { injectAuth } from '../providers/inject-auth';
 export interface ConvexAuthGuardConfig {
   /**
    * The route to redirect to when authentication is required but user is not authenticated.
+   * Used by `convexAuthGuard`.
    * @default '/login'
    */
   loginRoute?: string;
+
+  /**
+   * The route to redirect to when user is already authenticated.
+   * Used by `convexUnauthGuard` to redirect away from public-only pages (login, register).
+   * @default '/'
+   */
+  authenticatedRoute?: string;
 }
 
 /**
@@ -99,6 +107,73 @@ export const convexAuthGuard: CanActivateFn = (): Observable<
       }
       // Redirect to login
       return router.createUrlTree([loginRoute]);
+    }),
+  );
+};
+
+/**
+ * Route guard that prevents authenticated users from accessing public-only pages.
+ *
+ * This is the inverse of `convexAuthGuard`. Use it on login, register, and
+ * other pages that should only be accessible to unauthenticated users.
+ *
+ * This guard will:
+ * 1. Wait for auth to finish loading
+ * 2. Allow navigation if the user is NOT authenticated
+ * 3. Redirect to the authenticated route if the user IS authenticated
+ *
+ * @example
+ * ```typescript
+ * // In app.routes.ts
+ * export const routes: Routes = [
+ *   {
+ *     path: 'login',
+ *     loadComponent: () => import('./login/login.component'),
+ *     canActivate: [convexUnauthGuard],
+ *   },
+ *   {
+ *     path: 'register',
+ *     loadComponent: () => import('./register/register.component'),
+ *     canActivate: [convexUnauthGuard],
+ *   },
+ * ];
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // With custom redirect route
+ * // In app.config.ts
+ * providers: [
+ *   { provide: CONVEX_AUTH_GUARD_CONFIG, useValue: { authenticatedRoute: '/dashboard' } },
+ * ]
+ * ```
+ *
+ * @public
+ */
+export const convexUnauthGuard: CanActivateFn = (): Observable<
+  boolean | UrlTree
+> => {
+  const auth = injectAuth();
+  const router = inject(Router);
+  const config = inject(CONVEX_AUTH_GUARD_CONFIG, { optional: true });
+
+  const authenticatedRoute = config?.authenticatedRoute ?? '/';
+
+  // Convert signal to observable
+  const status$ = toObservable(auth.status);
+
+  return status$.pipe(
+    // Wait until not loading
+    filter((status) => status !== 'loading'),
+    // Take only the first emission after loading completes
+    take(1),
+    // Map to boolean or redirect
+    map((status) => {
+      if (status === 'unauthenticated') {
+        return true;
+      }
+      // Redirect authenticated users away
+      return router.createUrlTree([authenticatedRoute]);
     }),
   );
 };

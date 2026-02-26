@@ -11,7 +11,11 @@ import { ConvexClient } from 'convex/browser';
 import { provideConvexAuth } from '../providers/inject-auth';
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import { CONVEX } from '../tokens/convex';
-import { CONVEX_AUTH_GUARD_CONFIG, convexAuthGuard } from './auth-guards';
+import {
+  CONVEX_AUTH_GUARD_CONFIG,
+  convexAuthGuard,
+  convexUnauthGuard,
+} from './auth-guards';
 
 describe('Auth Guards', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
@@ -191,5 +195,126 @@ describe('Auth Guards', () => {
 
       expect(injector).toBeNull();
     });
+  });
+
+  describe('convexUnauthGuard', () => {
+    @Component({
+      selector: 'cva-test-dashboard',
+      template: 'Dashboard',
+      standalone: true,
+    })
+    class DashboardComponent {}
+
+    @Component({
+      selector: 'cva-test-login',
+      template: 'Login',
+      standalone: true,
+    })
+    class LoginComponent {}
+
+    @Component({
+      selector: 'cva-test-home',
+      template: 'Home',
+      standalone: true,
+    })
+    class HomeComponent {}
+
+    const routes: Routes = [
+      { path: '', component: HomeComponent },
+      {
+        path: 'login',
+        component: LoginComponent,
+        canActivate: [convexUnauthGuard],
+      },
+      { path: 'dashboard', component: DashboardComponent },
+    ];
+
+    function setupTestBed(customConfig?: { authenticatedRoute?: string }) {
+      const mockProvider: ConvexAuthProvider = {
+        isLoading,
+        isAuthenticated,
+        fetchAccessToken: async () => 'token',
+      };
+
+      const providers: Array<Provider | EnvironmentProviders> = [
+        { provide: CONVEX, useValue: mockConvexClient },
+        { provide: CONVEX_AUTH, useValue: mockProvider },
+        provideConvexAuth(),
+        provideRouter(routes),
+      ];
+
+      if (customConfig) {
+        providers.push({
+          provide: CONVEX_AUTH_GUARD_CONFIG,
+          useValue: customConfig,
+        });
+      }
+
+      TestBed.configureTestingModule({ providers });
+    }
+
+    it('should allow unauthenticated users through', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(false);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/login']);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/login');
+    }));
+
+    it('should redirect authenticated users to /', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(true);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/login']);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/');
+    }));
+
+    it('should use custom authenticatedRoute from config', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(true);
+      setupTestBed({ authenticatedRoute: '/dashboard' });
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/login']);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/dashboard');
+    }));
+
+    it('should wait for auth loading to complete before deciding', fakeAsync(() => {
+      isLoading.set(true);
+      isAuthenticated.set(false);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/login']);
+      tick();
+      flush();
+
+      // Should still be waiting (initial navigation stays at /)
+      expect(router.url).toBe('/');
+
+      // Auth finishes loading — user is not authenticated
+      isLoading.set(false);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/login');
+    }));
   });
 });
