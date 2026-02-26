@@ -35,7 +35,7 @@ function setupAuthView(conditionFn: (auth: ConvexAuthState) => boolean): void {
       }
     } else {
       if (viewRef) {
-        viewContainer.clear();
+        viewRef.destroy();
         viewRef = null;
       }
     }
