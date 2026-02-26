@@ -139,7 +139,7 @@ export function injectAction<Action extends ActionReference>(
     isLoading: provider.isLoading,
     isSuccess: provider.isSuccess,
     isError: provider.isError,
-    status: provider.status as Signal<ActionStatus>,
+    status: provider.status,
     reset: provider.reset,
   };
 }

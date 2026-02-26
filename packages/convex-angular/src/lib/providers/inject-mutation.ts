@@ -165,7 +165,7 @@ export function injectMutation<Mutation extends MutationReference>(
     isLoading: provider.isLoading,
     isSuccess: provider.isSuccess,
     isError: provider.isError,
-    status: provider.status as Signal<MutationStatus>,
+    status: provider.status,
     reset: provider.reset,
   };
 }

@@ -1,35 +1,37 @@
 /**
- * Status of a query subscription.
+ * Shared status type for subscription-based providers (queries).
  * - 'pending': Loading initial data or resubscribing
  * - 'success': Data received successfully
- * - 'error': Query failed with an error
- * - 'skipped': Query is skipped via skipToken
+ * - 'error': Subscription failed with an error
+ * - 'skipped': Subscription is skipped via skipToken
  */
-export type QueryStatus = 'pending' | 'success' | 'error' | 'skipped';
+export type SubscriptionStatus = 'pending' | 'success' | 'error' | 'skipped';
+
+/**
+ * Status of a query subscription.
+ */
+export type QueryStatus = SubscriptionStatus;
 
 /**
  * Status of a paginated query subscription.
- * - 'pending': Loading the first page
- * - 'success': First page loaded successfully
- * - 'error': Query failed with an error
- * - 'skipped': Query is skipped via skipToken
  */
-export type PaginatedQueryStatus = 'pending' | 'success' | 'error' | 'skipped';
+export type PaginatedQueryStatus = SubscriptionStatus;
+
+/**
+ * Shared status type for callable providers (mutations and actions).
+ * - 'idle': Operation has not been called yet or was reset
+ * - 'pending': Operation is in progress
+ * - 'success': Operation completed successfully
+ * - 'error': Operation failed with an error
+ */
+export type CallableStatus = 'idle' | 'pending' | 'success' | 'error';
 
 /**
  * Status of a mutation.
- * - 'idle': Mutation has not been called yet or was reset
- * - 'pending': Mutation is in progress
- * - 'success': Mutation completed successfully
- * - 'error': Mutation failed with an error
  */
-export type MutationStatus = 'idle' | 'pending' | 'success' | 'error';
+export type MutationStatus = CallableStatus;
 
 /**
  * Status of an action.
- * - 'idle': Action has not been called yet or was reset
- * - 'pending': Action is in progress
- * - 'success': Action completed successfully
- * - 'error': Action failed with an error
  */
-export type ActionStatus = 'idle' | 'pending' | 'success' | 'error';
+export type ActionStatus = CallableStatus;

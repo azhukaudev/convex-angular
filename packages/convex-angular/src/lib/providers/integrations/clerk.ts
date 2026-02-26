@@ -3,9 +3,11 @@ import {
   InjectionToken,
   Signal,
   computed,
+  effect,
   inject,
   makeEnvironmentProviders,
   provideEnvironmentInitializer,
+  signal,
 } from '@angular/core';
 
 import { CONVEX_AUTH_CONFIG, ConvexAuthConfig } from '../../tokens/auth';
@@ -146,24 +148,36 @@ export function provideClerkAuth(): EnvironmentProviders {
 
         // Create computed signals that bridge Clerk to Convex
         const isLoading = computed(() => !clerk.isLoaded());
-        const isAuthenticated = computed(() => clerk.isSignedIn() ?? false);
 
-        // Create a version signal that changes when org context changes
-        // This triggers a token refresh when organization changes
-        const tokenVersion = computed(() => {
-          // Access org signals to create dependency (if they exist)
-          clerk.orgId?.();
-          clerk.orgRole?.();
-          // Return a new object each time to trigger change detection
-          return {};
+        // Tracks org-context changes. Incremented by an effect whenever
+        // orgId or orgRole changes, which causes `isAuthenticated` (below)
+        // to re-emit and trigger re-authentication in ConvexAuthSyncService.
+        const orgVersion = signal(0);
+
+        // Effect that watches org signals and bumps orgVersion on change.
+        // This is necessary because fetchAccessToken is async — reading
+        // signals inside async functions is NOT tracked by Angular's
+        // reactivity system. Instead, we funnel org changes through a
+        // synchronous signal that the auth sync effect can observe.
+        if (clerk.orgId || clerk.orgRole) {
+          effect(() => {
+            clerk.orgId?.();
+            clerk.orgRole?.();
+            // Use untracked write to avoid circular dependency
+            orgVersion.update((v) => v + 1);
+          });
+        }
+
+        // Reading orgVersion here makes the auth sync effect re-run
+        // whenever the org context changes, triggering a fresh setAuth call.
+        const isAuthenticated = computed(() => {
+          orgVersion();
+          return clerk.isSignedIn() ?? false;
         });
 
         const fetchAccessToken = async (args: {
           forceRefreshToken: boolean;
         }) => {
-          // Track token version for reactivity (read the signal)
-          tokenVersion();
-
           try {
             return await clerk.getToken({
               template: 'convex',

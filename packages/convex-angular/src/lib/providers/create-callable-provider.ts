@@ -1,12 +1,6 @@
 import { Signal, computed, signal } from '@angular/core';
 
-import { ActionStatus, MutationStatus } from '../types';
-
-/**
- * Shared status type for callable providers (mutations and actions).
- * @internal
- */
-export type CallableStatus = MutationStatus | ActionStatus;
+import { CallableStatus } from '../types';
 
 /**
  * Options for creating a callable provider.
