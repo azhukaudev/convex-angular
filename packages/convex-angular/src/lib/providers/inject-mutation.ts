@@ -54,9 +54,9 @@ export interface MutationResult<Mutation extends MutationReference> {
 
   /**
    * The data returned by the last successful mutation call.
-   * Undefined until the mutation completes successfully.
+   * Undefined when idle, loading, or after reset.
    */
-  data: Signal<FunctionReturnType<Mutation>>;
+  data: Signal<FunctionReturnType<Mutation> | undefined>;
 
   /**
    * The error from the last failed mutation call.

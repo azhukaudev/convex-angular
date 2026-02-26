@@ -41,9 +41,9 @@ export interface ActionResult<Action extends ActionReference> {
 
   /**
    * The data returned by the last successful action call.
-   * Undefined until the action completes successfully.
+   * Undefined when idle, loading, or after reset.
    */
-  data: Signal<FunctionReturnType<Action>>;
+  data: Signal<FunctionReturnType<Action> | undefined>;
 
   /**
    * The error from the last failed action call.

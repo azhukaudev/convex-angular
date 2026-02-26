@@ -25,8 +25,9 @@ export interface CallableProviderOptions<TData> {
 export interface CallableProviderState<TData> {
   /**
    * The data returned by the last successful call.
+   * Undefined when idle, loading, or after reset.
    */
-  data: Signal<TData>;
+  data: Signal<TData | undefined>;
 
   /**
    * The error from the last failed call.
@@ -83,7 +84,7 @@ export function createCallableProvider<TData>(
   options?: CallableProviderOptions<TData>,
 ): CallableProviderState<TData> {
   // Internal signals for tracking state
-  const data = signal<TData>(undefined as TData);
+  const data = signal<TData | undefined>(undefined);
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
 
@@ -104,7 +105,7 @@ export function createCallableProvider<TData>(
    * Reset all state to initial values.
    */
   const reset = () => {
-    data.set(undefined as TData);
+    data.set(undefined);
     error.set(undefined);
     isLoading.set(false);
     hasCompleted.set(false);
@@ -117,7 +118,7 @@ export function createCallableProvider<TData>(
   const execute = async (fn: () => Promise<TData>): Promise<TData> => {
     try {
       // Reset state before new operation
-      data.set(undefined as TData);
+      data.set(undefined);
       error.set(undefined);
       hasCompleted.set(false);
       isLoading.set(true);
