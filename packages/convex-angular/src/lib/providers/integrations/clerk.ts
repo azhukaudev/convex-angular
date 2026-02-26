@@ -183,7 +183,11 @@ export function provideClerkAuth(): EnvironmentProviders {
               template: 'convex',
               skipCache: args.forceRefreshToken,
             });
-          } catch {
+          } catch (error) {
+            console.error(
+              '[Convex Auth] Failed to fetch Clerk access token:',
+              error,
+            );
             return null;
           }
         };

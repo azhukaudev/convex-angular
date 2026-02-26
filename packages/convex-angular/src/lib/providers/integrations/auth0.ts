@@ -139,7 +139,11 @@ export function provideAuth0Auth(): EnvironmentProviders {
             return await auth0.getAccessTokenSilently({
               cacheMode: args.forceRefreshToken ? 'off' : 'on',
             });
-          } catch {
+          } catch (error) {
+            console.error(
+              '[Convex Auth] Failed to fetch Auth0 access token:',
+              error,
+            );
             return null;
           }
         };
