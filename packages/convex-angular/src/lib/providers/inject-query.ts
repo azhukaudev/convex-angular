@@ -26,6 +26,17 @@ export type QueryReference = FunctionReference<'query'>;
  */
 export interface QueryOptions<Query extends QueryReference> {
   /**
+   * Data to use as the initial value before the query loads.
+   * Useful for providing placeholder data to avoid loading spinners
+   * for known defaults (e.g. empty arrays, default configs).
+   *
+   * The query will still subscribe and update with real data once available.
+   * While initialData is shown and the query is loading, `isLoading` remains
+   * `true` and `status` is `'pending'`.
+   */
+  initialData?: FunctionReturnType<Query>;
+
+  /**
    * Callback invoked when the query receives data.
    * Called on initial load and every subsequent update.
    * @param data - The return value of the query
@@ -158,7 +169,9 @@ export function injectQuery<Query extends QueryReference>(
   const convex = injectConvex();
 
   // Initialize signals
-  const data = signal<FunctionReturnType<Query>>(undefined);
+  const data = signal<FunctionReturnType<Query>>(
+    options?.initialData !== undefined ? options.initialData : undefined,
+  );
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(true);
   const isSkipped = signal(false);

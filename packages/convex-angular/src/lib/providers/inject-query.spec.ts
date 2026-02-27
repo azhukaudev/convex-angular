@@ -1110,4 +1110,108 @@ describe('injectQuery', () => {
       expect(fixture.componentInstance.todos.error()).toBeDefined();
     }));
   });
+  describe('initialData option', () => {
+    it('should use initialData as the initial value', fakeAsync(() => {
+      const initialData = [{ _id: 'init', title: 'Placeholder' }];
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          initialData,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toEqual(initialData);
+    }));
+
+    it('should still have isLoading true with initialData', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          initialData: [],
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+      expect(fixture.componentInstance.todos.status()).toBe('pending');
+    }));
+
+    it('should replace initialData with real data from subscription', fakeAsync(() => {
+      const initialData = [{ _id: 'init', title: 'Placeholder' }];
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          initialData,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toEqual(initialData);
+
+      // Real data arrives
+      const realData = [{ _id: '1', title: 'Real Todo' }];
+      onUpdateCallback(realData);
+
+      expect(fixture.componentInstance.todos.data()).toEqual(realData);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(false);
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+    }));
+
+    it('should clear initialData when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => skipToken, {
+          initialData: [{ _id: 'init', title: 'Placeholder' }],
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+    }));
+
+    it('should work without initialData (default behavior)', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+    }));
+  });
 });
