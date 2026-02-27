@@ -16,6 +16,12 @@ export interface CallableProviderOptions<TData> {
    * Callback invoked when the operation fails.
    */
   onError?: (err: Error) => void;
+
+  /**
+   * Callback invoked when the operation completes, regardless of success or failure.
+   * Called after onSuccess or onError. Useful for dismissing spinners or re-enabling forms.
+   */
+  onSettled?: () => void;
 }
 
 /**
@@ -136,6 +142,7 @@ export function createCallableProvider<TData>(
       throw errorObj;
     } finally {
       isLoading.set(false);
+      options?.onSettled?.();
     }
   };
 

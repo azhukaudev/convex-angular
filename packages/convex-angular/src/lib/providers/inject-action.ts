@@ -25,6 +25,12 @@ export interface ActionOptions<Action extends ActionReference> {
    * @param err - The error that occurred
    */
   onError?: (err: Error) => void;
+
+  /**
+   * Callback invoked when the action completes, regardless of success or failure.
+   * Called after onSuccess or onError. Useful for dismissing spinners or re-enabling forms.
+   */
+  onSettled?: () => void;
 }
 
 /**
@@ -123,6 +129,7 @@ export function injectAction<Action extends ActionReference>(
   const provider = createCallableProvider<FunctionReturnType<Action>>({
     onSuccess: options?.onSuccess,
     onError: options?.onError,
+    onSettled: options?.onSettled,
   });
 
   /**

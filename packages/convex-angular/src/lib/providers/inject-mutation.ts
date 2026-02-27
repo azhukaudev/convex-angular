@@ -32,6 +32,12 @@ export interface MutationOptions<Mutation extends MutationReference> {
   onError?: (err: Error) => void;
 
   /**
+   * Callback invoked when the mutation completes, regardless of success or failure.
+   * Called after onSuccess or onError. Useful for dismissing spinners or re-enabling forms.
+   */
+  onSettled?: () => void;
+
+  /**
    * Optimistic update to apply immediately before the mutation completes.
    * This allows the UI to update instantly while the mutation is in flight.
    */
@@ -143,6 +149,7 @@ export function injectMutation<Mutation extends MutationReference>(
   const provider = createCallableProvider<FunctionReturnType<Mutation>>({
     onSuccess: options?.onSuccess,
     onError: options?.onError,
+    onSettled: options?.onSettled,
   });
 
   /**

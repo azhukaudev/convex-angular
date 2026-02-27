@@ -234,4 +234,52 @@ describe('createCallableProvider', () => {
       expect(provider.error()?.message).toBe('no opts');
     });
   });
+  describe('onSettled callback', () => {
+    it('should call onSettled after success', async () => {
+      const onSettled = jest.fn();
+      const provider = createCallableProvider<string>({ onSettled });
+
+      await provider.execute(() => Promise.resolve('data'));
+
+      expect(onSettled).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call onSettled after error', async () => {
+      const onSettled = jest.fn();
+      const provider = createCallableProvider<string>({ onSettled });
+
+      await provider
+        .execute(() => Promise.reject(new Error('fail')))
+        .catch(() => {});
+
+      expect(onSettled).toHaveBeenCalledTimes(1);
+    });
+
+    it('should call onSettled after onSuccess', async () => {
+      const callOrder: string[] = [];
+      const onSuccess = jest.fn(() => callOrder.push('onSuccess'));
+      const onSettled = jest.fn(() => callOrder.push('onSettled'));
+      const provider = createCallableProvider<string>({
+        onSuccess,
+        onSettled,
+      });
+
+      await provider.execute(() => Promise.resolve('data'));
+
+      expect(callOrder).toEqual(['onSuccess', 'onSettled']);
+    });
+
+    it('should call onSettled after onError', async () => {
+      const callOrder: string[] = [];
+      const onError = jest.fn(() => callOrder.push('onError'));
+      const onSettled = jest.fn(() => callOrder.push('onSettled'));
+      const provider = createCallableProvider<string>({ onError, onSettled });
+
+      await provider
+        .execute(() => Promise.reject(new Error('fail')))
+        .catch(() => {});
+
+      expect(callOrder).toEqual(['onError', 'onSettled']);
+    });
+  });
 });

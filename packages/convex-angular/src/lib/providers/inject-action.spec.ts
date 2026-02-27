@@ -717,4 +717,49 @@ describe('injectAction', () => {
       expect(fixture.componentInstance.sendEmail.status()).toBe('idle');
     }));
   });
+  describe('onSettled callback', () => {
+    it('should call onSettled after successful action', fakeAsync(() => {
+      mockConvexClient.action.mockResolvedValue({ success: true });
+      const onSettled = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction, { onSettled });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail.run({ message: 'test' });
+      tick();
+
+      expect(onSettled).toHaveBeenCalledTimes(1);
+    }));
+
+    it('should call onSettled after failed action', fakeAsync(() => {
+      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
+      const onSettled = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction, { onSettled });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.sendEmail
+        .run({ message: 'test' })
+        .catch(() => {});
+      tick();
+
+      expect(onSettled).toHaveBeenCalledTimes(1);
+    }));
+  });
 });

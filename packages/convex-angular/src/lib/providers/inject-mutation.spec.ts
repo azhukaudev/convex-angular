@@ -746,4 +746,49 @@ describe('injectMutation', () => {
       expect(fixture.componentInstance.addTodo.status()).toBe('idle');
     }));
   });
+  describe('onSettled callback', () => {
+    it('should call onSettled after successful mutation', fakeAsync(() => {
+      mockConvexClient.mutation.mockResolvedValue({ id: '123' });
+      const onSettled = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation, { onSettled });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo.mutate({ title: 'test' });
+      tick();
+
+      expect(onSettled).toHaveBeenCalledTimes(1);
+    }));
+
+    it('should call onSettled after failed mutation', fakeAsync(() => {
+      mockConvexClient.mutation.mockRejectedValue(new Error('Failed'));
+      const onSettled = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation, { onSettled });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'test' })
+        .catch(() => {});
+      tick();
+
+      expect(onSettled).toHaveBeenCalledTimes(1);
+    }));
+  });
 });
