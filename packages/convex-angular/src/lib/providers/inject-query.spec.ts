@@ -1360,4 +1360,127 @@ describe('injectQuery', () => {
       expect(onSuccess).toHaveBeenCalledWith(rawData);
     }));
   });
+
+  describe('enabled option', () => {
+    it('should skip query when enabled returns false', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          enabled: () => false,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(false);
+      expect(fixture.componentInstance.todos.status()).toBe('skipped');
+    }));
+
+    it('should subscribe when enabled returns true', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          enabled: () => true,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+    }));
+
+    it('should reactively enable query when signal changes', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly isReady = signal(false);
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          enabled: () => this.isReady(),
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Initially disabled
+      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+
+      // Enable the query
+      fixture.componentInstance.isReady.set(true);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+    }));
+
+    it('should reactively disable query when signal changes', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly isActive = signal(true);
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          enabled: () => this.isActive(),
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Initially enabled
+      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+
+      // Receive some data
+      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      expect(fixture.componentInstance.todos.data()).toBeDefined();
+
+      // Disable the query
+      fixture.componentInstance.isActive.set(false);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(mockUnsubscribe).toHaveBeenCalled();
+    }));
+
+    it('should work without enabled option (default behavior)', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+    }));
+  });
 });

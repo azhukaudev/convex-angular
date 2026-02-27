@@ -59,6 +59,26 @@ export interface QueryOptions<
   select?: (data: FunctionReturnType<Query>) => TSelected;
 
   /**
+   * Reactive function controlling whether the query is active.
+   * When `enabled` returns `false`, the query is skipped (same as `skipToken`).
+   * When it returns `true`, the query subscribes normally.
+   *
+   * This is an ergonomic alternative to conditionally returning `skipToken`
+   * from `argsFn`. Unlike `skipToken`, `enabled` keeps the args function simple.
+   *
+   * @example
+   * ```typescript
+   * const userId = signal<string | null>(null);
+   * const user = injectQuery(
+   *   api.users.get,
+   *   () => ({ id: userId()! }),
+   *   { enabled: () => !!userId() },
+   * );
+   * ```
+   */
+  enabled?: () => boolean;
+
+  /**
    * Callback invoked when the query receives data.
    * Called on initial load and every subsequent update.
    * @param data - The return value of the query
@@ -177,6 +197,14 @@ export interface QueryResult<
  *   }
  * );
  *
+ * // With enabled option (ergonomic alternative to skipToken)
+ * const userId = signal<string | null>(null);
+ * const user = injectQuery(
+ *   api.users.get,
+ *   () => ({ id: userId()! }),
+ *   { enabled: () => !!userId() },
+ * );
+ *
  * // In template:
  * // @switch (todos.status()) {
  * //   @case ('pending') { <span>Loading...</span> }
@@ -192,7 +220,7 @@ export interface QueryResult<
  *
  * @param query - A FunctionReference to the query function
  * @param argsFn - A reactive function returning the query arguments, or skipToken to skip the query
- * @param options - Optional configuration including select, initialData, and callbacks
+ * @param options - Optional configuration including select, enabled, initialData, and callbacks
  * @returns A QueryResult with reactive data, error, loading, and skipped signals
  */
 // Overload: with select
@@ -255,8 +283,11 @@ export function injectQuery<Query extends QueryReference, TSelected>(
     const args = argsFn();
     refetchVersion(); // Track for manual refetch
 
-    // If skipToken, reset state and don't subscribe
-    if (args === skipToken) {
+    // Check enabled option (reactive — read inside effect for tracking)
+    const isEnabled = options?.enabled ? options.enabled() : true;
+
+    // If skipToken or disabled, reset state and don't subscribe
+    if (args === skipToken || !isEnabled) {
       rawData.set(undefined);
       error.set(undefined);
       isLoading.set(false);
