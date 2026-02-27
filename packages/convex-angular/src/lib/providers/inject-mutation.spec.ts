@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, Injector } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
@@ -789,6 +789,22 @@ describe('injectMutation', () => {
       tick();
 
       expect(onSettled).toHaveBeenCalledTimes(1);
+    }));
+  });
+
+  describe('injector option', () => {
+    it('should work when called outside injection context with injector', fakeAsync(() => {
+      const mockResult = { id: '123' };
+      mockConvexClient.mutation.mockResolvedValue(mockResult);
+      const injector = TestBed.inject(Injector);
+
+      const result = injectMutation(mockMutation, { injector });
+
+      result.mutate({ title: 'test' });
+      tick();
+
+      expect(result.data()).toEqual(mockResult);
+      expect(result.isSuccess()).toBe(true);
     }));
   });
 });

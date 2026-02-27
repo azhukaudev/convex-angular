@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, Injector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
@@ -1481,6 +1481,26 @@ describe('injectQuery', () => {
 
       expect(mockConvexClient.onUpdate).toHaveBeenCalled();
       expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+    }));
+  });
+
+  describe('injector option', () => {
+    it('should work when called outside injection context with injector', fakeAsync(() => {
+      const injector = TestBed.inject(Injector);
+
+      const result = injectQuery(mockQuery, () => ({ count: 10 }), {
+        injector,
+      });
+
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      expect(result.isLoading()).toBe(true);
+
+      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+
+      expect(result.data()).toEqual([{ _id: '1', title: 'Todo' }]);
+      expect(result.isSuccess()).toBe(true);
     }));
   });
 });

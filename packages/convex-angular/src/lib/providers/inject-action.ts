@@ -1,4 +1,9 @@
-import { Signal, assertInInjectionContext } from '@angular/core';
+import {
+  Injector,
+  Signal,
+  assertInInjectionContext,
+  runInInjectionContext,
+} from '@angular/core';
 import { FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { ActionStatus } from '../types';
@@ -31,6 +36,12 @@ export interface ActionOptions<Action extends ActionReference> {
    * Called after onSuccess or onError. Useful for dismissing spinners or re-enabling forms.
    */
   onSettled?: () => void;
+
+  /**
+   * Angular Injector to use for dependency injection.
+   * When provided, the function can be called outside of an injection context.
+   */
+  injector?: Injector;
 }
 
 /**
@@ -123,6 +134,11 @@ export function injectAction<Action extends ActionReference>(
   action: Action,
   options?: ActionOptions<Action>,
 ): ActionResult<Action> {
+  if (options?.injector) {
+    return runInInjectionContext(options.injector, () =>
+      injectAction(action, { ...options, injector: undefined }),
+    );
+  }
   assertInInjectionContext(injectAction);
   const convex = injectConvex();
 

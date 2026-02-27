@@ -1,8 +1,10 @@
 import {
+  Injector,
   Signal,
   assertInInjectionContext,
   computed,
   effect,
+  runInInjectionContext,
   signal,
   untracked,
 } from '@angular/core';
@@ -77,6 +79,26 @@ export interface QueryOptions<
    * ```
    */
   enabled?: () => boolean;
+
+  /**
+   * Angular Injector to use for dependency injection.
+   * When provided, the function can be called outside of an injection context
+   * (e.g., in a service method or after component initialization).
+   *
+   * @example
+   * ```typescript
+   * class TodoService {
+   *   private injector = inject(Injector);
+   *
+   *   loadTodos() {
+   *     return injectQuery(api.todos.list, () => ({}), {
+   *       injector: this.injector,
+   *     });
+   *   }
+   * }
+   * ```
+   */
+  injector?: Injector;
 
   /**
    * Callback invoked when the query receives data.
@@ -245,6 +267,11 @@ export function injectQuery<Query extends QueryReference, TSelected>(
   argsFn: () => Query['_args'] | SkipToken,
   options?: QueryOptions<Query, TSelected>,
 ): QueryResult<Query, TSelected | undefined> | QueryResult<Query> {
+  if (options?.injector) {
+    return runInInjectionContext(options.injector, () =>
+      injectQuery(query, argsFn, { ...options, injector: undefined }),
+    );
+  }
   assertInInjectionContext(injectQuery);
   const convex = injectConvex();
 

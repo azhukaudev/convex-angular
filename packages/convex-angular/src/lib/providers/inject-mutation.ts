@@ -1,4 +1,9 @@
-import { Signal, assertInInjectionContext } from '@angular/core';
+import {
+  Injector,
+  Signal,
+  assertInInjectionContext,
+  runInInjectionContext,
+} from '@angular/core';
 import { OptimisticUpdate } from 'convex/browser';
 import {
   FunctionArgs,
@@ -42,6 +47,12 @@ export interface MutationOptions<Mutation extends MutationReference> {
    * This allows the UI to update instantly while the mutation is in flight.
    */
   optimisticUpdate?: OptimisticUpdate<FunctionArgs<Mutation>>;
+
+  /**
+   * Angular Injector to use for dependency injection.
+   * When provided, the function can be called outside of an injection context.
+   */
+  injector?: Injector;
 }
 
 /**
@@ -143,6 +154,11 @@ export function injectMutation<Mutation extends MutationReference>(
   mutation: Mutation,
   options?: MutationOptions<Mutation>,
 ): MutationResult<Mutation> {
+  if (options?.injector) {
+    return runInInjectionContext(options.injector, () =>
+      injectMutation(mutation, { ...options, injector: undefined }),
+    );
+  }
   assertInInjectionContext(injectMutation);
   const convex = injectConvex();
 

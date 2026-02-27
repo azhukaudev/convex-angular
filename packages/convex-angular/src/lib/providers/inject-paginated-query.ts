@@ -1,8 +1,10 @@
 import {
+  Injector,
   Signal,
   assertInInjectionContext,
   computed,
   effect,
+  runInInjectionContext,
   signal,
 } from '@angular/core';
 import {
@@ -89,6 +91,17 @@ export interface PaginatedQueryOptions<Query extends PaginatedQueryReference> {
    * @param err - The error that occurred
    */
   onError?: (err: Error) => void;
+}
+
+/**
+ * Static configuration for injectPaginatedQuery.
+ */
+export interface PaginatedQueryConfig {
+  /**
+   * Angular Injector to use for dependency injection.
+   * When provided, the function can be called outside of an injection context.
+   */
+  injector?: Injector;
 }
 
 /**
@@ -220,7 +233,13 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   query: Query,
   argsFn: () => PaginatedQueryArgs<Query> | SkipToken,
   optionsFn: () => PaginatedQueryOptions<Query>,
+  config?: PaginatedQueryConfig,
 ): PaginatedQueryResult<Query> {
+  if (config?.injector) {
+    return runInInjectionContext(config.injector, () =>
+      injectPaginatedQuery(query, argsFn, optionsFn),
+    );
+  }
   assertInInjectionContext(injectPaginatedQuery);
   const convex = injectConvex();
 
