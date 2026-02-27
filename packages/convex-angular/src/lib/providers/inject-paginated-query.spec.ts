@@ -1148,6 +1148,58 @@ describe('injectPaginatedQuery', () => {
       expect(onError).toHaveBeenCalledWith(error);
     }));
 
+    it('should call onSettled callback after successful data', fakeAsync(() => {
+      const onSettled = jest.fn();
+
+      @Component({
+        template: '',
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => ({}),
+          () => ({ initialNumItems: 10, onSettled }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onUpdateCallback({
+        results: [{ _id: '1', name: 'Todo 1' }],
+        status: 'CanLoadMore',
+        loadMore: jest.fn(),
+      });
+      fixture.detectChanges();
+
+      expect(onSettled).toHaveBeenCalled();
+    }));
+
+    it('should call onSettled callback after error', fakeAsync(() => {
+      const onSettled = jest.fn();
+
+      @Component({
+        template: '',
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(
+          mockPaginatedQuery,
+          () => ({}),
+          () => ({ initialNumItems: 10, onSettled }),
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onErrorCallback(new Error('Query failed'));
+      fixture.detectChanges();
+
+      expect(onSettled).toHaveBeenCalled();
+    }));
+
     it('should work without callbacks', fakeAsync(() => {
       @Component({
         template: '',

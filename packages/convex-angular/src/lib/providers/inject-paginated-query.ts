@@ -91,6 +91,12 @@ export interface PaginatedQueryOptions<Query extends PaginatedQueryReference> {
    * @param err - The error that occurred
    */
   onError?: (err: Error) => void;
+
+  /**
+   * Callback invoked when the query completes, regardless of success or failure.
+   * Called after onSuccess or onError. Useful for dismissing spinners or re-enabling forms.
+   */
+  onSettled?: () => void;
 }
 
 /**
@@ -350,6 +356,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         // Call success callback (not during LoadingFirstPage as we don't have complete results yet)
         if (result.status !== 'LoadingFirstPage') {
           options.onSuccess?.(result.results);
+          options.onSettled?.();
         }
       },
       (err: Error) => {
@@ -361,6 +368,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         canLoadMore.set(true);
         isExhausted.set(false);
         options.onError?.(err);
+        options.onSettled?.();
       },
     );
 
