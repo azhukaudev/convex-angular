@@ -24,7 +24,10 @@ export type QueryReference = FunctionReference<'query'>;
 /**
  * Options for injectQuery.
  */
-export interface QueryOptions<Query extends QueryReference> {
+export interface QueryOptions<
+  Query extends QueryReference,
+  TSelected = FunctionReturnType<Query>,
+> {
   /**
    * Data to use as the initial value before the query loads.
    * Useful for providing placeholder data to avoid loading spinners
@@ -35,6 +38,25 @@ export interface QueryOptions<Query extends QueryReference> {
    * `true` and `status` is `'pending'`.
    */
   initialData?: FunctionReturnType<Query>;
+
+  /**
+   * Transform the query data before it reaches the `data` signal.
+   * Useful for deriving values without a separate `computed()`.
+   *
+   * When provided, the `data` signal will contain the transformed type.
+   *
+   * @example
+   * ```typescript
+   * const titles = injectQuery(api.todos.list, () => ({}), {
+   *   select: (todos) => todos.map(t => t.title),
+   * });
+   * // titles.data() is string[] | undefined
+   * ```
+   *
+   * @param data - The raw query return value
+   * @returns The transformed data
+   */
+  select?: (data: FunctionReturnType<Query>) => TSelected;
 
   /**
    * Callback invoked when the query receives data.
@@ -53,13 +75,18 @@ export interface QueryOptions<Query extends QueryReference> {
 /**
  * The result of calling injectQuery.
  */
-export interface QueryResult<Query extends QueryReference> {
+export interface QueryResult<
+  Query extends QueryReference,
+  TData = FunctionReturnType<Query>,
+> {
   /**
    * The current data from the query subscription.
    * Initially populated from local cache if available, then updated reactively.
    * Data is preserved during refetch for better UX.
+   *
+   * When a `select` function is provided, this contains the transformed data.
    */
-  data: Signal<FunctionReturnType<Query>>;
+  data: Signal<TData>;
 
   /**
    * The current error, if the query subscription failed.
@@ -132,6 +159,14 @@ export interface QueryResult<Query extends QueryReference> {
  *   () => userId() ? { userId: userId() } : skipToken,
  * );
  *
+ * // With select to transform data
+ * const todoTitles = injectQuery(
+ *   api.todos.list,
+ *   () => ({}),
+ *   { select: (todos) => todos.map(t => t.title) },
+ * );
+ * // todoTitles.data() is string[] | undefined
+ *
  * // With callbacks
  * const todos = injectQuery(
  *   api.todos.list,
@@ -157,19 +192,36 @@ export interface QueryResult<Query extends QueryReference> {
  *
  * @param query - A FunctionReference to the query function
  * @param argsFn - A reactive function returning the query arguments, or skipToken to skip the query
- * @param options - Optional callbacks for success and error handling
+ * @param options - Optional configuration including select, initialData, and callbacks
  * @returns A QueryResult with reactive data, error, loading, and skipped signals
  */
+// Overload: with select
+export function injectQuery<Query extends QueryReference, TSelected>(
+  query: Query,
+  argsFn: () => Query['_args'] | SkipToken,
+  options: QueryOptions<Query, TSelected> & {
+    select: (data: FunctionReturnType<Query>) => TSelected;
+  },
+): QueryResult<Query, TSelected | undefined>;
+
+// Overload: without select
 export function injectQuery<Query extends QueryReference>(
   query: Query,
   argsFn: () => Query['_args'] | SkipToken,
   options?: QueryOptions<Query>,
-): QueryResult<Query> {
+): QueryResult<Query>;
+
+// Implementation
+export function injectQuery<Query extends QueryReference, TSelected>(
+  query: Query,
+  argsFn: () => Query['_args'] | SkipToken,
+  options?: QueryOptions<Query, TSelected>,
+): QueryResult<Query, TSelected | undefined> | QueryResult<Query> {
   assertInInjectionContext(injectQuery);
   const convex = injectConvex();
 
   // Initialize signals
-  const data = signal<FunctionReturnType<Query>>(
+  const rawData = signal<FunctionReturnType<Query>>(
     options?.initialData !== undefined ? options.initialData : undefined,
   );
   const error = signal<Error | undefined>(undefined);
@@ -189,6 +241,15 @@ export function injectQuery<Query extends QueryReference>(
     return 'success';
   });
 
+  // Apply select transform if provided
+  const selectFn = options?.select;
+  const data = selectFn
+    ? computed(() => {
+        const raw = rawData();
+        return raw !== undefined ? selectFn(raw) : undefined;
+      })
+    : rawData.asReadonly();
+
   // Effect to reactively subscribe when args change
   effect((onCleanup) => {
     const args = argsFn();
@@ -196,7 +257,7 @@ export function injectQuery<Query extends QueryReference>(
 
     // If skipToken, reset state and don't subscribe
     if (args === skipToken) {
-      data.set(undefined);
+      rawData.set(undefined);
       error.set(undefined);
       isLoading.set(false);
       isSkipped.set(true);
@@ -210,13 +271,13 @@ export function injectQuery<Query extends QueryReference>(
 
     // Initialize with cached data if available (only if no existing data)
     // Use untracked to avoid creating a reactive dependency on data
-    if (untracked(data) === undefined) {
+    if (untracked(rawData) === undefined) {
       const cachedData = convex.client.localQueryResult(
         getFunctionName(query),
         args,
       );
       if (cachedData !== undefined) {
-        data.set(cachedData);
+        rawData.set(cachedData);
       }
     }
 
@@ -225,7 +286,7 @@ export function injectQuery<Query extends QueryReference>(
       query,
       args,
       (result: FunctionReturnType<Query>) => {
-        data.set(result);
+        rawData.set(result);
         error.set(undefined);
         isLoading.set(false);
         options?.onSuccess?.(result);
@@ -247,7 +308,7 @@ export function injectQuery<Query extends QueryReference>(
   };
 
   return {
-    data: data.asReadonly(),
+    data,
     error: error.asReadonly(),
     isLoading: isLoading.asReadonly(),
     isSkipped: isSkipped.asReadonly(),
@@ -255,5 +316,5 @@ export function injectQuery<Query extends QueryReference>(
     isError,
     status,
     refetch,
-  };
+  } as QueryResult<Query, TSelected | undefined> | QueryResult<Query>;
 }

@@ -1214,4 +1214,150 @@ describe('injectQuery', () => {
       expect(fixture.componentInstance.todos.isLoading()).toBe(true);
     }));
   });
+  describe('select option', () => {
+    it('should transform data using select function', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todoTitles = injectQuery(mockQuery, () => ({ count: 10 }), {
+          select: (todos) =>
+            todos.map((t: { _id: string; title: string }) => t.title),
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const rawData = [
+        { _id: '1', title: 'Buy milk' },
+        { _id: '2', title: 'Walk dog' },
+      ];
+      onUpdateCallback(rawData);
+
+      expect(fixture.componentInstance.todoTitles.data()).toEqual([
+        'Buy milk',
+        'Walk dog',
+      ]);
+    }));
+
+    it('should return undefined before data arrives', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todoTitles = injectQuery(mockQuery, () => ({ count: 10 }), {
+          select: (todos) =>
+            todos.map((t: { _id: string; title: string }) => t.title),
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todoTitles.data()).toBeUndefined();
+    }));
+
+    it('should update reactively when raw data changes', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todoCount = injectQuery(mockQuery, () => ({ count: 10 }), {
+          select: (todos) => todos.length,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onUpdateCallback([{ _id: '1', title: 'Todo 1' }]);
+      expect(fixture.componentInstance.todoCount.data()).toBe(1);
+
+      onUpdateCallback([
+        { _id: '1', title: 'Todo 1' },
+        { _id: '2', title: 'Todo 2' },
+      ]);
+      expect(fixture.componentInstance.todoCount.data()).toBe(2);
+    }));
+
+    it('should return undefined when skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todoTitles = injectQuery(mockQuery, () => skipToken, {
+          select: (todos) =>
+            todos.map((t: { _id: string; title: string }) => t.title),
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todoTitles.data()).toBeUndefined();
+      expect(fixture.componentInstance.todoTitles.isSkipped()).toBe(true);
+    }));
+
+    it('should apply select to initialData', fakeAsync(() => {
+      const initialData = [{ _id: 'init', title: 'Placeholder' }] as Array<{
+        _id: string;
+        title: string;
+      }>;
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todoTitles = injectQuery(mockQuery, () => ({ count: 10 }), {
+          initialData,
+          select: (todos) =>
+            todos.map((t: { _id: string; title: string }) => t.title),
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todoTitles.data()).toEqual([
+        'Placeholder',
+      ]);
+    }));
+
+    it('should still call onSuccess with raw data', fakeAsync(() => {
+      const onSuccess = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todoTitles = injectQuery(mockQuery, () => ({ count: 10 }), {
+          select: (todos) =>
+            todos.map((t: { _id: string; title: string }) => t.title),
+          onSuccess,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const rawData = [{ _id: '1', title: 'Todo' }];
+      onUpdateCallback(rawData);
+
+      // onSuccess receives the RAW data, not the selected data
+      expect(onSuccess).toHaveBeenCalledWith(rawData);
+    }));
+  });
 });
