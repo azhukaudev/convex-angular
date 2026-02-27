@@ -84,7 +84,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -114,7 +113,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -145,7 +143,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -177,7 +174,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -209,7 +205,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -242,7 +237,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -275,7 +269,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -308,7 +301,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -342,7 +334,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -384,7 +375,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -429,7 +419,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -471,7 +460,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth1 = injectAuth();
@@ -508,7 +496,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent1 {
         readonly auth = injectAuth();
@@ -516,7 +503,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent2 {
         readonly auth = injectAuth();
@@ -559,7 +545,6 @@ describe('injectAuth', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly auth = injectAuth();
@@ -608,7 +593,6 @@ describe('provideConvexAuth', () => {
 
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {}
 
@@ -645,7 +629,6 @@ describe('provideConvexAuth', () => {
 
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {}
 
@@ -696,7 +679,6 @@ describe('provideConvexAuth', () => {
 
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly auth = injectAuth();
@@ -728,7 +710,6 @@ describe('provideConvexAuth', () => {
 
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly auth = injectAuth();
@@ -769,7 +750,6 @@ describe('provideConvexAuthFromExisting', () => {
 
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly auth = injectAuth();

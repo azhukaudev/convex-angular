@@ -35,7 +35,6 @@ describe('injectAction', () => {
     it('should initialize with undefined data', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -50,7 +49,6 @@ describe('injectAction', () => {
     it('should initialize with no error', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -65,7 +63,6 @@ describe('injectAction', () => {
     it('should initialize with isLoading false', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -86,7 +83,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -106,7 +102,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -127,7 +122,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -154,7 +148,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -183,7 +176,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -208,7 +200,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -230,7 +221,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -255,7 +245,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -282,7 +271,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction, { onSuccess });
@@ -304,7 +292,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction, { onError });
@@ -327,7 +314,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction, { onSuccess });
@@ -350,7 +336,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction, { onError });
@@ -372,7 +357,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -392,7 +376,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -414,7 +397,6 @@ describe('injectAction', () => {
     it('should return idle status initially', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -433,7 +415,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -452,7 +433,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -472,7 +452,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -494,7 +473,6 @@ describe('injectAction', () => {
     it('should be false initially', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -513,7 +491,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -532,7 +509,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -552,7 +528,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -574,7 +549,6 @@ describe('injectAction', () => {
     it('should be false initially', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -591,7 +565,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -613,7 +586,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -633,7 +605,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -661,7 +632,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -692,7 +662,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction);
@@ -724,7 +693,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction, { onSettled });
@@ -745,7 +713,6 @@ describe('injectAction', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly sendEmail = injectAction(mockAction, { onSettled });

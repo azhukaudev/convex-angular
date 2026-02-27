@@ -35,7 +35,6 @@ describe('injectMutation', () => {
     it('should initialize with undefined data', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -50,7 +49,6 @@ describe('injectMutation', () => {
     it('should initialize with no error', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -65,7 +63,6 @@ describe('injectMutation', () => {
     it('should initialize with isLoading false', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -86,7 +83,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -106,7 +102,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -127,7 +122,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -154,7 +148,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -183,7 +176,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -210,7 +202,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -232,7 +223,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -257,7 +247,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -284,7 +273,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation, { onSuccess });
@@ -306,7 +294,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation, { onError });
@@ -329,7 +316,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation, { onSuccess });
@@ -352,7 +338,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation, { onError });
@@ -375,7 +360,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation, { optimisticUpdate });
@@ -401,7 +385,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -421,7 +404,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -443,7 +425,6 @@ describe('injectMutation', () => {
     it('should return idle status initially', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -462,7 +443,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -481,7 +461,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -501,7 +480,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -523,7 +501,6 @@ describe('injectMutation', () => {
     it('should be false initially', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -542,7 +519,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -561,7 +537,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -581,7 +556,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -603,7 +577,6 @@ describe('injectMutation', () => {
     it('should be false initially', () => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -620,7 +593,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -642,7 +614,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -662,7 +633,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -690,7 +660,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -721,7 +690,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation);
@@ -753,7 +721,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation, { onSettled });
@@ -774,7 +741,6 @@ describe('injectMutation', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly addTodo = injectMutation(mockMutation, { onSettled });

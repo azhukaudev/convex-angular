@@ -66,7 +66,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaAuthenticated>Authenticated content</div>`,
-        standalone: true,
         imports: [CvaAuthenticatedDirective],
       })
       class TestComponent {}
@@ -87,7 +86,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaAuthenticated>Authenticated content</div>`,
-        standalone: true,
         imports: [CvaAuthenticatedDirective],
       })
       class TestComponent {}
@@ -108,7 +106,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaAuthenticated>Authenticated content</div>`,
-        standalone: true,
         imports: [CvaAuthenticatedDirective],
       })
       class TestComponent {}
@@ -133,7 +130,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaAuthenticated>Authenticated content</div>`,
-        standalone: true,
         imports: [CvaAuthenticatedDirective],
       })
       class TestComponent {}
@@ -166,7 +162,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaUnauthenticated>Login form</div>`,
-        standalone: true,
         imports: [CvaUnauthenticatedDirective],
       })
       class TestComponent {}
@@ -185,7 +180,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaUnauthenticated>Login form</div>`,
-        standalone: true,
         imports: [CvaUnauthenticatedDirective],
       })
       class TestComponent {}
@@ -204,7 +198,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaUnauthenticated>Login form</div>`,
-        standalone: true,
         imports: [CvaUnauthenticatedDirective],
       })
       class TestComponent {}
@@ -227,7 +220,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaUnauthenticated>Login form</div>`,
-        standalone: true,
         imports: [CvaUnauthenticatedDirective],
       })
       class TestComponent {}
@@ -256,7 +248,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaAuthLoading>Loading...</div>`,
-        standalone: true,
         imports: [CvaAuthLoadingDirective],
       })
       class TestComponent {}
@@ -275,7 +266,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaAuthLoading>Loading...</div>`,
-        standalone: true,
         imports: [CvaAuthLoadingDirective],
       })
       class TestComponent {}
@@ -294,7 +284,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaAuthLoading>Loading...</div>`,
-        standalone: true,
         imports: [CvaAuthLoadingDirective],
       })
       class TestComponent {}
@@ -317,7 +306,6 @@ describe('Auth Helper Directives', () => {
 
       @Component({
         template: `<div *cvaAuthLoading>Loading...</div>`,
-        standalone: true,
         imports: [CvaAuthLoadingDirective],
       })
       class TestComponent {}
@@ -350,7 +338,6 @@ describe('Auth Helper Directives', () => {
           <div *cvaAuthenticated>Welcome!</div>
           <div *cvaUnauthenticated>Please sign in</div>
         `,
-        standalone: true,
         imports: [
           CvaAuthLoadingDirective,
           CvaAuthenticatedDirective,

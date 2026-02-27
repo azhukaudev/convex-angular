@@ -59,7 +59,6 @@ describe('injectQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -77,7 +76,6 @@ describe('injectQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -94,7 +92,6 @@ describe('injectQuery', () => {
     it('should set isLoading to true initially', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -110,7 +107,6 @@ describe('injectQuery', () => {
     it('should initialize with no error', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -126,7 +122,6 @@ describe('injectQuery', () => {
     it('should initialize with isSkipped false', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -144,7 +139,6 @@ describe('injectQuery', () => {
     it('should subscribe to query with correct arguments', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 20 }));
@@ -165,7 +159,6 @@ describe('injectQuery', () => {
     it('should update data signal on successful update', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -187,7 +180,6 @@ describe('injectQuery', () => {
     it('should set isLoading to false on successful update', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -205,7 +197,6 @@ describe('injectQuery', () => {
     it('should clear error on successful update', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -230,7 +221,6 @@ describe('injectQuery', () => {
     it('should set error signal on query error', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -249,7 +239,6 @@ describe('injectQuery', () => {
     it('should preserve existing data on error for better UX', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -273,7 +262,6 @@ describe('injectQuery', () => {
     it('should set isLoading to false on error', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -293,7 +281,6 @@ describe('injectQuery', () => {
     it('should not subscribe when skipToken is returned', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => skipToken);
@@ -309,7 +296,6 @@ describe('injectQuery', () => {
     it('should set isSkipped to true when skipToken is returned', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => skipToken);
@@ -325,7 +311,6 @@ describe('injectQuery', () => {
     it('should set data to undefined when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => skipToken);
@@ -341,7 +326,6 @@ describe('injectQuery', () => {
     it('should set error to undefined when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => skipToken);
@@ -357,7 +341,6 @@ describe('injectQuery', () => {
     it('should set isLoading to false when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => skipToken);
@@ -373,7 +356,6 @@ describe('injectQuery', () => {
     it('should conditionally skip based on signal value', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly userId = signal<string | null>(null);
@@ -402,7 +384,6 @@ describe('injectQuery', () => {
     it('should clear data/error when transitioning to skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
@@ -434,7 +415,6 @@ describe('injectQuery', () => {
     it('should unsubscribe when transitioning to skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
@@ -461,7 +441,6 @@ describe('injectQuery', () => {
     it('should not double-unsubscribe when toggling skipToken', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
@@ -498,7 +477,6 @@ describe('injectQuery', () => {
     it('should resubscribe when transitioning from skipped to active', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly shouldSkip = signal(true);
@@ -529,7 +507,6 @@ describe('injectQuery', () => {
     it('should resubscribe when argsFn returns different values', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly count = signal(10);
@@ -565,7 +542,6 @@ describe('injectQuery', () => {
     it('should unsubscribe from previous subscription when args change', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly count = signal(10);
@@ -593,7 +569,6 @@ describe('injectQuery', () => {
     it('should unsubscribe on component destroy', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -615,7 +590,6 @@ describe('injectQuery', () => {
     it('should handle multiple sequential updates', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -646,7 +620,6 @@ describe('injectQuery', () => {
     it('should return pending status while loading', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -662,7 +635,6 @@ describe('injectQuery', () => {
     it('should return success status after data is received', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -680,7 +652,6 @@ describe('injectQuery', () => {
     it('should return error status after error', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -698,7 +669,6 @@ describe('injectQuery', () => {
     it('should return skipped status when skipToken is used', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => skipToken);
@@ -714,7 +684,6 @@ describe('injectQuery', () => {
     it('should transition through statuses correctly', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly shouldSkip = signal(true);
@@ -753,7 +722,6 @@ describe('injectQuery', () => {
     it('should be false while loading', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -769,7 +737,6 @@ describe('injectQuery', () => {
     it('should be true after successful data load', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -787,7 +754,6 @@ describe('injectQuery', () => {
     it('should be false when there is an error', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -805,7 +771,6 @@ describe('injectQuery', () => {
     it('should be false when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => skipToken);
@@ -823,7 +788,6 @@ describe('injectQuery', () => {
     it('should be false while loading', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -839,7 +803,6 @@ describe('injectQuery', () => {
     it('should be false after successful data load', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -857,7 +820,6 @@ describe('injectQuery', () => {
     it('should be true when there is an error', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -875,7 +837,6 @@ describe('injectQuery', () => {
     it('should be false when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => skipToken);
@@ -893,7 +854,6 @@ describe('injectQuery', () => {
     it('should trigger resubscription when refetch is called', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -916,7 +876,6 @@ describe('injectQuery', () => {
     it('should unsubscribe from previous subscription on refetch', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -939,7 +898,6 @@ describe('injectQuery', () => {
     it('should preserve existing data during refetch', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -967,7 +925,6 @@ describe('injectQuery', () => {
     it('should set isLoading to true on refetch', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -995,7 +952,6 @@ describe('injectQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1018,7 +974,6 @@ describe('injectQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1044,7 +999,6 @@ describe('injectQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1065,7 +1019,6 @@ describe('injectQuery', () => {
     it('should work without options parameter', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -1087,7 +1040,6 @@ describe('injectQuery', () => {
     it('should preserve existing data when error occurs', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -1116,7 +1068,6 @@ describe('injectQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1134,7 +1085,6 @@ describe('injectQuery', () => {
     it('should still have isLoading true with initialData', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1155,7 +1105,6 @@ describe('injectQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1181,7 +1130,6 @@ describe('injectQuery', () => {
     it('should clear initialData when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => skipToken, {
@@ -1200,7 +1148,6 @@ describe('injectQuery', () => {
     it('should work without initialData (default behavior)', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
@@ -1218,7 +1165,6 @@ describe('injectQuery', () => {
     it('should transform data using select function', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todoTitles = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1246,7 +1192,6 @@ describe('injectQuery', () => {
     it('should return undefined before data arrives', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todoTitles = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1265,7 +1210,6 @@ describe('injectQuery', () => {
     it('should update reactively when raw data changes', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todoCount = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1290,7 +1234,6 @@ describe('injectQuery', () => {
     it('should return undefined when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todoTitles = injectQuery(mockQuery, () => skipToken, {
@@ -1315,7 +1258,6 @@ describe('injectQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todoTitles = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1339,7 +1281,6 @@ describe('injectQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todoTitles = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1365,7 +1306,6 @@ describe('injectQuery', () => {
     it('should skip query when enabled returns false', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1386,7 +1326,6 @@ describe('injectQuery', () => {
     it('should subscribe when enabled returns true', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
@@ -1406,7 +1345,6 @@ describe('injectQuery', () => {
     it('should reactively enable query when signal changes', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly isReady = signal(false);
@@ -1436,7 +1374,6 @@ describe('injectQuery', () => {
     it('should reactively disable query when signal changes', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly isActive = signal(true);
@@ -1469,7 +1406,6 @@ describe('injectQuery', () => {
     it('should work without enabled option (default behavior)', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));

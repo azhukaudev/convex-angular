@@ -69,7 +69,6 @@ function setupAuthView(conditionFn: (auth: ConvexAuthState) => boolean): void {
  */
 @Directive({
   selector: '[cvaAuthenticated]',
-  standalone: true,
 })
 export class CvaAuthenticatedDirective {
   constructor() {
@@ -105,7 +104,6 @@ export class CvaAuthenticatedDirective {
  */
 @Directive({
   selector: '[cvaUnauthenticated]',
-  standalone: true,
 })
 export class CvaUnauthenticatedDirective {
   constructor() {
@@ -137,7 +135,6 @@ export class CvaUnauthenticatedDirective {
  */
 @Directive({
   selector: '[cvaAuthLoading]',
-  standalone: true,
 })
 export class CvaAuthLoadingDirective {
   constructor() {

@@ -53,19 +53,16 @@ describe('Auth Guards', () => {
   describe('convexAuthGuard', () => {
     @Component({
       template: 'Dashboard',
-      standalone: true,
     })
     class DashboardComponent {}
 
     @Component({
       template: 'Login',
-      standalone: true,
     })
     class LoginComponent {}
 
     @Component({
       template: 'Home',
-      standalone: true,
     })
     class HomeComponent {}
 
@@ -123,7 +120,6 @@ describe('Auth Guards', () => {
 
       @Component({
         template: 'Custom Login',
-        standalone: true,
       })
       class CustomLoginComponent {}
 
@@ -201,21 +197,18 @@ describe('Auth Guards', () => {
     @Component({
       selector: 'cva-test-dashboard',
       template: 'Dashboard',
-      standalone: true,
     })
     class DashboardComponent {}
 
     @Component({
       selector: 'cva-test-login',
       template: 'Login',
-      standalone: true,
     })
     class LoginComponent {}
 
     @Component({
       selector: 'cva-test-home',
       template: 'Home',
-      standalone: true,
     })
     class HomeComponent {}
 

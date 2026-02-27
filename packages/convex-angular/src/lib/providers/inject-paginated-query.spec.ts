@@ -49,7 +49,6 @@ describe('injectPaginatedQuery', () => {
   it('should initialize with loading state', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -74,7 +73,6 @@ describe('injectPaginatedQuery', () => {
   it('should subscribe to paginated query with correct arguments', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly category = signal('work');
@@ -103,7 +101,6 @@ describe('injectPaginatedQuery', () => {
   it('should update signals when LoadingFirstPage status is received', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -133,7 +130,6 @@ describe('injectPaginatedQuery', () => {
   it('should update signals when CanLoadMore status is received', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -169,7 +165,6 @@ describe('injectPaginatedQuery', () => {
   it('should update signals when LoadingMore status is received', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -202,7 +197,6 @@ describe('injectPaginatedQuery', () => {
   it('should update signals when Exhausted status is received', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -240,7 +234,6 @@ describe('injectPaginatedQuery', () => {
 
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -270,7 +263,6 @@ describe('injectPaginatedQuery', () => {
   it('should return false from loadMore when not subscribed', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -293,7 +285,6 @@ describe('injectPaginatedQuery', () => {
   it('should preserve existing results on error', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -335,7 +326,6 @@ describe('injectPaginatedQuery', () => {
   it('should reset pagination when reset() is called', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -374,7 +364,6 @@ describe('injectPaginatedQuery', () => {
   it('should resubscribe when args change', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly category = signal('work');
@@ -416,7 +405,6 @@ describe('injectPaginatedQuery', () => {
   it('should resubscribe when options change', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly pageSize = signal(10);
@@ -458,7 +446,6 @@ describe('injectPaginatedQuery', () => {
   it('should unsubscribe on component destroy', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -480,7 +467,6 @@ describe('injectPaginatedQuery', () => {
   it('should clear error on successful update', fakeAsync(() => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly todos = injectPaginatedQuery(
@@ -515,7 +501,6 @@ describe('injectPaginatedQuery', () => {
     it('should not subscribe when skipToken is returned', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -537,7 +522,6 @@ describe('injectPaginatedQuery', () => {
     it('should set isSkipped to true when skipToken is returned', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -557,7 +541,6 @@ describe('injectPaginatedQuery', () => {
     it('should set results to empty array when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -577,7 +560,6 @@ describe('injectPaginatedQuery', () => {
     it('should set all loading/status signals correctly when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -601,7 +583,6 @@ describe('injectPaginatedQuery', () => {
     it('should conditionally skip based on signal value', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly category = signal<string | null>(null);
@@ -636,7 +617,6 @@ describe('injectPaginatedQuery', () => {
     it('should clear results when transitioning to skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
@@ -675,7 +655,6 @@ describe('injectPaginatedQuery', () => {
     it('should unsubscribe when transitioning to skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
@@ -706,7 +685,6 @@ describe('injectPaginatedQuery', () => {
     it('should not double-unsubscribe when toggling skipToken', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
@@ -745,7 +723,6 @@ describe('injectPaginatedQuery', () => {
     it('should resubscribe when transitioning from skipped to active', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly shouldSkip = signal(true);
@@ -780,7 +757,6 @@ describe('injectPaginatedQuery', () => {
     it('should return false from loadMore when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -803,7 +779,6 @@ describe('injectPaginatedQuery', () => {
     it('should return pending status while loading first page', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -823,7 +798,6 @@ describe('injectPaginatedQuery', () => {
     it('should return success status after first page is loaded', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -850,7 +824,6 @@ describe('injectPaginatedQuery', () => {
     it('should return success status when exhausted', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -877,7 +850,6 @@ describe('injectPaginatedQuery', () => {
     it('should return error status after error', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -900,7 +872,6 @@ describe('injectPaginatedQuery', () => {
     it('should return skipped status when skipToken is used', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -922,7 +893,6 @@ describe('injectPaginatedQuery', () => {
     it('should be false while loading first page', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -942,7 +912,6 @@ describe('injectPaginatedQuery', () => {
     it('should be true after first page is loaded', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -969,7 +938,6 @@ describe('injectPaginatedQuery', () => {
     it('should be false when there is an error', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -992,7 +960,6 @@ describe('injectPaginatedQuery', () => {
     it('should be false when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -1014,7 +981,6 @@ describe('injectPaginatedQuery', () => {
     it('should be false while loading first page', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -1034,7 +1000,6 @@ describe('injectPaginatedQuery', () => {
     it('should be true when there is an error', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -1057,7 +1022,6 @@ describe('injectPaginatedQuery', () => {
     it('should be false after successful data load', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -1084,7 +1048,6 @@ describe('injectPaginatedQuery', () => {
     it('should be false when skipped', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -1108,7 +1071,6 @@ describe('injectPaginatedQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -1138,7 +1100,6 @@ describe('injectPaginatedQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -1167,7 +1128,6 @@ describe('injectPaginatedQuery', () => {
 
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(
@@ -1191,7 +1151,6 @@ describe('injectPaginatedQuery', () => {
     it('should work without callbacks', fakeAsync(() => {
       @Component({
         template: '',
-        standalone: true,
       })
       class TestComponent {
         readonly todos = injectPaginatedQuery(

@@ -27,7 +27,6 @@ describe('injectConvex', () => {
   it('should return the injected ConvexClient', () => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly convex = injectConvex();
@@ -42,7 +41,6 @@ describe('injectConvex', () => {
   it('should provide access to client methods', () => {
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly convex = injectConvex();
@@ -64,7 +62,6 @@ describe('injectConvex', () => {
 
     @Component({
       template: '',
-      standalone: true,
     })
     class TestComponent {
       readonly convex = injectConvex();
