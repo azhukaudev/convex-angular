@@ -160,7 +160,7 @@ export function injectQuery<Query extends QueryReference>(
   // Initialize signals
   const data = signal<FunctionReturnType<Query>>(undefined);
   const error = signal<Error | undefined>(undefined);
-  const isLoading = signal(false);
+  const isLoading = signal(true);
   const isSkipped = signal(false);
 
   // Version counter for manual refetch

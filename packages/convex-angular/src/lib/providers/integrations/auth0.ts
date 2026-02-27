@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 
 import { CONVEX_AUTH_CONFIG, ConvexAuthConfig } from '../../tokens/auth';
-import { injectAuth } from '../inject-auth';
+import { ConvexAuthSyncService, injectAuth } from '../inject-auth';
 
 /**
  * Interface that your Auth0 auth service must implement.
@@ -127,6 +127,7 @@ export const AUTH0_AUTH = new InjectionToken<Auth0AuthProvider>('AUTH0_AUTH');
  */
 export function provideAuth0Auth(): EnvironmentProviders {
   return makeEnvironmentProviders([
+    ConvexAuthSyncService,
     {
       provide: CONVEX_AUTH_CONFIG,
       useFactory: (): ConvexAuthConfig => {

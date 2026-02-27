@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 
 import { CONVEX_AUTH_CONFIG, ConvexAuthConfig } from '../../tokens/auth';
-import { injectAuth } from '../inject-auth';
+import { ConvexAuthSyncService, injectAuth } from '../inject-auth';
 
 /**
  * Interface that your Clerk auth service must implement.
@@ -141,6 +141,7 @@ export const CLERK_AUTH = new InjectionToken<ClerkAuthProvider>('CLERK_AUTH');
  */
 export function provideClerkAuth(): EnvironmentProviders {
   return makeEnvironmentProviders([
+    ConvexAuthSyncService,
     {
       provide: CONVEX_AUTH_CONFIG,
       useFactory: (): ConvexAuthConfig => {

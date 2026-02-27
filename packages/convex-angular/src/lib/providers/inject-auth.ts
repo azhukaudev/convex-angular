@@ -32,7 +32,7 @@ import { injectConvex } from './inject-convex';
  * @internal
  */
 @Injectable()
-class ConvexAuthSyncService {
+export class ConvexAuthSyncService {
   /** Whether the Convex backend has confirmed the token. `null` = pending. */
   readonly isConvexAuthenticated = signal<boolean | null>(null);
 
