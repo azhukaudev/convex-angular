@@ -14,7 +14,9 @@ import { CONVEX } from '../tokens/convex';
 import {
   CONVEX_AUTH_GUARD_CONFIG,
   convexAuthGuard,
+  convexAuthMatch,
   convexUnauthGuard,
+  convexUnauthMatch,
 } from './auth-guards';
 
 describe('Auth Guards', () => {
@@ -300,6 +302,205 @@ describe('Auth Guards', () => {
       flush();
 
       // Should still be waiting (initial navigation stays at /)
+      expect(router.url).toBe('/');
+
+      // Auth finishes loading — user is not authenticated
+      isLoading.set(false);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/login');
+    }));
+  });
+
+  describe('convexAuthMatch', () => {
+    @Component({
+      selector: 'cva-test-admin',
+      template: 'Admin',
+    })
+    class AdminComponent {}
+
+    @Component({
+      selector: 'cva-test-login-match',
+      template: 'Login',
+    })
+    class LoginComponent {}
+
+    @Component({
+      selector: 'cva-test-home-match',
+      template: 'Home',
+    })
+    class HomeComponent {}
+
+    const routes: Routes = [
+      { path: '', component: HomeComponent },
+      {
+        path: 'admin',
+        component: AdminComponent,
+        canMatch: [convexAuthMatch],
+      },
+      // Fallback when not matched (not authenticated)
+      { path: 'admin', component: LoginComponent },
+    ];
+
+    function setupTestBed() {
+      const mockProvider: ConvexAuthProvider = {
+        isLoading,
+        isAuthenticated,
+        fetchAccessToken: async () => 'token',
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: CONVEX, useValue: mockConvexClient },
+          { provide: CONVEX_AUTH, useValue: mockProvider },
+          provideConvexAuth(),
+          provideRouter(routes),
+        ],
+      });
+    }
+
+    it('should match route when authenticated', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(true);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/admin']);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/admin');
+    }));
+
+    it('should fall through to next route when not authenticated', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(false);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/admin']);
+      tick();
+      flush();
+
+      // Falls through to the fallback route (LoginComponent)
+      expect(router.url).toBe('/admin');
+    }));
+
+    it('should wait for auth loading to complete', fakeAsync(() => {
+      isLoading.set(true);
+      isAuthenticated.set(false);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/admin']);
+      tick();
+      flush();
+
+      // Should still be waiting
+      expect(router.url).toBe('/');
+
+      // Auth finishes loading — user is authenticated
+      isLoading.set(false);
+      isAuthenticated.set(true);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/admin');
+    }));
+  });
+
+  describe('convexUnauthMatch', () => {
+    @Component({
+      selector: 'cva-test-login-unauth-match',
+      template: 'Login',
+    })
+    class LoginComponent {}
+
+    @Component({
+      selector: 'cva-test-dashboard-unauth-match',
+      template: 'Dashboard',
+    })
+    class DashboardComponent {}
+
+    @Component({
+      selector: 'cva-test-home-unauth-match',
+      template: 'Home',
+    })
+    class HomeComponent {}
+
+    const routes: Routes = [
+      { path: '', component: HomeComponent },
+      {
+        path: 'login',
+        component: LoginComponent,
+        canMatch: [convexUnauthMatch],
+      },
+      // Fallback when not matched (already authenticated)
+      { path: 'login', redirectTo: 'dashboard' },
+      { path: 'dashboard', component: DashboardComponent },
+    ];
+
+    function setupTestBed() {
+      const mockProvider: ConvexAuthProvider = {
+        isLoading,
+        isAuthenticated,
+        fetchAccessToken: async () => 'token',
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: CONVEX, useValue: mockConvexClient },
+          { provide: CONVEX_AUTH, useValue: mockProvider },
+          provideConvexAuth(),
+          provideRouter(routes),
+        ],
+      });
+    }
+
+    it('should match route when not authenticated', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(false);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/login']);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/login');
+    }));
+
+    it('should redirect to dashboard when authenticated', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(true);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/login']);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/dashboard');
+    }));
+
+    it('should wait for auth loading to complete', fakeAsync(() => {
+      isLoading.set(true);
+      isAuthenticated.set(false);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/login']);
+      tick();
+      flush();
+
+      // Should still be waiting
       expect(router.url).toBe('/');
 
       // Auth finishes loading — user is not authenticated

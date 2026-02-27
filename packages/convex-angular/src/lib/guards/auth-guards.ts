@@ -1,6 +1,6 @@
 import { InjectionToken, inject } from '@angular/core';
 import { toObservable } from '@angular/core/rxjs-interop';
-import { CanActivateFn, Router, UrlTree } from '@angular/router';
+import { CanActivateFn, CanMatchFn, Router, UrlTree } from '@angular/router';
 import { Observable } from 'rxjs';
 import { filter, map, take } from 'rxjs/operators';
 
@@ -175,5 +175,91 @@ export const convexUnauthGuard: CanActivateFn = (): Observable<
       // Redirect authenticated users away
       return router.createUrlTree([authenticatedRoute]);
     }),
+  );
+};
+
+/**
+ * Route match guard that requires authentication.
+ *
+ * Unlike `convexAuthGuard` (which uses `canActivate`), this guard uses `canMatch`
+ * to prevent lazy-loaded routes from being matched and downloaded entirely
+ * when the user is not authenticated.
+ *
+ * This guard will:
+ * 1. Wait for auth to finish loading
+ * 2. Match the route if the user is authenticated
+ * 3. Reject the match if the user is not authenticated
+ *
+ * @example
+ * ```typescript
+ * // In app.routes.ts
+ * export const routes: Routes = [
+ *   {
+ *     path: 'admin',
+ *     loadComponent: () => import('./admin/admin.component'),
+ *     canMatch: [convexAuthMatch],
+ *   },
+ *   // Fallback route when not matched (not authenticated)
+ *   {
+ *     path: 'admin',
+ *     redirectTo: 'login',
+ *   },
+ * ];
+ * ```
+ *
+ * @public
+ */
+export const convexAuthMatch: CanMatchFn = (): Observable<boolean> => {
+  const auth = injectAuth();
+
+  const status$ = toObservable(auth.status);
+
+  return status$.pipe(
+    filter((status) => status !== 'loading'),
+    take(1),
+    map((status) => status === 'authenticated'),
+  );
+};
+
+/**
+ * Route match guard that prevents authenticated users from matching public-only routes.
+ *
+ * Unlike `convexUnauthGuard` (which uses `canActivate`), this guard uses `canMatch`
+ * to prevent lazy-loaded routes from being matched and downloaded entirely
+ * when the user is already authenticated.
+ *
+ * This guard will:
+ * 1. Wait for auth to finish loading
+ * 2. Match the route if the user is NOT authenticated
+ * 3. Reject the match if the user IS authenticated
+ *
+ * @example
+ * ```typescript
+ * // In app.routes.ts
+ * export const routes: Routes = [
+ *   {
+ *     path: 'login',
+ *     loadComponent: () => import('./login/login.component'),
+ *     canMatch: [convexUnauthMatch],
+ *   },
+ *   // Fallback route when not matched (already authenticated)
+ *   {
+ *     path: 'login',
+ *     redirectTo: 'dashboard',
+ *   },
+ * ];
+ * ```
+ *
+ * @public
+ */
+export const convexUnauthMatch: CanMatchFn = (): Observable<boolean> => {
+  const auth = injectAuth();
+
+  const status$ = toObservable(auth.status);
+
+  return status$.pipe(
+    filter((status) => status !== 'loading'),
+    take(1),
+    map((status) => status === 'unauthenticated'),
   );
 };
