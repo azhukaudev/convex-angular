@@ -45,9 +45,10 @@ export interface ClerkAuthProvider {
 
   /**
    * Signal indicating whether the user is signed in.
-   * May be undefined while loading.
+   * Must resolve to a definite boolean (use `!!` or `?? false` if the
+   * underlying SDK provides `boolean | undefined`).
    */
-  isSignedIn: Signal<boolean | undefined>;
+  isSignedIn: Signal<boolean>;
 
   /**
    * Function to get an access token from Clerk.
@@ -173,7 +174,7 @@ export function provideClerkAuth(): EnvironmentProviders {
         // whenever the org context changes, triggering a fresh setAuth call.
         const isAuthenticated = computed(() => {
           orgVersion();
-          return clerk.isSignedIn() ?? false;
+          return clerk.isSignedIn();
         });
 
         const fetchAccessToken = async (args: {
