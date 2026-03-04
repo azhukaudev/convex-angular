@@ -1,5 +1,19 @@
 # convex-angular
 
+## [1.1.0](https://github.com/azhukaudev/convex-angular/compare/v1.0.4...v1.1.0) (2026-03-04)
+
+### ✨ Features
+
+- Enforce root-only Convex setup by validating `provideConvex(...)` registrations and throwing on duplicate or nested provider scopes.
+
+### ⚠️ Breaking Changes
+
+- `provideConvex(...)` now returns `EnvironmentProviders` and must be configured exactly once in root app providers.
+
+### 📖 Documentation
+
+- Clarify root-only `provideConvex(...)` setup requirements in package and repository READMEs.
+
 ## [1.0.4](https://github.com/azhukaudev/convex-angular/compare/v1.0.3...v1.0.4) (2026-02-16)
 
 ### 📖 Documentation
