@@ -19,10 +19,21 @@ import { CONVEX } from '../tokens/convex';
  * ```
  *
  * @returns The ConvexClient instance configured via provideConvex
- * @throws Error if called outside of an injection context or if provideConvex was not called
+ * @throws Error if called outside of an injection context, if provideConvex was not called,
+ * or if provideConvex was configured outside the root injector
  */
 export function injectConvex(): ConvexClient {
   assertInInjectionContext(injectConvex);
-  const convex = inject(CONVEX);
+
+  // Use optional injection so we can throw a focused setup error instead of
+  // Angular's generic NullInjectorError for missing CONVEX.
+  const convex = inject(CONVEX, { optional: true });
+
+  if (!convex) {
+    throw new Error(
+      'Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers (for example, in `app.config.ts`).',
+    );
+  }
+
   return convex;
 }

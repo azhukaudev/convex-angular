@@ -27,7 +27,7 @@ The Angular client for Convex.
 npm install convex convex-angular
 ```
 
-2. Add `provideConvex` to your `app.config.ts` file:
+2. Add `provideConvex` once to your root `app.config.ts` providers:
 
 ```typescript
 import { ApplicationConfig } from '@angular/core';
@@ -37,6 +37,9 @@ export const appConfig: ApplicationConfig = {
   providers: [provideConvex('https://<your-convex-deployment>.convex.cloud')],
 };
 ```
+
+`provideConvex(...)` must be configured only once at the root application level.
+Do not register it again in nested or route-level providers.
 
 3. 🎉 That's it! You can now use the injection providers in your app.
 

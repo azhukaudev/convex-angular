@@ -1,8 +1,12 @@
-import { Component } from '@angular/core';
+import {
+  Component,
+  EnvironmentInjector,
+  createEnvironmentInjector,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 
-import { CONVEX } from '../tokens/convex';
+import { CONVEX, provideConvex } from '../tokens/convex';
 import { injectConvex } from './inject-convex';
 
 describe('injectConvex', () => {
@@ -70,6 +74,50 @@ describe('injectConvex', () => {
       readonly convex = injectConvex();
     }
 
-    expect(() => TestBed.createComponent(TestComponent)).toThrow();
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(
+      /Could not find `CONVEX`/,
+    );
+  });
+});
+
+describe('provideConvex configuration', () => {
+  afterEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  it('should throw when provideConvex is registered multiple times in one injector', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideConvex('https://first.convex.cloud'),
+        provideConvex('https://second.convex.cloud'),
+      ],
+    });
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly convex = injectConvex();
+    }
+
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(
+      /registered more than once in the same injector/,
+    );
+  });
+
+  it('should throw when provideConvex is registered in a child injector', () => {
+    TestBed.configureTestingModule({
+      providers: [provideConvex('https://root.convex.cloud')],
+    });
+
+    const rootInjector = TestBed.inject(EnvironmentInjector);
+
+    expect(() =>
+      createEnvironmentInjector(
+        [provideConvex('https://child.convex.cloud')],
+        rootInjector,
+      ),
+    ).toThrow(/must be configured only in your root application providers/);
   });
 });
