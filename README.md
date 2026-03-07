@@ -303,10 +303,13 @@ export class AppComponent {
 
 The auth state provides:
 
-- `isLoading()` - True while auth is initializing
-- `isAuthenticated()` - True when user is authenticated
-- `error()` - Authentication error, if any
+- `isLoading()` - True while the auth provider is loading or Convex is still validating the current token with the backend
+- `isAuthenticated()` - True only after the auth provider reports an authenticated user and Convex confirms the token
+- `error()` - The most recent unexpected provider, token, or auth-sync failure
 - `status()` - `'loading' | 'authenticated' | 'unauthenticated'`
+
+Returning `null` from `fetchAccessToken(...)` is treated as a normal
+unauthenticated outcome. It does not populate `error()`.
 
 ### Clerk Integration
 
@@ -354,6 +357,12 @@ export const appConfig: ApplicationConfig = {
 };
 ```
 
+`provideClerkAuth()` already includes `provideConvexAuth()`, so do not add both.
+If your Clerk service exposes upstream failures, forward them via the optional
+`error` signal so `injectAuth().error()` can surface them. Clerk integrations
+can also expose reactive auth context like `orgId`/`orgRole`; `provideClerkAuth()`
+uses that state to refresh the token when organization context changes.
+
 ### Auth0 Integration
 
 To integrate with Auth0, create a service that implements `Auth0AuthProvider` and register it with `provideAuth0Auth()`.
@@ -397,9 +406,14 @@ export const appConfig: ApplicationConfig = {
 };
 ```
 
+`provideAuth0Auth()` already includes `provideConvexAuth()`, so do not add both.
+If your Auth0 service can expose upstream auth failures, forward them via the
+optional `error` signal so `injectAuth().error()` can surface them.
+
 ### Custom Auth Providers
 
-For other auth providers, implement the `ConvexAuthProvider` interface and use `provideConvexAuth()`.
+For other auth providers, implement the `ConvexAuthProvider` interface and use
+`provideConvexAuthFromExisting(...)` as the default setup.
 
 ```typescript
 // custom-auth.service.ts
@@ -416,12 +430,22 @@ import {
 export class CustomAuthService implements ConvexAuthProvider {
   readonly isLoading = signal(true);
   readonly isAuthenticated = signal(false);
+  readonly error = signal<Error | undefined>(undefined);
+  readonly reauthVersion = signal(0);
 
   constructor() {
     // Initialize your auth provider
     myAuthProvider.onStateChange((state) => {
       this.isLoading.set(false);
       this.isAuthenticated.set(state.loggedIn);
+    });
+
+    myAuthProvider.onError?.((error) => {
+      this.error.set(error);
+    });
+
+    myAuthProvider.onOrganizationChange?.(() => {
+      this.reauthVersion.update((version) => version + 1);
     });
   }
 
@@ -443,6 +467,16 @@ export const appConfig: ApplicationConfig = {
 ```
 
 `provideConvexAuthFromExisting(...)` registers `CONVEX_AUTH` with `useExisting` and includes `provideConvexAuth()` internally.
+
+Optional `ConvexAuthProvider` hooks:
+
+- `reauthVersion` - expose a signal that changes when account, tenant, or
+  organization context changes require a fresh token while the user stays signed in
+- `error` - expose upstream auth failures so they flow through `injectAuth().error()`
+
+Return `null` or `undefined` from `fetchAccessToken(...)` when the user is
+signed out or no token is available. That keeps auth unauthenticated without
+marking it as an error.
 
 If you wire `CONVEX_AUTH` manually, use `useExisting` (not `useClass`) when the
 auth provider is also injected elsewhere, otherwise you can end up with two
@@ -474,7 +508,9 @@ export class ConvexAuthService implements ConvexAuthProvider {
 
 With `provideConvexAuth()` registered, convex-angular will call
 `convex.setAuth(...)` / `convex.client.clearAuth()` automatically when your
-provider’s `isAuthenticated` changes.
+provider’s `isAuthenticated` changes. If your auth client can fail
+independently, expose an optional `error` signal. If auth context can change
+while the user stays signed in, expose `reauthVersion` to force a fresh token.
 
 ### Auth Directives
 

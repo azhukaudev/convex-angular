@@ -1,5 +1,16 @@
 # convex-angular
 
+## [1.4.0](https://github.com/azhukaudev/convex-angular/compare/v1.3.0...v1.4.0) (2026-03-07)
+
+### ✨ Features
+
+- Rework `injectAuth()` auth sync so `status()` stays loading until Convex confirms the current token with the backend
+- Extend `ConvexAuthProvider` with optional `reauthVersion` and `error` signals, and update built-in Clerk/Auth0 integrations to wire auth sync through `provideConvexAuth()` automatically
+
+### 📖 Documentation
+
+- Clarify `injectAuth()` loading/authenticated/error semantics and document the optional `ConvexAuthProvider` reauth/error hooks in both READMEs
+
 ## [1.3.0](https://github.com/azhukaudev/convex-angular/compare/v1.2.0...v1.3.0) (2026-03-07)
 
 ### ✨ Features
