@@ -51,7 +51,7 @@ export interface MutationResult<Mutation extends MutationReference> {
   /**
    * Execute the mutation with the given arguments.
    * @param args - The arguments to pass to the mutation
-   * @returns A promise that resolves with the mutation's return value
+   * @returns A promise that resolves with the mutation's return value or rejects with the mutation error
    */
   mutate: (
     args: FunctionArgs<Mutation>,
@@ -116,10 +116,14 @@ export interface MutationResult<Mutation extends MutationReference> {
  *   },
  * });
  *
- * // In template:
- * // <button (click)="createTodo.mutate({ title: 'Buy groceries' })">
- * //   Add Todo
- * // </button>
+ * // In component code:
+ * // async addTodo() {
+ * //   try {
+ * //     await createTodo.mutate({ title: 'Buy groceries' });
+ * //   } catch (err) {
+ * //     console.error(err);
+ * //   }
+ * // }
  * //
  * // @switch (createTodo.status()) {
  * //   @case ('pending') { <span>Saving...</span> }
@@ -130,7 +134,8 @@ export interface MutationResult<Mutation extends MutationReference> {
  *
  * @param mutation - A FunctionReference to the mutation function
  * @param options - Optional callbacks and optimistic update configuration
- * @returns A MutationResult with mutate method and reactive state signals
+ * @returns A MutationResult with mutate method and reactive state signals.
+ * `mutate()` rejects on failure after updating the reactive error state.
  */
 export function injectMutation<Mutation extends MutationReference>(
   mutation: Mutation,
@@ -194,7 +199,7 @@ export function injectMutation<Mutation extends MutationReference>(
       error.set(errorObj);
       hasCompleted.set(true);
       options?.onError?.(errorObj);
-      return undefined;
+      throw errorObj;
     } finally {
       isLoading.set(false);
     }

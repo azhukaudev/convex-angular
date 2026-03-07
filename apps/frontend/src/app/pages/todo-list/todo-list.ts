@@ -44,25 +44,34 @@ export default class TodoList {
 
   handleTodoChange(id: Id<'todos'>, completed: boolean) {
     if (completed) {
-      this.reopenTodo.mutate({ id });
-    } else {
-      this.completeTodo.mutate({ id });
+      void this.runOperation(this.reopenTodo.mutate({ id }));
+      return;
     }
+
+    void this.runOperation(this.completeTodo.mutate({ id }));
   }
 
   handleAddTodo() {
-    this.addTodo.mutate({ title: this.newTask() });
+    void this.runOperation(this.addTodo.mutate({ title: this.newTask() }));
   }
 
   handleDeleteTodo(id: Id<'todos'>) {
-    this.deleteTodo.mutate({ id });
+    void this.runOperation(this.deleteTodo.mutate({ id }));
   }
 
   handleCompleteAll() {
-    this.completeAll.run({});
+    void this.runOperation(this.completeAll.run({}));
   }
 
   handleReopenAll() {
-    this.reopenAll.run({});
+    void this.runOperation(this.reopenAll.run({}));
+  }
+
+  private async runOperation(operation: Promise<unknown>) {
+    try {
+      await operation;
+    } catch (error) {
+      console.error(error);
+    }
   }
 }

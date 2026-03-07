@@ -38,7 +38,13 @@ export default class Landing {
   }
 );
 
-// Usage: addTodo.mutate({ title: 'New task' })`,
+async saveTodo() {
+  try {
+    await this.addTodo.mutate({ title: 'New task' });
+  } catch (error) {
+    console.error(error);
+  }
+}`,
     },
     {
       name: 'injectAction',
@@ -50,7 +56,13 @@ export default class Landing {
   }
 );
 
-// Usage: sendEmail.run({ to: 'user@example.com' })`,
+async send() {
+  try {
+    await this.sendEmail.run({ to: 'user@example.com' });
+  } catch (error) {
+    console.error(error);
+  }
+}`,
     },
     {
       name: 'injectPaginatedQuery',

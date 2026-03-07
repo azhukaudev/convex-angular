@@ -40,7 +40,7 @@ export interface ActionResult<Action extends ActionReference> {
   /**
    * Execute the action with the given arguments.
    * @param args - The arguments to pass to the action
-   * @returns A promise that resolves with the action's return value
+   * @returns A promise that resolves with the action's return value or rejects with the action error
    */
   run: (args: Action['_args']) => Promise<FunctionReturnType<Action>>;
 
@@ -96,10 +96,14 @@ export interface ActionResult<Action extends ActionReference> {
  *   onError: (err) => console.error('Failed to send email', err),
  * });
  *
- * // In template:
- * // <button (click)="sendEmail.run({ to: 'user@example.com', subject: 'Hello' })">
- * //   Send Email
- * // </button>
+ * // In component code:
+ * // async handleSend() {
+ * //   try {
+ * //     await sendEmail.run({ to: 'user@example.com', subject: 'Hello' });
+ * //   } catch (err) {
+ * //     console.error(err);
+ * //   }
+ * // }
  * //
  * // @switch (sendEmail.status()) {
  * //   @case ('pending') { <span>Sending...</span> }
@@ -110,7 +114,8 @@ export interface ActionResult<Action extends ActionReference> {
  *
  * @param action - A FunctionReference to the action function
  * @param options - Optional callbacks for success and error handling
- * @returns An ActionResult with run method and reactive state signals
+ * @returns An ActionResult with run method and reactive state signals.
+ * `run()` rejects on failure after updating the reactive error state.
  */
 export function injectAction<Action extends ActionReference>(
   action: Action,
@@ -172,7 +177,7 @@ export function injectAction<Action extends ActionReference>(
       error.set(errorObj);
       hasCompleted.set(true);
       options?.onError?.(errorObj);
-      return undefined;
+      throw errorObj;
     } finally {
       isLoading.set(false);
     }

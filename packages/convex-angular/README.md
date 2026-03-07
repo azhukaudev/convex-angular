@@ -94,15 +94,24 @@ import { api } from '../convex/_generated/api';
 @Component({
   selector: 'app-root',
   template: `
-    <button (click)="addTodo.mutate({ title: 'Buy groceries' })">
-      Add Todo
-    </button>
+    <button (click)="addTodoItem()">Add Todo</button>
   `,
 })
 export class AppComponent {
   readonly addTodo = injectMutation(api.todos.addTodo);
+
+  async addTodoItem() {
+    try {
+      await this.addTodo.mutate({ title: 'Buy groceries' });
+    } catch (error) {
+      console.error(error);
+    }
+  }
 }
 ```
+
+`mutate()` rejects on failure. `error()` and `status()` are still updated, and
+`onError` still runs before the promise rejects.
 
 ### Running actions
 
@@ -116,14 +125,23 @@ import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
-  template: `<button (click)="completeAllTodos.run({})">
-    Complete All Todos
-  </button>`,
+  template: `<button (click)="completeAll()">Complete All Todos</button>`,
 })
 export class AppComponent {
   readonly completeAllTodos = injectAction(api.todoFunctions.completeAllTodos);
+
+  async completeAll() {
+    try {
+      await this.completeAllTodos.run({});
+    } catch (error) {
+      console.error(error);
+    }
+  }
 }
 ```
+
+`run()` rejects on failure. `error()` and `status()` are still updated, and
+`onError` still runs before the promise rejects.
 
 ### Paginated queries
 
@@ -256,12 +274,16 @@ import { api } from '../convex/_generated/api';
 export class AppComponent {
   private readonly injectRef = inject(EnvironmentInjector);
 
-  submit() {
+  async submit() {
     const mutation = injectMutation(api.todos.addTodo, {
       injectRef: this.injectRef,
     });
 
-    mutation.mutate({ title: 'Created outside the initial scope' });
+    try {
+      await mutation.mutate({ title: 'Created outside the initial scope' });
+    } catch (error) {
+      console.error(error);
+    }
   }
 }
 ```
