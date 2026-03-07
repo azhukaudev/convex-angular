@@ -58,7 +58,7 @@ export default class Landing {
       code: `readonly todos = injectPaginatedQuery(
   api.todos.listPaginated,
   () => ({}),
-  () => ({ initialNumItems: 10 })
+  { initialNumItems: 10 }
 );
 
 // todos.results() - accumulated results

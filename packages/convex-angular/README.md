@@ -158,7 +158,7 @@ export class AppComponent {
   readonly todos = injectPaginatedQuery(
     api.todos.listTodosPaginated,
     () => ({}),
-    () => ({ initialNumItems: 10 }),
+    { initialNumItems: 10 },
   );
 }
 ```

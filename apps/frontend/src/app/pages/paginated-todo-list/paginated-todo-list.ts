@@ -37,7 +37,7 @@ export default class PaginatedTodoList {
   readonly todos = injectPaginatedQuery(
     api.todos.listTodosPaginated,
     () => ({}),
-    () => ({ initialNumItems: this.pageSize() }),
+    { initialNumItems: this.pageSize },
   );
 
   readonly addTodo = injectMutation(api.todos.addTodo, {

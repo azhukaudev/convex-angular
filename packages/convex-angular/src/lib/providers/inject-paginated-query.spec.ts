@@ -55,7 +55,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -81,7 +81,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({ category: this.category() }),
-        () => ({ initialNumItems: 20 }),
+        { initialNumItems: 20 },
       );
     }
 
@@ -109,7 +109,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -139,7 +139,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -175,7 +175,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -208,7 +208,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -246,7 +246,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -276,7 +276,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -299,7 +299,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -341,7 +341,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -381,7 +381,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({ category: this.category() }),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -413,7 +413,7 @@ describe('injectPaginatedQuery', () => {
     );
   }));
 
-  it('should resubscribe when options change', fakeAsync(() => {
+  it('should resubscribe when initialNumItems signal changes', fakeAsync(() => {
     @Component({
       template: '',
       standalone: true,
@@ -423,7 +423,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: this.pageSize() }),
+        { initialNumItems: this.pageSize },
       );
     }
 
@@ -435,7 +435,7 @@ describe('injectPaginatedQuery', () => {
       mockConvexClient.onPaginatedUpdate_experimental,
     ).toHaveBeenCalledTimes(1);
 
-    // Change options
+    // Change the reactive page size
     fixture.componentInstance.pageSize.set(20);
     fixture.detectChanges();
     tick();
@@ -464,7 +464,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -486,7 +486,7 @@ describe('injectPaginatedQuery', () => {
       readonly todos = injectPaginatedQuery(
         mockPaginatedQuery,
         () => ({}),
-        () => ({ initialNumItems: 10 }),
+        { initialNumItems: 10 },
       );
     }
 
@@ -521,7 +521,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => skipToken,
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -543,7 +543,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => skipToken,
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -563,7 +563,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => skipToken,
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -583,7 +583,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => skipToken,
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -608,7 +608,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => (this.category() ? { category: this.category() } : skipToken),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -643,7 +643,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => (this.shouldSkip() ? skipToken : {}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -682,7 +682,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => (this.shouldSkip() ? skipToken : {}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -713,7 +713,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => (this.shouldSkip() ? skipToken : {}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -752,7 +752,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => (this.shouldSkip() ? skipToken : {}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -786,7 +786,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => skipToken,
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -809,7 +809,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -829,7 +829,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -856,7 +856,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -883,7 +883,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -906,7 +906,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => skipToken,
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -928,7 +928,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -948,7 +948,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -975,7 +975,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -998,7 +998,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => skipToken,
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 
@@ -1022,7 +1022,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10, onSuccess }),
+          { initialNumItems: 10, onSuccess },
         );
       }
 
@@ -1052,7 +1052,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10, onSuccess }),
+          { initialNumItems: 10, onSuccess },
         );
       }
 
@@ -1081,7 +1081,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10, onError }),
+          { initialNumItems: 10, onError },
         );
       }
 
@@ -1105,7 +1105,7 @@ describe('injectPaginatedQuery', () => {
         readonly todos = injectPaginatedQuery(
           mockPaginatedQuery,
           () => ({}),
-          () => ({ initialNumItems: 10 }),
+          { initialNumItems: 10 },
         );
       }
 

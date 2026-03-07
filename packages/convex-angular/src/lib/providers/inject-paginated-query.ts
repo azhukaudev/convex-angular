@@ -5,6 +5,7 @@ import {
   computed,
   effect,
   inject,
+  isSignal,
   signal,
 } from '@angular/core';
 import {
@@ -77,7 +78,7 @@ export interface PaginatedQueryOptions<Query extends PaginatedQueryReference> {
   /**
    * Number of items to load initially.
    */
-  initialNumItems: number;
+  initialNumItems: number | Signal<number>;
 
   /**
    * Callback invoked when the query receives data.
@@ -171,7 +172,7 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
  * const todos = injectPaginatedQuery(
  *   api.todos.listTodos,
  *   () => ({ category: 'work' }),
- *   () => ({ initialNumItems: 10 })
+ *   { initialNumItems: 10 }
  * );
  *
  * // Conditionally skipped query using skipToken
@@ -179,18 +180,26 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
  * const filteredTodos = injectPaginatedQuery(
  *   api.todos.listTodos,
  *   () => category() ? { category: category() } : skipToken,
- *   () => ({ initialNumItems: 10 })
+ *   { initialNumItems: 10 }
+ * );
+ *
+ * // Reactive page size
+ * const pageSize = signal(10);
+ * const paginatedTodos = injectPaginatedQuery(
+ *   api.todos.listTodos,
+ *   () => ({}),
+ *   { initialNumItems: pageSize }
  * );
  *
  * // With callbacks
  * const todos = injectPaginatedQuery(
  *   api.todos.listTodos,
  *   () => ({}),
- *   () => ({
+ *   {
  *     initialNumItems: 10,
  *     onSuccess: (results) => console.log('Loaded', results.length, 'items'),
  *     onError: (err) => console.error('Failed to load', err),
- *   })
+ *   }
  * );
  *
  * // In template:
@@ -209,13 +218,13 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
  *
  * @param query - A FunctionReference to the paginated query function
  * @param argsFn - A function returning the arguments object for the query (excluding paginationOpts), or skipToken to skip
- * @param optionsFn - A function returning the pagination options including initialNumItems and optional callbacks
+ * @param options - Pagination options including initialNumItems and optional callbacks
  * @returns A PaginatedQueryResult with signals for results, status, and methods for loadMore/reset
  */
 export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   query: Query,
   argsFn: () => PaginatedQueryArgs<Query> | SkipToken,
-  optionsFn: () => PaginatedQueryOptions<Query>,
+  options: PaginatedQueryOptions<Query>,
 ): PaginatedQueryResult<Query> {
   assertInInjectionContext(injectPaginatedQuery);
   const convex = injectConvex();
@@ -258,7 +267,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
   const subscribe = (
     args: PaginatedQueryArgs<Query>,
-    options: PaginatedQueryOptions<Query>,
+    initialNumItems: number,
   ) => {
     cleanupSubscription();
 
@@ -275,7 +284,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     unsubscribe = convex.onPaginatedUpdate_experimental(
       query,
       args as FunctionArgs<Query>,
-      { initialNumItems: options.initialNumItems },
+      { initialNumItems },
       (rawResult) => {
         // Cast to the actual runtime type (Convex types don't match implementation)
         const result = rawResult as unknown as ClientPaginatedResult<
@@ -335,11 +344,13 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     );
   };
 
-  // Effect to reactively subscribe when args or options change
+  // Effect to reactively subscribe when args, reset version, or page size change
   effect(() => {
     // Track dependencies
     const args = argsFn();
-    const options = optionsFn();
+    const initialNumItems = isSignal(options.initialNumItems)
+      ? options.initialNumItems()
+      : options.initialNumItems;
     resetVersion();
 
     // Cleanup previous subscription
@@ -358,7 +369,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       return;
     }
 
-    subscribe(args, options);
+    subscribe(args, initialNumItems);
   });
 
   destroyRef.onDestroy(() => cleanupSubscription());
