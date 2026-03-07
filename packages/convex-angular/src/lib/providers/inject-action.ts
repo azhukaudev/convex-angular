@@ -1,13 +1,9 @@
-import {
-  Signal,
-  assertInInjectionContext,
-  computed,
-  signal,
-} from '@angular/core';
+import { EnvironmentInjector, Signal, computed, signal } from '@angular/core';
 import { FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { ActionStatus } from '../types';
 import { injectConvex } from './inject-convex';
+import { runInResolvedInjectionContext } from './injection-context';
 
 /**
  * A FunctionReference that refers to a Convex action.
@@ -18,6 +14,12 @@ export type ActionReference = FunctionReference<'action'>;
  * Options for injectAction.
  */
 export interface ActionOptions<Action extends ActionReference> {
+  /**
+   * Environment injector used to resolve dependencies when creating the action
+   * outside the current injection context.
+   */
+  injectRef?: EnvironmentInjector;
+
   /**
    * Callback invoked when the action completes successfully.
    * @param data - The return value of the action
@@ -114,8 +116,11 @@ export function injectAction<Action extends ActionReference>(
   action: Action,
   options?: ActionOptions<Action>,
 ): ActionResult<Action> {
-  assertInInjectionContext(injectAction);
-  const convex = injectConvex();
+  const convex = runInResolvedInjectionContext(
+    injectAction,
+    options?.injectRef,
+    () => injectConvex(),
+  );
 
   // Internal signals for tracking state
   const data = signal<FunctionReturnType<Action>>(undefined);

@@ -1,7 +1,7 @@
 import {
   DestroyRef,
+  EnvironmentInjector,
   Signal,
-  assertInInjectionContext,
   computed,
   effect,
   inject,
@@ -19,6 +19,7 @@ import {
 import { SkipToken, skipToken } from '../skip-token';
 import { PaginatedQueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
+import { runInResolvedInjectionContext } from './injection-context';
 
 /**
  * Pagination status returned by the Convex client.
@@ -75,6 +76,12 @@ export type PaginatedQueryItem<Query extends PaginatedQueryReference> =
  * Options for injectPaginatedQuery.
  */
 export interface PaginatedQueryOptions<Query extends PaginatedQueryReference> {
+  /**
+   * Environment injector used to create the paginated query outside the
+   * current injection context.
+   */
+  injectRef?: EnvironmentInjector;
+
   /**
    * Number of items to load initially.
    */
@@ -226,176 +233,181 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   argsFn: () => PaginatedQueryArgs<Query> | SkipToken,
   options: PaginatedQueryOptions<Query>,
 ): PaginatedQueryResult<Query> {
-  assertInInjectionContext(injectPaginatedQuery);
-  const convex = injectConvex();
-  const destroyRef = inject(DestroyRef);
+  return runInResolvedInjectionContext(
+    injectPaginatedQuery,
+    options.injectRef,
+    () => {
+      const convex = injectConvex();
+      const destroyRef = inject(DestroyRef);
 
-  // Internal signals
-  const results = signal<PaginatedQueryItem<Query>[]>([]);
-  const error = signal<Error | undefined>(undefined);
-  const isLoadingFirstPage = signal(true);
-  const isLoadingMore = signal(false);
-  const canLoadMore = signal(false);
-  const isExhausted = signal(false);
-  const isSkipped = signal(false);
+      // Internal signals
+      const results = signal<PaginatedQueryItem<Query>[]>([]);
+      const error = signal<Error | undefined>(undefined);
+      const isLoadingFirstPage = signal(true);
+      const isLoadingMore = signal(false);
+      const canLoadMore = signal(false);
+      const isExhausted = signal(false);
+      const isSkipped = signal(false);
 
-  // Computed signals
-  const isSuccess = computed(
-    () => !isLoadingFirstPage() && !isSkipped() && !error(),
-  );
-  const status = computed<PaginatedQueryStatus>(() => {
-    if (isSkipped()) return 'skipped';
-    if (isLoadingFirstPage()) return 'pending';
-    if (error()) return 'error';
-    return 'success';
-  });
+      // Computed signals
+      const isSuccess = computed(
+        () => !isLoadingFirstPage() && !isSkipped() && !error(),
+      );
+      const status = computed<PaginatedQueryStatus>(() => {
+        if (isSkipped()) return 'skipped';
+        if (isLoadingFirstPage()) return 'pending';
+        if (error()) return 'error';
+        return 'success';
+      });
 
-  // Track the loadMore function from the current subscription
-  let currentLoadMore: ((numItems: number) => boolean) | undefined;
-  let unsubscribe: (() => void) | undefined;
-  const cleanupSubscription = () => {
-    const currentUnsubscribe = unsubscribe;
-    if (!currentUnsubscribe) {
-      return;
-    }
-    unsubscribe = undefined;
-    currentUnsubscribe();
-  };
+      // Track the loadMore function from the current subscription
+      let currentLoadMore: ((numItems: number) => boolean) | undefined;
+      let unsubscribe: (() => void) | undefined;
+      const cleanupSubscription = () => {
+        const currentUnsubscribe = unsubscribe;
+        if (!currentUnsubscribe) {
+          return;
+        }
+        unsubscribe = undefined;
+        currentUnsubscribe();
+      };
 
-  // Version counter to trigger reset
-  const resetVersion = signal(0);
+      // Version counter to trigger reset
+      const resetVersion = signal(0);
 
-  const subscribe = (
-    args: PaginatedQueryArgs<Query>,
-    initialNumItems: number,
-  ) => {
-    cleanupSubscription();
+      const subscribe = (
+        args: PaginatedQueryArgs<Query>,
+        initialNumItems: number,
+      ) => {
+        cleanupSubscription();
 
-    // Reset state for new subscription
-    results.set([]);
-    error.set(undefined);
-    isLoadingFirstPage.set(true);
-    isLoadingMore.set(false);
-    canLoadMore.set(false);
-    isExhausted.set(false);
-    isSkipped.set(false);
-    currentLoadMore = undefined;
-
-    unsubscribe = convex.onPaginatedUpdate_experimental(
-      query,
-      args as FunctionArgs<Query>,
-      { initialNumItems },
-      (rawResult) => {
-        // Cast to the actual runtime type (Convex types don't match implementation)
-        const result = rawResult as unknown as ClientPaginatedResult<
-          PaginatedQueryItem<Query>
-        >;
-
-        // Store the loadMore function
-        currentLoadMore = result.loadMore;
-
-        // Update results
-        results.set(result.results);
+        // Reset state for new subscription
+        results.set([]);
         error.set(undefined);
+        isLoadingFirstPage.set(true);
+        isLoadingMore.set(false);
+        canLoadMore.set(false);
+        isExhausted.set(false);
+        isSkipped.set(false);
+        currentLoadMore = undefined;
 
-        // Update status signals based on status
-        switch (result.status) {
-          case 'LoadingFirstPage':
-            isLoadingFirstPage.set(true);
-            isLoadingMore.set(false);
-            canLoadMore.set(false);
-            isExhausted.set(false);
-            break;
-          case 'LoadingMore':
+        unsubscribe = convex.onPaginatedUpdate_experimental(
+          query,
+          args as FunctionArgs<Query>,
+          { initialNumItems },
+          (rawResult) => {
+            // Cast to the actual runtime type (Convex types don't match implementation)
+            const result = rawResult as unknown as ClientPaginatedResult<
+              PaginatedQueryItem<Query>
+            >;
+
+            // Store the loadMore function
+            currentLoadMore = result.loadMore;
+
+            // Update results
+            results.set(result.results);
+            error.set(undefined);
+
+            // Update status signals based on status
+            switch (result.status) {
+              case 'LoadingFirstPage':
+                isLoadingFirstPage.set(true);
+                isLoadingMore.set(false);
+                canLoadMore.set(false);
+                isExhausted.set(false);
+                break;
+              case 'LoadingMore':
+                isLoadingFirstPage.set(false);
+                isLoadingMore.set(true);
+                canLoadMore.set(false);
+                isExhausted.set(false);
+                break;
+              case 'CanLoadMore':
+                isLoadingFirstPage.set(false);
+                isLoadingMore.set(false);
+                canLoadMore.set(true);
+                isExhausted.set(false);
+                break;
+              case 'Exhausted':
+                isLoadingFirstPage.set(false);
+                isLoadingMore.set(false);
+                canLoadMore.set(false);
+                isExhausted.set(true);
+                break;
+            }
+
+            // Call success callback (not during LoadingFirstPage as we don't have complete results yet)
+            if (result.status !== 'LoadingFirstPage') {
+              options.onSuccess?.(result.results);
+            }
+          },
+          (err: Error) => {
+            // Keep existing results on error
+            error.set(err);
             isLoadingFirstPage.set(false);
-            isLoadingMore.set(true);
-            canLoadMore.set(false);
-            isExhausted.set(false);
-            break;
-          case 'CanLoadMore':
-            isLoadingFirstPage.set(false);
             isLoadingMore.set(false);
+            // Allow retry via loadMore
             canLoadMore.set(true);
             isExhausted.set(false);
-            break;
-          case 'Exhausted':
-            isLoadingFirstPage.set(false);
-            isLoadingMore.set(false);
-            canLoadMore.set(false);
-            isExhausted.set(true);
-            break;
+            options.onError?.(err);
+          },
+        );
+      };
+
+      // Effect to reactively subscribe when args, reset version, or page size change
+      effect(() => {
+        // Track dependencies
+        const args = argsFn();
+        const initialNumItems = isSignal(options.initialNumItems)
+          ? options.initialNumItems()
+          : options.initialNumItems;
+        resetVersion();
+
+        // Cleanup previous subscription
+        cleanupSubscription();
+
+        // If skipToken, reset state and don't subscribe
+        if (args === skipToken) {
+          results.set([]);
+          error.set(undefined);
+          isLoadingFirstPage.set(false);
+          isLoadingMore.set(false);
+          canLoadMore.set(false);
+          isExhausted.set(false);
+          isSkipped.set(true);
+          currentLoadMore = undefined;
+          return;
         }
 
-        // Call success callback (not during LoadingFirstPage as we don't have complete results yet)
-        if (result.status !== 'LoadingFirstPage') {
-          options.onSuccess?.(result.results);
+        subscribe(args, initialNumItems);
+      });
+
+      destroyRef.onDestroy(() => cleanupSubscription());
+
+      const loadMore = (numItems: number): boolean => {
+        if (!currentLoadMore) {
+          return false;
         }
-      },
-      (err: Error) => {
-        // Keep existing results on error
-        error.set(err);
-        isLoadingFirstPage.set(false);
-        isLoadingMore.set(false);
-        // Allow retry via loadMore
-        canLoadMore.set(true);
-        isExhausted.set(false);
-        options.onError?.(err);
-      },
-    );
-  };
+        return currentLoadMore(numItems);
+      };
 
-  // Effect to reactively subscribe when args, reset version, or page size change
-  effect(() => {
-    // Track dependencies
-    const args = argsFn();
-    const initialNumItems = isSignal(options.initialNumItems)
-      ? options.initialNumItems()
-      : options.initialNumItems;
-    resetVersion();
+      const reset = () => {
+        resetVersion.update((v) => v + 1);
+      };
 
-    // Cleanup previous subscription
-    cleanupSubscription();
-
-    // If skipToken, reset state and don't subscribe
-    if (args === skipToken) {
-      results.set([]);
-      error.set(undefined);
-      isLoadingFirstPage.set(false);
-      isLoadingMore.set(false);
-      canLoadMore.set(false);
-      isExhausted.set(false);
-      isSkipped.set(true);
-      currentLoadMore = undefined;
-      return;
-    }
-
-    subscribe(args, initialNumItems);
-  });
-
-  destroyRef.onDestroy(() => cleanupSubscription());
-
-  const loadMore = (numItems: number): boolean => {
-    if (!currentLoadMore) {
-      return false;
-    }
-    return currentLoadMore(numItems);
-  };
-
-  const reset = () => {
-    resetVersion.update((v) => v + 1);
-  };
-
-  return {
-    results: results.asReadonly(),
-    error: error.asReadonly(),
-    isLoadingFirstPage: isLoadingFirstPage.asReadonly(),
-    isLoadingMore: isLoadingMore.asReadonly(),
-    canLoadMore: canLoadMore.asReadonly(),
-    isExhausted: isExhausted.asReadonly(),
-    isSkipped: isSkipped.asReadonly(),
-    isSuccess,
-    status,
-    loadMore,
-    reset,
-  };
+      return {
+        results: results.asReadonly(),
+        error: error.asReadonly(),
+        isLoadingFirstPage: isLoadingFirstPage.asReadonly(),
+        isLoadingMore: isLoadingMore.asReadonly(),
+        canLoadMore: canLoadMore.asReadonly(),
+        isExhausted: isExhausted.asReadonly(),
+        isSkipped: isSkipped.asReadonly(),
+        isSuccess,
+        status,
+        loadMore,
+        reset,
+      };
+    },
+  );
 }

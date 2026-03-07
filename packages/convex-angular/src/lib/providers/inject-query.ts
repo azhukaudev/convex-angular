@@ -1,7 +1,7 @@
 import {
   DestroyRef,
+  EnvironmentInjector,
   Signal,
-  assertInInjectionContext,
   computed,
   effect,
   inject,
@@ -17,6 +17,7 @@ import {
 import { SkipToken, skipToken } from '../skip-token';
 import { QueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
+import { runInResolvedInjectionContext } from './injection-context';
 
 /**
  * A FunctionReference that refers to a Convex query.
@@ -27,6 +28,12 @@ export type QueryReference = FunctionReference<'query'>;
  * Options for injectQuery.
  */
 export interface QueryOptions<Query extends QueryReference> {
+  /**
+   * Environment injector used to create the query outside the current
+   * injection context.
+   */
+  injectRef?: EnvironmentInjector;
+
   /**
    * Callback invoked when the query receives data.
    * Called on initial load and every subsequent update.
@@ -150,107 +157,108 @@ export function injectQuery<Query extends QueryReference>(
   argsFn: () => Query['_args'] | SkipToken,
   options?: QueryOptions<Query>,
 ): QueryResult<Query> {
-  assertInInjectionContext(injectQuery);
-  const convex = injectConvex();
-  const destroyRef = inject(DestroyRef);
+  return runInResolvedInjectionContext(injectQuery, options?.injectRef, () => {
+    const convex = injectConvex();
+    const destroyRef = inject(DestroyRef);
 
-  // Initialize signals
-  const data = signal<FunctionReturnType<Query>>(undefined);
-  const error = signal<Error | undefined>(undefined);
-  const isLoading = signal(false);
-  const isSkipped = signal(false);
+    // Initialize signals
+    const data = signal<FunctionReturnType<Query>>(undefined);
+    const error = signal<Error | undefined>(undefined);
+    const isLoading = signal(false);
+    const isSkipped = signal(false);
 
-  // Version counter for manual refetch
-  const refetchVersion = signal(0);
+    // Version counter for manual refetch
+    const refetchVersion = signal(0);
 
-  // Computed signals
-  const isSuccess = computed(() => !isLoading() && !isSkipped() && !error());
-  const status = computed<QueryStatus>(() => {
-    if (isSkipped()) return 'skipped';
-    if (isLoading()) return 'pending';
-    if (error()) return 'error';
-    return 'success';
-  });
+    // Computed signals
+    const isSuccess = computed(() => !isLoading() && !isSkipped() && !error());
+    const status = computed<QueryStatus>(() => {
+      if (isSkipped()) return 'skipped';
+      if (isLoading()) return 'pending';
+      if (error()) return 'error';
+      return 'success';
+    });
 
-  // Track current subscription for cleanup
-  let unsubscribe: (() => void) | undefined;
-  const cleanupSubscription = () => {
-    const currentUnsubscribe = unsubscribe;
-    if (!currentUnsubscribe) {
-      return;
-    }
-    unsubscribe = undefined;
-    currentUnsubscribe();
-  };
-
-  // Effect to reactively subscribe when args change
-  effect(() => {
-    const args = argsFn();
-    refetchVersion(); // Track for manual refetch
-
-    // Cleanup previous subscription
-    cleanupSubscription();
-
-    // If skipToken, reset state and don't subscribe
-    if (args === skipToken) {
-      data.set(undefined);
-      error.set(undefined);
-      isLoading.set(false);
-      isSkipped.set(true);
-      return;
-    }
-
-    // Not skipped - try to get cached data and start subscription
-    isSkipped.set(false);
-    isLoading.set(true);
-    // Note: We preserve existing data during refetch for better UX
-
-    // Initialize with cached data if available (only if no existing data)
-    // Use untracked to avoid creating a reactive dependency on data
-    if (untracked(data) === undefined) {
-      const cachedData = convex.client.localQueryResult(
-        getFunctionName(query),
-        args,
-      );
-      if (cachedData !== undefined) {
-        data.set(cachedData);
+    // Track current subscription for cleanup
+    let unsubscribe: (() => void) | undefined;
+    const cleanupSubscription = () => {
+      const currentUnsubscribe = unsubscribe;
+      if (!currentUnsubscribe) {
+        return;
       }
-    }
+      unsubscribe = undefined;
+      currentUnsubscribe();
+    };
 
-    // Subscribe to the query
-    unsubscribe = convex.onUpdate(
-      query,
-      args,
-      (result: FunctionReturnType<Query>) => {
-        data.set(result);
+    // Effect to reactively subscribe when args change
+    effect(() => {
+      const args = argsFn();
+      refetchVersion(); // Track for manual refetch
+
+      // Cleanup previous subscription
+      cleanupSubscription();
+
+      // If skipToken, reset state and don't subscribe
+      if (args === skipToken) {
+        data.set(undefined);
         error.set(undefined);
         isLoading.set(false);
-        options?.onSuccess?.(result);
-      },
-      (err: Error) => {
-        // Preserve existing data on error for better UX
-        error.set(err);
-        isLoading.set(false);
-        options?.onError?.(err);
-      },
-    );
+        isSkipped.set(true);
+        return;
+      }
+
+      // Not skipped - try to get cached data and start subscription
+      isSkipped.set(false);
+      isLoading.set(true);
+      // Note: We preserve existing data during refetch for better UX
+
+      // Initialize with cached data if available (only if no existing data)
+      // Use untracked to avoid creating a reactive dependency on data
+      if (untracked(data) === undefined) {
+        const cachedData = convex.client.localQueryResult(
+          getFunctionName(query),
+          args,
+        );
+        if (cachedData !== undefined) {
+          data.set(cachedData);
+        }
+      }
+
+      // Subscribe to the query
+      unsubscribe = convex.onUpdate(
+        query,
+        args,
+        (result: FunctionReturnType<Query>) => {
+          data.set(result);
+          error.set(undefined);
+          isLoading.set(false);
+          options?.onSuccess?.(result);
+        },
+        (err: Error) => {
+          // Preserve existing data on error for better UX
+          error.set(err);
+          isLoading.set(false);
+          options?.onError?.(err);
+        },
+      );
+    });
+
+    // Cleanup subscription when the owning scope is destroyed
+    destroyRef.onDestroy(() => cleanupSubscription());
+
+    // Refetch function
+    const refetch = () => {
+      refetchVersion.update((v) => v + 1);
+    };
+
+    return {
+      data: data.asReadonly(),
+      error: error.asReadonly(),
+      isLoading: isLoading.asReadonly(),
+      isSkipped: isSkipped.asReadonly(),
+      isSuccess,
+      status,
+      refetch,
+    };
   });
-
-  // Cleanup subscription when component is destroyed
-  destroyRef.onDestroy(() => cleanupSubscription());
-
-  // Refetch function
-  const refetch = () => {
-    refetchVersion.update((v) => v + 1);
-  };
-
-  return {
-    data: data.asReadonly(),
-    error: error.asReadonly(),
-    isLoading: isLoading.asReadonly(),
-    isSkipped: isSkipped.asReadonly(),
-    isSuccess,
-    status,
-    refetch,
-  };
 }

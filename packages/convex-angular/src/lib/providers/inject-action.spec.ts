@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, EnvironmentInjector } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
@@ -612,5 +612,25 @@ describe('injectAction', () => {
       expect(fixture.componentInstance.sendEmail.error()).toBeUndefined();
       expect(fixture.componentInstance.sendEmail.status()).toBe('idle');
     }));
+  });
+
+  describe('injectRef', () => {
+    it('should create an action outside an injection context with injectRef', fakeAsync(() => {
+      const injector = TestBed.inject(EnvironmentInjector);
+      mockConvexClient.action.mockResolvedValue({ success: true });
+
+      const sendEmail = injectAction(mockAction, { injectRef: injector });
+      sendEmail.run({ message: 'test' });
+      tick();
+
+      expect(sendEmail.data()).toEqual({ success: true });
+      expect(mockConvexClient.action).toHaveBeenCalledWith(mockAction, {
+        message: 'test',
+      });
+    }));
+
+    it('should still throw outside an injection context without injectRef', () => {
+      expect(() => injectAction(mockAction)).toThrow();
+    });
   });
 });

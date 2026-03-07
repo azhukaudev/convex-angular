@@ -1,4 +1,9 @@
-import { Component, signal } from '@angular/core';
+import {
+  Component,
+  EnvironmentInjector,
+  createEnvironmentInjector,
+  signal,
+} from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
@@ -1039,5 +1044,77 @@ describe('injectQuery', () => {
       expect(fixture.componentInstance.todos.data()).toEqual(initialData);
       expect(fixture.componentInstance.todos.error()).toBeDefined();
     }));
+  });
+
+  describe('injectRef', () => {
+    it('should create a query outside an injection context with injectRef', fakeAsync(() => {
+      const injector = TestBed.inject(EnvironmentInjector);
+
+      const todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+        injectRef: injector,
+      });
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledWith(
+        mockQuery,
+        { count: 10 },
+        expect.any(Function),
+        expect.any(Function),
+      );
+
+      const result = [{ _id: '1', title: 'Todo 1' }];
+      onUpdateCallback(result);
+
+      expect(todos.data()).toEqual(result);
+    }));
+
+    it('should clean up subscriptions when the provided injector is destroyed', fakeAsync(() => {
+      const childInjector = createEnvironmentInjector(
+        [],
+        TestBed.inject(EnvironmentInjector),
+      );
+
+      injectQuery(mockQuery, () => ({ count: 10 }), {
+        injectRef: childInjector,
+      });
+      tick();
+
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+
+      childInjector.destroy();
+
+      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    }));
+
+    it('should let injectRef override the ambient component scope', fakeAsync(() => {
+      const childInjector = createEnvironmentInjector(
+        [],
+        TestBed.inject(EnvironmentInjector),
+      );
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          injectRef: childInjector,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      fixture.destroy();
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+
+      childInjector.destroy();
+      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    }));
+
+    it('should still throw outside an injection context without injectRef', () => {
+      expect(() => injectQuery(mockQuery, () => ({ count: 10 }))).toThrow();
+    });
   });
 });

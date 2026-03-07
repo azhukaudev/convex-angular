@@ -1,4 +1,9 @@
-import { Component, signal } from '@angular/core';
+import {
+  Component,
+  EnvironmentInjector,
+  createEnvironmentInjector,
+  signal,
+} from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, PaginationResult } from 'convex/server';
@@ -52,11 +57,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -106,11 +109,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -136,11 +137,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -172,11 +171,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -205,11 +202,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -243,11 +238,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -273,11 +266,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -296,11 +287,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -338,11 +327,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -420,11 +407,9 @@ describe('injectPaginatedQuery', () => {
     })
     class TestComponent {
       readonly pageSize = signal(10);
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: this.pageSize },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: this.pageSize,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -461,11 +446,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -483,11 +466,9 @@ describe('injectPaginatedQuery', () => {
       standalone: true,
     })
     class TestComponent {
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({}),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -806,11 +787,9 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -826,11 +805,9 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -853,11 +830,9 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -880,11 +855,9 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -925,11 +898,9 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -945,11 +916,9 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -972,11 +941,9 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -1019,11 +986,10 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10, onSuccess },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+          onSuccess,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -1049,11 +1015,10 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10, onSuccess },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+          onSuccess,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -1078,11 +1043,10 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10, onError },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+          onError,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -1102,11 +1066,9 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => ({}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -1123,5 +1085,63 @@ describe('injectPaginatedQuery', () => {
 
       expect(fixture.componentInstance.todos.error()).toBeDefined();
     }));
+  });
+
+  describe('injectRef', () => {
+    it('should create a paginated query outside an injection context with injectRef', fakeAsync(() => {
+      const injector = TestBed.inject(EnvironmentInjector);
+
+      const todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+        injectRef: injector,
+      });
+      tick();
+
+      expect(
+        mockConvexClient.onPaginatedUpdate_experimental,
+      ).toHaveBeenCalledWith(
+        mockPaginatedQuery,
+        {},
+        { initialNumItems: 10 },
+        expect.any(Function),
+        expect.any(Function),
+      );
+
+      const result = [{ _id: '1', name: 'Todo 1' }];
+      onUpdateCallback({
+        results: result,
+        status: 'CanLoadMore',
+        loadMore: jest.fn(),
+      });
+
+      expect(todos.results()).toEqual(result);
+    }));
+
+    it('should clean up subscriptions when the provided injector is destroyed', fakeAsync(() => {
+      const childInjector = createEnvironmentInjector(
+        [],
+        TestBed.inject(EnvironmentInjector),
+      );
+
+      injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+        injectRef: childInjector,
+      });
+      tick();
+
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+
+      childInjector.destroy();
+
+      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    }));
+
+    it('should still throw outside an injection context without injectRef', () => {
+      expect(() =>
+        injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        }),
+      ).toThrow();
+    });
   });
 });

@@ -1,9 +1,4 @@
-import {
-  Signal,
-  assertInInjectionContext,
-  computed,
-  signal,
-} from '@angular/core';
+import { EnvironmentInjector, Signal, computed, signal } from '@angular/core';
 import { OptimisticUpdate } from 'convex/browser';
 import {
   FunctionArgs,
@@ -13,6 +8,7 @@ import {
 
 import { MutationStatus } from '../types';
 import { injectConvex } from './inject-convex';
+import { runInResolvedInjectionContext } from './injection-context';
 
 /**
  * A FunctionReference that refers to a Convex mutation.
@@ -23,6 +19,12 @@ export type MutationReference = FunctionReference<'mutation'>;
  * Options for injectMutation.
  */
 export interface MutationOptions<Mutation extends MutationReference> {
+  /**
+   * Environment injector used to resolve dependencies when creating the
+   * mutation outside the current injection context.
+   */
+  injectRef?: EnvironmentInjector;
+
   /**
    * Callback invoked when the mutation completes successfully.
    * @param data - The return value of the mutation
@@ -134,8 +136,11 @@ export function injectMutation<Mutation extends MutationReference>(
   mutation: Mutation,
   options?: MutationOptions<Mutation>,
 ): MutationResult<Mutation> {
-  assertInInjectionContext(injectMutation);
-  const convex = injectConvex();
+  const convex = runInResolvedInjectionContext(
+    injectMutation,
+    options?.injectRef,
+    () => injectConvex(),
+  );
 
   // Internal signals for tracking state
   const data = signal<FunctionReturnType<Mutation>>(undefined);

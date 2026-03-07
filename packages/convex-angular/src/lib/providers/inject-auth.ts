@@ -3,7 +3,6 @@ import {
   EnvironmentInjector,
   EnvironmentProviders,
   Type,
-  assertInInjectionContext,
   computed,
   effect,
   inject,
@@ -22,6 +21,18 @@ import {
   ConvexAuthStatus,
 } from '../tokens/auth';
 import { injectConvex } from './inject-convex';
+import {
+  resolveEnvironmentInjector,
+  runInResolvedInjectionContext,
+} from './injection-context';
+
+export interface InjectAuthOptions {
+  /**
+   * Environment injector used to create the auth helper outside the current
+   * injection context.
+   */
+  injectRef?: EnvironmentInjector;
+}
 
 /**
  * WeakMap to store auth state per injector.
@@ -187,50 +198,51 @@ function initializeAuthSync(
  *
  * @public
  */
-export function injectAuth(): ConvexAuthState {
-  assertInInjectionContext(injectAuth);
+export function injectAuth(options?: InjectAuthOptions): ConvexAuthState {
+  const injector = resolveEnvironmentInjector(injectAuth, options?.injectRef);
 
-  const authConfig = inject(CONVEX_AUTH_CONFIG, { optional: true });
+  return runInResolvedInjectionContext(injectAuth, options?.injectRef, () => {
+    const authConfig = inject(CONVEX_AUTH_CONFIG, { optional: true });
 
-  if (!authConfig) {
-    throw new Error(
-      'Could not find `CONVEX_AUTH_CONFIG`. ' +
-        'Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, ' +
-        'or `provideAuth0Auth()` in your application providers.',
-    );
-  }
+    if (!authConfig) {
+      throw new Error(
+        'Could not find `CONVEX_AUTH_CONFIG`. ' +
+          'Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, ' +
+          'or `provideAuth0Auth()` in your application providers.',
+      );
+    }
 
-  const injector = inject(EnvironmentInjector);
-  const state = getOrCreateAuthState(injector);
+    const state = getOrCreateAuthState(injector);
 
-  // Initialize auth sync on first call
-  initializeAuthSync(injector, authConfig, state);
+    // Initialize auth sync on first call
+    initializeAuthSync(injector, authConfig, state);
 
-  // Computed signals based on auth config and Convex state
-  const isLoading = computed(() => {
-    // Loading if auth provider is loading OR Convex hasn't confirmed yet
-    return authConfig.isLoading() || state.isConvexAuthenticated() === null;
+    // Computed signals based on auth config and Convex state
+    const isLoading = computed(() => {
+      // Loading if auth provider is loading OR Convex hasn't confirmed yet
+      return authConfig.isLoading() || state.isConvexAuthenticated() === null;
+    });
+
+    const isAuthenticated = computed(() => {
+      // Must be authenticated by provider AND confirmed by Convex
+      return (
+        authConfig.isAuthenticated() && (state.isConvexAuthenticated() ?? false)
+      );
+    });
+
+    const status = computed<ConvexAuthStatus>(() => {
+      if (isLoading()) return 'loading';
+      if (isAuthenticated()) return 'authenticated';
+      return 'unauthenticated';
+    });
+
+    return {
+      isLoading,
+      isAuthenticated,
+      error: state.error.asReadonly(),
+      status,
+    };
   });
-
-  const isAuthenticated = computed(() => {
-    // Must be authenticated by provider AND confirmed by Convex
-    return (
-      authConfig.isAuthenticated() && (state.isConvexAuthenticated() ?? false)
-    );
-  });
-
-  const status = computed<ConvexAuthStatus>(() => {
-    if (isLoading()) return 'loading';
-    if (isAuthenticated()) return 'authenticated';
-    return 'unauthenticated';
-  });
-
-  return {
-    isLoading,
-    isAuthenticated,
-    error: state.error.asReadonly(),
-    status,
-  };
 }
 
 /**

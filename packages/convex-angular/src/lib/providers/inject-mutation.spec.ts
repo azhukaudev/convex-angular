@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, EnvironmentInjector } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
@@ -641,5 +641,27 @@ describe('injectMutation', () => {
       expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
       expect(fixture.componentInstance.addTodo.status()).toBe('idle');
     }));
+  });
+
+  describe('injectRef', () => {
+    it('should create a mutation outside an injection context with injectRef', fakeAsync(() => {
+      const injector = TestBed.inject(EnvironmentInjector);
+      mockConvexClient.mutation.mockResolvedValue({ id: '123' });
+
+      const addTodo = injectMutation(mockMutation, { injectRef: injector });
+      addTodo.mutate({ title: 'test' });
+      tick();
+
+      expect(addTodo.data()).toEqual({ id: '123' });
+      expect(mockConvexClient.mutation).toHaveBeenCalledWith(
+        mockMutation,
+        { title: 'test' },
+        { optimisticUpdate: undefined },
+      );
+    }));
+
+    it('should still throw outside an injection context without injectRef', () => {
+      expect(() => injectMutation(mockMutation)).toThrow();
+    });
   });
 });

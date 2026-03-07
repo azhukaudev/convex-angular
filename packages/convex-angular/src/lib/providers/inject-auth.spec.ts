@@ -1,4 +1,10 @@
-import { Component, Injectable, signal } from '@angular/core';
+import {
+  Component,
+  EnvironmentInjector,
+  Injectable,
+  createEnvironmentInjector,
+  signal,
+} from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 
@@ -578,6 +584,108 @@ describe('injectAuth', () => {
       expect(fixture.componentInstance.auth.isLoading()).toBe(false);
       expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
     }));
+  });
+
+  describe('injectRef', () => {
+    it('should create auth state outside an injection context with injectRef', fakeAsync(() => {
+      const mockProvider: ConvexAuthProvider = {
+        isLoading: signal(false),
+        isAuthenticated: signal(true),
+        fetchAccessToken: async () => 'token',
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: CONVEX, useValue: mockConvexClient },
+          { provide: CONVEX_AUTH, useValue: mockProvider },
+          provideConvexAuth(),
+        ],
+      });
+
+      const auth = injectAuth({
+        injectRef: TestBed.inject(EnvironmentInjector),
+      });
+      tick();
+
+      expect(auth.status()).toBe('authenticated');
+      expect(mockSetAuth).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.any(Function),
+      );
+    }));
+
+    it('should clean up auth sync when the provided injector is destroyed', fakeAsync(() => {
+      const mockProvider: ConvexAuthProvider = {
+        isLoading: signal(false),
+        isAuthenticated: signal(true),
+        fetchAccessToken: async () => 'token',
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: CONVEX, useValue: mockConvexClient },
+          { provide: CONVEX_AUTH, useValue: mockProvider },
+          provideConvexAuth(),
+        ],
+      });
+
+      const childInjector = createEnvironmentInjector(
+        [],
+        TestBed.inject(EnvironmentInjector),
+      );
+
+      injectAuth({ injectRef: childInjector });
+      tick();
+
+      mockHasAuth.mockReturnValue(true);
+      childInjector.destroy();
+
+      expect(mockClearAuth).toHaveBeenCalledTimes(1);
+    }));
+
+    it('should let injectRef override the ambient component scope', fakeAsync(() => {
+      const mockProvider: ConvexAuthProvider = {
+        isLoading: signal(false),
+        isAuthenticated: signal(true),
+        fetchAccessToken: async () => 'token',
+      };
+
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: CONVEX, useValue: mockConvexClient },
+          { provide: CONVEX_AUTH, useValue: mockProvider },
+          provideConvexAuth(),
+        ],
+      });
+
+      const childInjector = createEnvironmentInjector(
+        [],
+        TestBed.inject(EnvironmentInjector),
+      );
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly auth = injectAuth({ injectRef: childInjector });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      mockHasAuth.mockReturnValue(true);
+      fixture.destroy();
+      expect(mockClearAuth).not.toHaveBeenCalled();
+
+      childInjector.destroy();
+      expect(mockClearAuth).toHaveBeenCalledTimes(1);
+    }));
+
+    it('should still throw outside an injection context without injectRef', () => {
+      expect(() => injectAuth()).toThrow();
+    });
   });
 });
 

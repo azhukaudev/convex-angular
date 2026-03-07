@@ -1,7 +1,16 @@
-import { assertInInjectionContext, inject } from '@angular/core';
+import { EnvironmentInjector, inject } from '@angular/core';
 import { ConvexClient } from 'convex/browser';
 
 import { CONVEX } from '../tokens/convex';
+import { runInResolvedInjectionContext } from './injection-context';
+
+export interface InjectConvexOptions {
+  /**
+   * Environment injector used to resolve the Convex client when creating
+   * helpers outside the current injection context.
+   */
+  injectRef?: EnvironmentInjector;
+}
 
 /**
  * Inject the Convex client instance.
@@ -22,18 +31,18 @@ import { CONVEX } from '../tokens/convex';
  * @throws Error if called outside of an injection context, if provideConvex was not called,
  * or if provideConvex was configured outside the root injector
  */
-export function injectConvex(): ConvexClient {
-  assertInInjectionContext(injectConvex);
+export function injectConvex(options?: InjectConvexOptions): ConvexClient {
+  return runInResolvedInjectionContext(injectConvex, options?.injectRef, () => {
+    // Use optional injection so we can throw a focused setup error instead
+    // of Angular's generic NullInjectorError for missing CONVEX.
+    const convex = inject(CONVEX, { optional: true });
 
-  // Use optional injection so we can throw a focused setup error instead of
-  // Angular's generic NullInjectorError for missing CONVEX.
-  const convex = inject(CONVEX, { optional: true });
+    if (!convex) {
+      throw new Error(
+        'Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers (for example, in `app.config.ts`).',
+      );
+    }
 
-  if (!convex) {
-    throw new Error(
-      'Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers (for example, in `app.config.ts`).',
-    );
-  }
-
-  return convex;
+    return convex;
+  });
 }

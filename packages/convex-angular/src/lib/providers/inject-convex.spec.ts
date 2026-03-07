@@ -78,6 +78,16 @@ describe('injectConvex', () => {
       /Could not find `CONVEX`/,
     );
   });
+
+  it('should resolve the ConvexClient outside an injection context with injectRef', () => {
+    const injector = TestBed.inject(EnvironmentInjector);
+
+    expect(injectConvex({ injectRef: injector })).toBe(mockConvexClient);
+  });
+
+  it('should throw outside an injection context without injectRef', () => {
+    expect(() => injectConvex()).toThrow();
+  });
 });
 
 describe('provideConvex configuration', () => {

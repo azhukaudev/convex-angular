@@ -238,6 +238,38 @@ export class AppComponent {
 }
 ```
 
+### Creating helpers outside the initial injection context
+
+If you need to create a Convex helper later from plain code, capture an
+`EnvironmentInjector` in DI and pass it as `injectRef`.
+
+```typescript
+import { Component, EnvironmentInjector, inject } from '@angular/core';
+import { injectMutation } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
+
+@Component({
+  selector: 'app-root',
+  template: `<button (click)="submit()">Save</button>`,
+})
+export class AppComponent {
+  private readonly injectRef = inject(EnvironmentInjector);
+
+  submit() {
+    const mutation = injectMutation(api.todos.addTodo, {
+      injectRef: this.injectRef,
+    });
+
+    mutation.mutate({ title: 'Created outside the initial scope' });
+  }
+}
+```
+
+This works for all public `inject*` helpers, including `injectQuery`,
+`injectPaginatedQuery`, `injectMutation`, `injectAction`, `injectConvex`, and
+`injectAuth`.
+
 ## 🔐 Authentication
 
 ### Using injectAuth
