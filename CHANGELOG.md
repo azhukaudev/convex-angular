@@ -1,5 +1,15 @@
 # convex-angular
 
+## [1.3.0](https://github.com/azhukaudev/convex-angular/compare/v1.2.0...v1.3.0) (2026-03-07)
+
+### ✨ Features
+
+- Add optional `injectRef` support to all public `inject*` helpers so they can be created outside the initial Angular injection context
+
+### 📖 Documentation
+
+- Document `injectRef` usage for creating helpers outside the initial injection context.
+
 ## [1.2.0](https://github.com/azhukaudev/convex-angular/compare/v1.1.0...v1.2.0) (2026-03-07)
 
 ### ⚠️ Breaking Changes
