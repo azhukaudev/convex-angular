@@ -16,41 +16,14 @@ import {
   provideConvexAuthFromExisting,
 } from './inject-auth';
 
-/**
- * Mock auth provider for testing
- */
-@Injectable()
-class MockAuthProvider implements ConvexAuthProvider {
-  readonly isLoading = signal(false);
-  readonly isAuthenticated = signal(false);
-  readonly tokenToReturn: string | null = 'token';
-
-  async fetchAccessToken(_args: {
-    forceRefreshToken: boolean;
-  }): Promise<string | null> {
-    return this.tokenToReturn;
-  }
-}
-
 @Injectable()
 class ExistingAuthProvider implements ConvexAuthProvider {
   readonly isLoading = signal(false);
   readonly isAuthenticated = signal(false);
+  readonly error = signal<Error | undefined>(undefined);
   readonly fetchAccessToken = jest.fn(
     async (_args: { forceRefreshToken: boolean }) => 'token',
   );
-}
-
-@Injectable()
-class MethodFetchAuthProvider implements ConvexAuthProvider {
-  readonly isLoading = signal(false);
-  readonly isAuthenticated = signal(true);
-
-  async fetchAccessToken(_args: {
-    forceRefreshToken: boolean;
-  }): Promise<string | null> {
-    return this.isAuthenticated() ? 'method-token' : null;
-  }
 }
 
 describe('injectAuth', () => {
@@ -58,10 +31,71 @@ describe('injectAuth', () => {
   let mockSetAuth: jest.Mock;
   let mockClearAuth: jest.Mock;
   let mockHasAuth: jest.Mock;
+  let fetchAccessToken: jest.Mock<
+    Promise<string | null | undefined>,
+    [{ forceRefreshToken: boolean }]
+  >;
+  let providerLoading: ReturnType<typeof signal<boolean>>;
+  let providerAuthenticated: ReturnType<typeof signal<boolean>>;
+  let providerError: ReturnType<typeof signal<Error | undefined>>;
+  let reauthVersion: ReturnType<typeof signal<number>>;
+  let setAuthFetcher:
+    | ((args: {
+        forceRefreshToken: boolean;
+      }) => Promise<string | null | undefined>)
+    | undefined;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
 
+  function createProvider(): ConvexAuthProvider {
+    return {
+      isLoading: providerLoading,
+      isAuthenticated: providerAuthenticated,
+      error: providerError,
+      reauthVersion,
+      fetchAccessToken,
+    };
+  }
+
+  function configureTestingModule(
+    authProvider: ConvexAuthProvider = createProvider(),
+    extraProviders: unknown[] = [],
+  ) {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CONVEX, useValue: mockConvexClient },
+        { provide: CONVEX_AUTH, useValue: authProvider },
+        provideConvexAuth(),
+        ...extraProviders,
+      ],
+    });
+  }
+
+  function createAuthFixture() {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+    return fixture;
+  }
+
   beforeEach(() => {
-    mockSetAuth = jest.fn((_fetchToken, onChange) => {
+    providerLoading = signal(false);
+    providerAuthenticated = signal(false);
+    providerError = signal<Error | undefined>(undefined);
+    reauthVersion = signal(0);
+    fetchAccessToken = jest.fn().mockResolvedValue('token');
+    setAuthFetcher = undefined;
+    setAuthOnChange = undefined;
+
+    mockSetAuth = jest.fn((fetchToken, onChange) => {
+      setAuthFetcher = fetchToken;
       setAuthOnChange = onChange;
     });
     mockClearAuth = jest.fn();
@@ -74,642 +108,34 @@ describe('injectAuth', () => {
         hasAuth: mockHasAuth,
       },
     } as unknown as jest.Mocked<ConvexClient>;
-
-    setAuthOnChange = undefined;
   });
 
   afterEach(() => {
     TestBed.resetTestingModule();
   });
 
-  describe('without auth provider', () => {
-    it('should throw an error when no auth provider is configured', () => {
-      TestBed.configureTestingModule({
-        providers: [{ provide: CONVEX, useValue: mockConvexClient }],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      expect(() => TestBed.createComponent(TestComponent)).toThrow(
-        /Could not find `CONVEX_AUTH_CONFIG`/,
-      );
+  it('throws when auth state providers are not configured', () => {
+    TestBed.configureTestingModule({
+      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
     });
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
+
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(
+      /Could not find Convex auth state/,
+    );
   });
 
-  describe('initial state', () => {
-    it('should be loading when auth provider is loading', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(true),
-        isAuthenticated: signal(false),
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      expect(fixture.componentInstance.auth.isLoading()).toBe(true);
-      expect(fixture.componentInstance.auth.status()).toBe('loading');
-    }));
-
-    it('should be unauthenticated when provider says not authenticated', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(false),
-        fetchAccessToken: async () => null,
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      expect(fixture.componentInstance.auth.isLoading()).toBe(false);
-      expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
-      expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
-    }));
-
-    it('should be authenticated immediately when provider is authenticated', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(true),
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      // Should be authenticated immediately (trusts provider)
-      expect(fixture.componentInstance.auth.isLoading()).toBe(false);
-      expect(fixture.componentInstance.auth.status()).toBe('authenticated');
-    }));
-
-    it('should have no error initially', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(false),
-        fetchAccessToken: async () => null,
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      expect(fixture.componentInstance.auth.error()).toBeUndefined();
-    }));
-  });
-
-  describe('authentication flow', () => {
-    it('should call setAuth on ConvexClient when provider is authenticated', fakeAsync(() => {
-      const fetchAccessToken = jest.fn().mockResolvedValue('test-token');
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(true),
-        fetchAccessToken,
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      expect(mockSetAuth).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-      );
-    }));
-
-    it('should become authenticated immediately when provider is authenticated', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(true),
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      // Immediately authenticated (trusts provider, doesn't wait for Convex)
-      expect(fixture.componentInstance.auth.isLoading()).toBe(false);
-      expect(fixture.componentInstance.auth.isAuthenticated()).toBe(true);
-      expect(fixture.componentInstance.auth.status()).toBe('authenticated');
-    }));
-
-    it('should not call setAuth when provider is not authenticated', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(false),
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      expect(mockSetAuth).not.toHaveBeenCalled();
-    }));
-  });
-
-  describe('state transitions', () => {
-    it('should transition from loading to authenticated', fakeAsync(() => {
-      const isLoading = signal(true);
-      const isAuthenticated = signal(false);
-      const mockProvider: ConvexAuthProvider = {
-        isLoading,
-        isAuthenticated,
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      // Initially loading
-      expect(fixture.componentInstance.auth.status()).toBe('loading');
-
-      // Provider finishes loading and is authenticated
-      isLoading.set(false);
-      isAuthenticated.set(true);
-      fixture.detectChanges();
-      tick();
-
-      // Immediately authenticated (trusts provider, doesn't wait for Convex confirmation)
-      expect(fixture.componentInstance.auth.status()).toBe('authenticated');
-    }));
-
-    it('should transition from authenticated to unauthenticated', fakeAsync(() => {
-      const isLoading = signal(false);
-      const isAuthenticated = signal(true);
-      const mockProvider: ConvexAuthProvider = {
-        isLoading,
-        isAuthenticated,
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      // Convex confirms authentication
-      setAuthOnChange?.(true);
-      fixture.detectChanges();
-      expect(fixture.componentInstance.auth.status()).toBe('authenticated');
-
-      // User logs out
-      mockHasAuth.mockReturnValue(true);
-      isAuthenticated.set(false);
-      fixture.detectChanges();
-      tick();
-
-      expect(mockClearAuth).toHaveBeenCalled();
-      expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
-      expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
-    }));
-
-    it('should transition back to loading when provider goes back to loading', fakeAsync(() => {
-      const isLoading = signal(false);
-      const isAuthenticated = signal(true);
-      const mockProvider: ConvexAuthProvider = {
-        isLoading,
-        isAuthenticated,
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      // Convex confirms authentication
-      setAuthOnChange?.(true);
-      fixture.detectChanges();
-      expect(fixture.componentInstance.auth.status()).toBe('authenticated');
-
-      // Provider goes back to loading (e.g., re-authenticating)
-      isLoading.set(true);
-      fixture.detectChanges();
-      tick();
-
-      expect(fixture.componentInstance.auth.status()).toBe('loading');
-    }));
-  });
-
-  describe('multiple injectAuth calls', () => {
-    it('should share state between multiple calls in same component', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(true),
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth1 = injectAuth();
-        readonly auth2 = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      // Convex confirms
-      setAuthOnChange?.(true);
-      fixture.detectChanges();
-
-      // Both should reflect the same state
-      expect(fixture.componentInstance.auth1.isAuthenticated()).toBe(true);
-      expect(fixture.componentInstance.auth2.isAuthenticated()).toBe(true);
-    }));
-
-    it('should share state between different components', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(true),
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent1 {
-        readonly auth = injectAuth();
-      }
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent2 {
-        readonly auth = injectAuth();
-      }
-
-      const fixture1 = TestBed.createComponent(TestComponent1);
-      fixture1.detectChanges();
-      tick();
-
-      const fixture2 = TestBed.createComponent(TestComponent2);
-      fixture2.detectChanges();
-      tick();
-
-      // Convex confirms
-      setAuthOnChange?.(true);
-      fixture1.detectChanges();
-      fixture2.detectChanges();
-
-      // Both should reflect the same state
-      expect(fixture1.componentInstance.auth.isAuthenticated()).toBe(true);
-      expect(fixture2.componentInstance.auth.isAuthenticated()).toBe(true);
-    }));
-  });
-
-  describe('convex callback', () => {
-    it('should handle Convex reporting not authenticated', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(true),
-        fetchAccessToken: async () => 'invalid-token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth();
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      // Convex reports not authenticated (token invalid/expired)
-      setAuthOnChange?.(false);
-      fixture.detectChanges();
-
-      // Provider says authenticated but Convex says no
-      expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
-      expect(fixture.componentInstance.auth.isLoading()).toBe(false);
-      expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
-    }));
-  });
-
-  describe('injectRef', () => {
-    it('should create auth state outside an injection context with injectRef', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(true),
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      const auth = injectAuth({
-        injectRef: TestBed.inject(EnvironmentInjector),
-      });
-      tick();
-
-      expect(auth.status()).toBe('authenticated');
-      expect(mockSetAuth).toHaveBeenCalledWith(
-        expect.any(Function),
-        expect.any(Function),
-      );
-    }));
-
-    it('should clean up auth sync when the provided injector is destroyed', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(true),
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      const childInjector = createEnvironmentInjector(
-        [],
-        TestBed.inject(EnvironmentInjector),
-      );
-
-      injectAuth({ injectRef: childInjector });
-      tick();
-
-      mockHasAuth.mockReturnValue(true);
-      childInjector.destroy();
-
-      expect(mockClearAuth).toHaveBeenCalledTimes(1);
-    }));
-
-    it('should let injectRef override the ambient component scope', fakeAsync(() => {
-      const mockProvider: ConvexAuthProvider = {
-        isLoading: signal(false),
-        isAuthenticated: signal(true),
-        fetchAccessToken: async () => 'token',
-      };
-
-      TestBed.configureTestingModule({
-        providers: [
-          { provide: CONVEX, useValue: mockConvexClient },
-          { provide: CONVEX_AUTH, useValue: mockProvider },
-          provideConvexAuth(),
-        ],
-      });
-
-      const childInjector = createEnvironmentInjector(
-        [],
-        TestBed.inject(EnvironmentInjector),
-      );
-
-      @Component({
-        template: '',
-        standalone: true,
-      })
-      class TestComponent {
-        readonly auth = injectAuth({ injectRef: childInjector });
-      }
-
-      const fixture = TestBed.createComponent(TestComponent);
-      fixture.detectChanges();
-      tick();
-
-      mockHasAuth.mockReturnValue(true);
-      fixture.destroy();
-      expect(mockClearAuth).not.toHaveBeenCalled();
-
-      childInjector.destroy();
-      expect(mockClearAuth).toHaveBeenCalledTimes(1);
-    }));
-
-    it('should still throw outside an injection context without injectRef', () => {
-      expect(() => injectAuth()).toThrow();
-    });
-  });
-});
-
-describe('provideConvexAuth', () => {
-  it('should auto-initialize auth sync', fakeAsync(() => {
-    const fetchAccessToken = jest.fn().mockResolvedValue('token');
-    const mockProvider: ConvexAuthProvider = {
-      isLoading: signal(false),
-      isAuthenticated: signal(true),
-      fetchAccessToken,
-    };
-
-    const mockConvexClient = {
-      setAuth: jest.fn(),
-      client: {
-        clearAuth: jest.fn(),
-        hasAuth: jest.fn().mockReturnValue(false),
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
-
+  it('throws when provideConvexAuth is configured without CONVEX_AUTH', () => {
     TestBed.configureTestingModule({
       providers: [
         { provide: CONVEX, useValue: mockConvexClient },
-        { provide: CONVEX_AUTH, useValue: mockProvider },
         provideConvexAuth(),
       ],
     });
@@ -718,147 +144,262 @@ describe('provideConvexAuth', () => {
       template: '',
       standalone: true,
     })
-    class TestComponent {}
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
 
-    const fixture = TestBed.createComponent(TestComponent);
-    fixture.detectChanges();
-    tick();
-
-    expect(mockConvexClient.setAuth).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.any(Function),
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(
+      /Could not find `CONVEX_AUTH`/,
     );
+  });
+
+  it('is loading while the auth provider is loading', fakeAsync(() => {
+    providerLoading.set(true);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    expect(fixture.componentInstance.auth.isLoading()).toBe(true);
+    expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
+    expect(fixture.componentInstance.auth.status()).toBe('loading');
   }));
 
-  it('should preserve provider context for method-based fetchAccessToken', fakeAsync(() => {
-    let setAuthFetcher: ConvexAuthProvider['fetchAccessToken'] | undefined;
+  it('waits for Convex confirmation when the provider is authenticated', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
 
-    const mockConvexClient = {
-      setAuth: jest.fn((fetchToken: ConvexAuthProvider['fetchAccessToken']) => {
-        setAuthFetcher = fetchToken;
-      }),
-      client: {
-        clearAuth: jest.fn(),
-        hasAuth: jest.fn().mockReturnValue(false),
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
+    const fixture = createAuthFixture();
 
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
-        { provide: CONVEX_AUTH, useClass: MethodFetchAuthProvider },
-        provideConvexAuth(),
-      ],
-    });
+    expect(fixture.componentInstance.auth.isLoading()).toBe(true);
+    expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
+    expect(fixture.componentInstance.auth.status()).toBe('loading');
+    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+  }));
 
-    @Component({
-      template: '',
-      standalone: true,
-    })
-    class TestComponent {}
+  it('becomes authenticated only after Convex confirms the token', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
 
-    const fixture = TestBed.createComponent(TestComponent);
+    const fixture = createAuthFixture();
+
+    setAuthOnChange?.(true);
     fixture.detectChanges();
     tick();
 
-    expect(setAuthFetcher).toBeDefined();
+    expect(fixture.componentInstance.auth.isLoading()).toBe(false);
+    expect(fixture.componentInstance.auth.isAuthenticated()).toBe(true);
+    expect(fixture.componentInstance.auth.status()).toBe('authenticated');
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
+  }));
+
+  it('becomes unauthenticated when Convex rejects the token', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    setAuthOnChange?.(false);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.isLoading()).toBe(false);
+    expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
+  }));
+
+  it('treats a null token as unauthenticated without setting an error', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    fetchAccessToken.mockResolvedValue(null);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
 
     let token: string | null | undefined;
-    let error: unknown;
-    setAuthFetcher!({ forceRefreshToken: false }).then(
-      (value) => {
-        token = value;
-      },
-      (err) => {
-        error = err;
-      },
+    setAuthFetcher?.({ forceRefreshToken: false }).then((value) => {
+      token = value;
+    });
+    tick();
+    fixture.detectChanges();
+
+    expect(token).toBeNull();
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
+  }));
+
+  it('records token fetch failures as ordinary Error objects', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    fetchAccessToken.mockRejectedValue(new Error('provider exploded'));
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    let token: string | null | undefined;
+    setAuthFetcher?.({ forceRefreshToken: true }).then((value) => {
+      token = value;
+    });
+    tick();
+    fixture.detectChanges();
+
+    expect(token).toBeNull();
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+    expect(fixture.componentInstance.auth.error()).toEqual(
+      expect.objectContaining({
+        message: '[convex-angular auth] Token fetch failed: provider exploded',
+      }),
     );
-    tick();
-
-    expect(error).toBeUndefined();
-    expect(token).toBe('method-token');
   }));
 
-  it('should work with TestBed using CONVEX_AUTH token', fakeAsync(() => {
-    const mockProvider: ConvexAuthProvider = {
-      isLoading: signal(false),
-      isAuthenticated: signal(false),
-      fetchAccessToken: async () => null,
-    };
+  it('mirrors provider errors until they clear', fakeAsync(() => {
+    configureTestingModule();
 
-    const mockConvexClient = {
-      setAuth: jest.fn(),
-      client: {
-        clearAuth: jest.fn(),
-        hasAuth: jest.fn().mockReturnValue(false),
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
+    const fixture = createAuthFixture();
+    const providerFailure = new Error('upstream failed');
 
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
-        { provide: CONVEX_AUTH, useValue: mockProvider },
-        provideConvexAuth(),
-      ],
+    providerError.set(providerFailure);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.error()).toBe(providerFailure);
+
+    providerError.set(undefined);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
+  }));
+
+  it('shows the most recent active error across provider and internal failures', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+    const providerFailure = new Error('provider failed');
+
+    providerError.set(providerFailure);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.error()).toBe(providerFailure);
+
+    mockSetAuth.mockImplementation(() => {
+      throw new Error('sync exploded');
     });
 
-    @Component({
-      template: '',
-      standalone: true,
-    })
-    class TestComponent {
-      readonly auth = injectAuth();
-    }
-
-    const fixture = TestBed.createComponent(TestComponent);
+    reauthVersion.update((value) => value + 1);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+    expect(fixture.componentInstance.auth.error()).toEqual(
+      expect.objectContaining({
+        message: '[convex-angular auth] Convex auth sync failed: sync exploded',
+      }),
+    );
   }));
 
-  it('should work with useClass for injectable services', fakeAsync(() => {
-    const mockConvexClient = {
-      setAuth: jest.fn(),
-      client: {
-        clearAuth: jest.fn(),
-        hasAuth: jest.fn().mockReturnValue(false),
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
+  it('clears internal errors when the next auth attempt starts', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    fetchAccessToken.mockRejectedValue(new Error('provider exploded'));
+    configureTestingModule();
 
-    TestBed.configureTestingModule({
-      providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
-        { provide: CONVEX_AUTH, useClass: MockAuthProvider },
-        provideConvexAuth(),
-      ],
-    });
+    const fixture = createAuthFixture();
 
-    @Component({
-      template: '',
-      standalone: true,
-    })
-    class TestComponent {
-      readonly auth = injectAuth();
-    }
+    setAuthFetcher?.({ forceRefreshToken: false });
+    tick();
+    fixture.detectChanges();
 
-    const fixture = TestBed.createComponent(TestComponent);
+    expect(fixture.componentInstance.auth.error()).toEqual(
+      expect.objectContaining({
+        message: '[convex-angular auth] Token fetch failed: provider exploded',
+      }),
+    );
+
+    fetchAccessToken.mockResolvedValue('fresh-token');
+    reauthVersion.update((value) => value + 1);
     fixture.detectChanges();
     tick();
 
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
+    expect(fixture.componentInstance.auth.status()).toBe('loading');
+  }));
+
+  it('clears auth and internal errors when the provider signs out', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    fetchAccessToken.mockRejectedValue(new Error('provider exploded'));
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    setAuthFetcher?.({ forceRefreshToken: false });
+    tick();
+
+    mockHasAuth.mockReturnValue(true);
+    providerAuthenticated.set(false);
+    fixture.detectChanges();
+    tick();
+
+    expect(mockClearAuth).toHaveBeenCalled();
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+  }));
+
+  it('re-runs auth when reauthVersion changes while signed in', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    createAuthFixture();
+    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+
+    reauthVersion.update((value) => value + 1);
+    tick();
+
+    expect(mockSetAuth).toHaveBeenCalledTimes(2);
+  }));
+
+  it('returns the same auth state object for repeated calls in the same injector', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    const injector = TestBed.inject(EnvironmentInjector);
+    const authA = injectAuth({ injectRef: injector });
+    const authB = injectAuth({ injectRef: injector });
+    tick();
+
+    expect(authA).toBe(authB);
+    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+  }));
+
+  it('binds cleanup to the provided injector', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    const childInjector = createEnvironmentInjector(
+      [],
+      TestBed.inject(EnvironmentInjector),
+    );
+
+    injectAuth({ injectRef: childInjector });
+    tick();
+
+    mockHasAuth.mockReturnValue(true);
+    childInjector.destroy();
+
+    expect(mockClearAuth).toHaveBeenCalledTimes(1);
   }));
 });
 
 describe('provideConvexAuthFromExisting', () => {
-  it('should reuse the existing provider instance and sync auth transitions', fakeAsync(() => {
-    const mockHasAuth = jest.fn().mockReturnValue(false);
+  afterEach(() => {
+    TestBed.resetTestingModule();
+  });
 
+  it('reuses the existing auth provider instance', fakeAsync(() => {
     const mockConvexClient = {
       setAuth: jest.fn(),
       client: {
         clearAuth: jest.fn(),
-        hasAuth: mockHasAuth,
+        hasAuth: jest.fn().mockReturnValue(false),
       },
     } as unknown as jest.Mocked<ConvexClient>;
 
@@ -887,23 +428,12 @@ describe('provideConvexAuthFromExisting', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.setAuth).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
 
     existingProvider.isAuthenticated.set(true);
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.setAuth).toHaveBeenCalledWith(
-      expect.any(Function),
-      expect.any(Function),
-    );
-
-    mockHasAuth.mockReturnValue(true);
-    existingProvider.isAuthenticated.set(false);
-    fixture.detectChanges();
-    tick();
-
-    expect(mockConvexClient.client.clearAuth).toHaveBeenCalled();
-    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+    expect(mockConvexClient.setAuth).toHaveBeenCalledTimes(1);
   }));
 });

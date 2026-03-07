@@ -2,29 +2,25 @@ import {
   DestroyRef,
   EnvironmentInjector,
   EnvironmentProviders,
+  InjectionToken,
   Type,
   computed,
   effect,
   inject,
   makeEnvironmentProviders,
   provideEnvironmentInitializer,
-  runInInjectionContext,
   signal,
 } from '@angular/core';
+import { ConvexClient } from 'convex/browser';
 
 import {
   CONVEX_AUTH,
-  CONVEX_AUTH_CONFIG,
-  ConvexAuthConfig,
   ConvexAuthProvider,
   ConvexAuthState,
   ConvexAuthStatus,
 } from '../tokens/auth';
-import { injectConvex } from './inject-convex';
-import {
-  resolveEnvironmentInjector,
-  runInResolvedInjectionContext,
-} from './injection-context';
+import { CONVEX } from '../tokens/convex';
+import { runInResolvedInjectionContext } from './injection-context';
 
 export interface InjectAuthOptions {
   /**
@@ -34,117 +30,229 @@ export interface InjectAuthOptions {
   injectRef?: EnvironmentInjector;
 }
 
-/**
- * WeakMap to store auth state per injector.
- * This allows multiple independent auth contexts in the same application
- * (e.g., for testing or multi-tenant scenarios).
- */
-const authStateByInjector = new WeakMap<
-  EnvironmentInjector,
-  {
-    isConvexAuthenticated: ReturnType<typeof signal<boolean | null>>;
-    error: ReturnType<typeof signal<Error | undefined>>;
-    initialized: boolean;
-  }
->();
-
-/**
- * Get or create auth state for the current injector.
- * This ensures we have a singleton auth state per injector context.
- */
-function getOrCreateAuthState(injector: EnvironmentInjector) {
-  let state = authStateByInjector.get(injector);
-  if (!state) {
-    state = {
-      isConvexAuthenticated: signal<boolean | null>(null),
-      error: signal<Error | undefined>(undefined),
-      initialized: false,
-    };
-    authStateByInjector.set(injector, state);
-  }
-  return state;
+interface SequencedError {
+  error: Error;
+  sequence: number;
 }
 
-/**
- * Initialize auth synchronization with the Convex client.
- * This is called once per injector when the first `injectAuth()` is called.
- */
-function initializeAuthSync(
-  injector: EnvironmentInjector,
-  authConfig: ConvexAuthConfig,
-  state: ReturnType<typeof getOrCreateAuthState>,
-): void {
-  if (state.initialized) {
-    return;
+const CONVEX_AUTH_STATE = new InjectionToken<ConvexAuthState>(
+  'CONVEX_AUTH_STATE',
+  {
+    providedIn: 'any',
+    factory: createConvexAuthState,
+  },
+);
+const CONVEX_AUTH_ENABLED = new InjectionToken<boolean>('CONVEX_AUTH_ENABLED');
+
+function normalizeError(error: unknown, prefix: string): Error {
+  if (error instanceof Error) {
+    return new Error(`${prefix}: ${error.message}`);
   }
-  state.initialized = true;
 
-  runInInjectionContext(injector, () => {
-    const convex = injectConvex();
-    const destroyRef = inject(DestroyRef);
+  return new Error(`${prefix}: ${String(error)}`);
+}
 
-    // Track the current auth setup to handle cleanup
-    let currentAuthCleanup: (() => void) | undefined;
+function createConvexAuthState(): ConvexAuthState {
+  const enabled = inject(CONVEX_AUTH_ENABLED, { optional: true });
+  if (!enabled) {
+    throw new Error(
+      'Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, or `provideAuth0Auth()` in your application providers.',
+    );
+  }
 
-    const clearAuthIfNeeded = () => {
+  const provider = inject(CONVEX_AUTH, { optional: true });
+  if (!provider) {
+    throw new Error(
+      'Could not find `CONVEX_AUTH`. Make sure to provide an auth provider using `CONVEX_AUTH`, `provideClerkAuth()`, or `provideAuth0Auth()` before calling `provideConvexAuth()`.',
+    );
+  }
+
+  const convex = inject(CONVEX, { optional: true }) as ConvexClient | null;
+  if (!convex) {
+    throw new Error(
+      'Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers before calling `provideConvexAuth()`.',
+    );
+  }
+
+  const destroyRef = inject(DestroyRef);
+
+  const backendAuthenticated = signal<boolean | null>(null);
+  const providerError = signal<SequencedError | undefined>(undefined);
+  const internalError = signal<SequencedError | undefined>(undefined);
+
+  let currentSequence = 0;
+  let currentGeneration = 0;
+
+  const nextSequence = () => {
+    currentSequence += 1;
+    return currentSequence;
+  };
+
+  const setProviderError = (error: Error) => {
+    providerError.set({
+      error,
+      sequence: nextSequence(),
+    });
+  };
+
+  const setInternalError = (error: unknown, prefix: string) => {
+    internalError.set({
+      error: normalizeError(error, prefix),
+      sequence: nextSequence(),
+    });
+  };
+
+  const clearInternalError = () => {
+    internalError.set(undefined);
+  };
+
+  const clearAuthIfNeeded = () => {
+    try {
       if (convex.client.hasAuth()) {
         convex.client.clearAuth();
       }
-    };
+    } catch (error) {
+      setInternalError(error, '[convex-angular auth] Convex auth sync failed');
+      backendAuthenticated.set(false);
+    }
+  };
 
-    // Effect to sync auth state with Convex client
-    effect(() => {
-      const providerLoading = authConfig.isLoading();
-      const providerAuthenticated = authConfig.isAuthenticated();
+  const isLoading = computed(() => {
+    return (
+      provider.isLoading() ||
+      (provider.isAuthenticated() && backendAuthenticated() === null)
+    );
+  });
 
-      // Cleanup previous auth setup if any
-      currentAuthCleanup?.();
-      currentAuthCleanup = undefined;
+  const isAuthenticated = computed(() => {
+    return provider.isAuthenticated() && backendAuthenticated() === true;
+  });
 
-      // If provider is loading, reset Convex auth state to null (loading)
-      if (providerLoading) {
-        clearAuthIfNeeded();
-        state.isConvexAuthenticated.set(null);
-        state.error.set(undefined);
-        return;
-      }
+  const status = computed<ConvexAuthStatus>(() => {
+    if (isLoading()) {
+      return 'loading';
+    }
 
-      // If provider says not authenticated, reflect that immediately
-      if (!providerAuthenticated) {
-        clearAuthIfNeeded();
-        state.isConvexAuthenticated.set(false);
-        state.error.set(undefined);
-        return;
-      }
+    if (isAuthenticated()) {
+      return 'authenticated';
+    }
 
-      // Provider is authenticated - set up Convex auth
-      // Initially trust the provider's auth state
-      state.isConvexAuthenticated.set(true);
-      state.error.set(undefined);
+    return 'unauthenticated';
+  });
 
+  const error = computed(() => {
+    const currentProviderError = providerError();
+    const currentInternalError = internalError();
+
+    if (!currentProviderError) {
+      return currentInternalError?.error;
+    }
+
+    if (!currentInternalError) {
+      return currentProviderError.error;
+    }
+
+    return currentProviderError.sequence >= currentInternalError.sequence
+      ? currentProviderError.error
+      : currentInternalError.error;
+  });
+
+  effect(() => {
+    const upstreamError = provider.error?.();
+    if (upstreamError) {
+      setProviderError(upstreamError);
+      return;
+    }
+
+    providerError.set(undefined);
+  });
+
+  effect(() => {
+    const upstreamLoading = provider.isLoading();
+    const upstreamAuthenticated = provider.isAuthenticated();
+    provider.reauthVersion?.();
+
+    currentGeneration += 1;
+    const generation = currentGeneration;
+
+    if (upstreamLoading) {
+      clearInternalError();
+      backendAuthenticated.set(null);
+      clearAuthIfNeeded();
+      return;
+    }
+
+    if (!upstreamAuthenticated) {
+      clearInternalError();
+      backendAuthenticated.set(false);
+      clearAuthIfNeeded();
+      return;
+    }
+
+    clearInternalError();
+    backendAuthenticated.set(null);
+
+    try {
       convex.setAuth(
-        authConfig.fetchAccessToken,
-        (backendReportsIsAuthenticated: boolean) => {
-          // Backend can override if it disagrees
-          state.isConvexAuthenticated.set(backendReportsIsAuthenticated);
-          if (backendReportsIsAuthenticated) {
-            state.error.set(undefined);
+        async (args) => {
+          try {
+            const token = await provider.fetchAccessToken(args);
+
+            if (generation !== currentGeneration) {
+              return null;
+            }
+
+            if (token == null) {
+              backendAuthenticated.set(false);
+              return null;
+            }
+
+            return token;
+          } catch (fetchError) {
+            if (generation === currentGeneration) {
+              setInternalError(
+                fetchError,
+                '[convex-angular auth] Token fetch failed',
+              );
+              backendAuthenticated.set(false);
+            }
+
+            return null;
+          }
+        },
+        (isConvexAuthenticated) => {
+          if (generation !== currentGeneration) {
+            return;
+          }
+
+          backendAuthenticated.set(isConvexAuthenticated);
+          if (isConvexAuthenticated) {
+            clearInternalError();
           }
         },
       );
-
-      // Store cleanup function
-      currentAuthCleanup = () => {
-        clearAuthIfNeeded();
-      };
-    });
-
-    // Cleanup on destroy
-    destroyRef.onDestroy(() => {
-      currentAuthCleanup?.();
-      authStateByInjector.delete(injector);
-    });
+    } catch (syncError) {
+      if (generation === currentGeneration) {
+        setInternalError(
+          syncError,
+          '[convex-angular auth] Convex auth sync failed',
+        );
+        backendAuthenticated.set(false);
+      }
+    }
   });
+
+  destroyRef.onDestroy(() => {
+    currentGeneration += 1;
+    clearAuthIfNeeded();
+  });
+
+  return {
+    isLoading,
+    isAuthenticated,
+    error,
+    status,
+  };
 }
 
 /**
@@ -154,94 +262,19 @@ function initializeAuthSync(
  * Requires an auth integration to be configured via `provideConvexAuth()`
  * or a provider-specific function like `provideClerkAuth()`.
  *
- * @example
- * ```typescript
- * @Component({
- *   template: `
- *     @switch (auth.status()) {
- *       @case ('loading') { <p-progressSpinner /> }
- *       @case ('authenticated') { <app-dashboard /> }
- *       @case ('unauthenticated') { <app-login /> }
- *     }
- *   `,
- * })
- * export class AppComponent {
- *   readonly auth = injectAuth();
- * }
- * ```
- *
- * @example
- * ```typescript
- * // Using individual signals
- * @Component({
- *   template: `
- *     @if (auth.isLoading()) {
- *       <span>Loading...</span>
- *     } @else if (auth.isAuthenticated()) {
- *       <span>Welcome!</span>
- *     } @else {
- *       <button (click)="login()">Sign In</button>
- *     }
- *
- *     @if (auth.error()) {
- *       <span class="error">{{ auth.error()?.message }}</span>
- *     }
- *   `,
- * })
- * export class NavComponent {
- *   readonly auth = injectAuth();
- * }
- * ```
- *
- * @returns ConvexAuthState with isLoading, isAuthenticated, error, and status signals
- * @throws Error if called without an auth provider configured
- *
  * @public
  */
 export function injectAuth(options?: InjectAuthOptions): ConvexAuthState {
-  const injector = resolveEnvironmentInjector(injectAuth, options?.injectRef);
-
   return runInResolvedInjectionContext(injectAuth, options?.injectRef, () => {
-    const authConfig = inject(CONVEX_AUTH_CONFIG, { optional: true });
+    const state = inject(CONVEX_AUTH_STATE, { optional: true });
 
-    if (!authConfig) {
+    if (!state) {
       throw new Error(
-        'Could not find `CONVEX_AUTH_CONFIG`. ' +
-          'Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, ' +
-          'or `provideAuth0Auth()` in your application providers.',
+        'Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, or `provideAuth0Auth()` in your application providers.',
       );
     }
 
-    const state = getOrCreateAuthState(injector);
-
-    // Initialize auth sync on first call
-    initializeAuthSync(injector, authConfig, state);
-
-    // Computed signals based on auth config and Convex state
-    const isLoading = computed(() => {
-      // Loading if auth provider is loading OR Convex hasn't confirmed yet
-      return authConfig.isLoading() || state.isConvexAuthenticated() === null;
-    });
-
-    const isAuthenticated = computed(() => {
-      // Must be authenticated by provider AND confirmed by Convex
-      return (
-        authConfig.isAuthenticated() && (state.isConvexAuthenticated() ?? false)
-      );
-    });
-
-    const status = computed<ConvexAuthStatus>(() => {
-      if (isLoading()) return 'loading';
-      if (isAuthenticated()) return 'authenticated';
-      return 'unauthenticated';
-    });
-
-    return {
-      isLoading,
-      isAuthenticated,
-      error: state.error.asReadonly(),
-      status,
-    };
+    return state;
   });
 }
 
@@ -252,50 +285,6 @@ export function injectAuth(options?: InjectAuthOptions): ConvexAuthState {
  * that implements `ConvexAuthProvider`, then provide it using the `CONVEX_AUTH`
  * token, and finally call `provideConvexAuth()`.
  *
- * If your auth provider is an injectable service that you also inject elsewhere
- * (for example to call `signIn()` or `signOut()`), register it with
- * `useExisting` to avoid creating two service instances.
- *
- * This pattern ensures your auth service is created within Angular's injection
- * context, avoiding race conditions that can occur when signals are created
- * outside of DI.
- *
- * @example
- * ```typescript
- * // 1. Create your auth service implementing ConvexAuthProvider
- * @Injectable({ providedIn: 'root' })
- * export class MyAuthService implements ConvexAuthProvider {
- *   readonly isLoading = signal(true);
- *   readonly isAuthenticated = signal(false);
- *
- *   constructor() {
- *     // Initialize your auth provider
- *     myAuthProvider.onStateChange((state) => {
- *       this.isLoading.set(false);
- *       this.isAuthenticated.set(state.loggedIn);
- *     });
- *   }
- *
- *   async fetchAccessToken({ forceRefreshToken }: { forceRefreshToken: boolean }) {
- *     return myAuthProvider.getToken({ refresh: forceRefreshToken });
- *   }
- * }
- *
- * // 2. Register in app.config.ts
- * export const appConfig: ApplicationConfig = {
- *   providers: [
- *     provideConvex(environment.convexUrl),
- *     { provide: CONVEX_AUTH, useExisting: MyAuthService },
- *     provideConvexAuth(),
- *   ],
- * };
- *
- * // 3. Use in components
- * export class AppComponent {
- *   readonly auth = injectAuth();
- * }
- * ```
- *
  * @returns EnvironmentProviders to add to your application providers
  *
  * @public
@@ -303,18 +292,11 @@ export function injectAuth(options?: InjectAuthOptions): ConvexAuthState {
 export function provideConvexAuth(): EnvironmentProviders {
   return makeEnvironmentProviders([
     {
-      provide: CONVEX_AUTH_CONFIG,
-      useFactory: (): ConvexAuthConfig => {
-        const provider = inject(CONVEX_AUTH);
-        return {
-          isLoading: provider.isLoading,
-          isAuthenticated: provider.isAuthenticated,
-          fetchAccessToken: (args) => provider.fetchAccessToken(args),
-        };
-      },
+      provide: CONVEX_AUTH_ENABLED,
+      useValue: true,
     },
     provideEnvironmentInitializer(() => {
-      injectAuth();
+      inject(CONVEX_AUTH_STATE);
     }),
   ]);
 }
@@ -324,18 +306,7 @@ export function provideConvexAuth(): EnvironmentProviders {
  *
  * This registers `{ provide: CONVEX_AUTH, useExisting: authProviderType }` and
  * enables auth sync via `provideConvexAuth()`. Prefer this helper when the auth
- * provider is also injected elsewhere in your app (to avoid creating two
- * instances).
- *
- * @example
- * ```typescript
- * export const appConfig: ApplicationConfig = {
- *   providers: [
- *     provideConvex(environment.convexUrl),
- *     provideConvexAuthFromExisting(MyAuthService),
- *   ],
- * };
- * ```
+ * provider is also injected elsewhere in your app.
  *
  * @param authProviderType - Injectable service implementing ConvexAuthProvider
  * @returns EnvironmentProviders to add to your application providers

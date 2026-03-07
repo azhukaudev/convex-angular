@@ -382,7 +382,14 @@ describe('Auth Helper Directives', () => {
       fixture.detectChanges();
       tick();
 
-      // Immediately authenticated (trusts provider, doesn't wait for Convex)
+      expect(fixture.nativeElement.textContent).toContain('Loading...');
+      expect(fixture.nativeElement.textContent).not.toContain('Welcome!');
+      expect(fixture.nativeElement.textContent).not.toContain('Please sign in');
+
+      setAuthOnChange?.(true);
+      fixture.detectChanges();
+      tick();
+
       expect(fixture.nativeElement.textContent).not.toContain('Loading...');
       expect(fixture.nativeElement.textContent).toContain('Welcome!');
       expect(fixture.nativeElement.textContent).not.toContain('Please sign in');

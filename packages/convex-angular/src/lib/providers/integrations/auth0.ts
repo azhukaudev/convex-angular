@@ -2,13 +2,13 @@ import {
   EnvironmentProviders,
   InjectionToken,
   Signal,
+  computed,
   inject,
   makeEnvironmentProviders,
-  provideEnvironmentInitializer,
 } from '@angular/core';
 
-import { CONVEX_AUTH_CONFIG, ConvexAuthConfig } from '../../tokens/auth';
-import { injectAuth } from '../inject-auth';
+import { CONVEX_AUTH, ConvexAuthProvider } from '../../tokens/auth';
+import { provideConvexAuth } from '../inject-auth';
 
 /**
  * Interface that your Auth0 auth service must implement.
@@ -56,6 +56,11 @@ export interface Auth0AuthProvider {
   getAccessTokenSilently(options?: {
     cacheMode?: 'on' | 'off';
   }): Promise<string>;
+
+  /**
+   * Optional provider-owned error signal.
+   */
+  error?: Signal<Error | undefined>;
 }
 
 /**
@@ -128,31 +133,26 @@ export const AUTH0_AUTH = new InjectionToken<Auth0AuthProvider>('AUTH0_AUTH');
 export function provideAuth0Auth(): EnvironmentProviders {
   return makeEnvironmentProviders([
     {
-      provide: CONVEX_AUTH_CONFIG,
-      useFactory: (): ConvexAuthConfig => {
+      provide: CONVEX_AUTH,
+      useFactory: (): ConvexAuthProvider => {
         const auth0 = inject(AUTH0_AUTH);
 
-        const fetchAccessToken = async (args: {
-          forceRefreshToken: boolean;
-        }) => {
-          try {
-            return await auth0.getAccessTokenSilently({
-              cacheMode: args.forceRefreshToken ? 'off' : 'on',
-            });
-          } catch {
-            return null;
-          }
-        };
-
         return {
-          isLoading: auth0.isLoading,
-          isAuthenticated: auth0.isAuthenticated,
-          fetchAccessToken,
+          isLoading: computed(() => auth0.isLoading()),
+          isAuthenticated: computed(() => auth0.isAuthenticated()),
+          error: auth0.error,
+          fetchAccessToken: async (args) => {
+            try {
+              return await auth0.getAccessTokenSilently({
+                cacheMode: args.forceRefreshToken ? 'off' : 'on',
+              });
+            } catch {
+              return null;
+            }
+          },
         };
       },
     },
-    provideEnvironmentInitializer(() => {
-      injectAuth();
-    }),
+    provideConvexAuth(),
   ]);
 }

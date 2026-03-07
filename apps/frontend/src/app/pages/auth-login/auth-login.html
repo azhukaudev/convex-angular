@@ -1,59 +1,61 @@
 <div
-  class="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-8 px-4 py-12"
+  class="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-6 px-4 py-12"
 >
-  <header class="text-center">
-    <h1 class="text-3xl font-bold">Authentication Demo</h1>
-    <p class="mt-2 text-gray-600">
-      Sign in with custom auth provider integration
-    </p>
-  </header>
-
-  <p-card>
-    <form
-      [formGroup]="loginForm"
-      (ngSubmit)="onSubmit()"
-      class="flex flex-col gap-4"
+  <p-card class="border-surface-200 overflow-hidden border shadow-sm">
+    <p-tabs
+      [value]="mode()"
+      (valueChange)="onTabChange($event)"
+      [lazy]="true"
+      class="block"
     >
-      <div class="flex flex-col gap-2">
-        <label for="username" class="font-medium">Username</label>
-        <input
-          pInputText
-          id="username"
-          formControlName="username"
-          placeholder="Enter username"
-          class="w-full"
-        />
-      </div>
+      <p-tablist class="mb-6">
+        <p-tab value="sign-in">Sign In</p-tab>
+        <p-tab value="sign-up">Sign Up</p-tab>
+      </p-tablist>
 
-      <div class="flex flex-col gap-2">
-        <label for="password" class="font-medium">Password</label>
-        <p-password
-          id="password"
-          formControlName="password"
-          [feedback]="false"
-          [toggleMask]="true"
-          placeholder="Enter password"
-          styleClass="w-full"
-          inputStyleClass="w-full"
-        />
-      </div>
+      <p-tabpanels>
+        <p-tabpanel value="sign-in">
+          <div class="mb-6 flex flex-col gap-2">
+            <span
+              class="text-primary text-xs font-semibold tracking-[0.28em] uppercase"
+            >
+              Welcome Back
+            </span>
+            <h1 class="text-3xl font-semibold tracking-tight">Sign In</h1>
+            <p class="text-sm leading-6 text-gray-600">
+              Sign in with Better Auth and let Convex verify the session token.
+            </p>
+          </div>
 
-      @if (authService.error()) {
-        <p-message severity="error" [text]="authService.error()!" />
-      }
+          <ng-container
+            [ngTemplateOutlet]="authFormTemplate"
+            [ngTemplateOutletContext]="{ isSignUp: false }"
+          />
+        </p-tabpanel>
 
-      <p-button
-        type="submit"
-        label="Sign In"
-        icon="pi pi-sign-in"
-        styleClass="w-full"
-      />
+        <p-tabpanel value="sign-up">
+          <div class="mb-6 flex flex-col gap-2">
+            <span
+              class="text-primary text-xs font-semibold tracking-[0.28em] uppercase"
+            >
+              New Here
+            </span>
+            <h1 class="text-3xl font-semibold tracking-tight">
+              Create an Account
+            </h1>
+            <p class="text-sm leading-6 text-gray-600">
+              Register with Better Auth and receive a real Convex-backed
+              session.
+            </p>
+          </div>
 
-      <p class="text-center text-sm text-gray-500">
-        Hint: Use <code class="rounded bg-gray-100 px-1">admin</code> /
-        <code class="rounded bg-gray-100 px-1">admin</code>
-      </p>
-    </form>
+          <ng-container
+            [ngTemplateOutlet]="authFormTemplate"
+            [ngTemplateOutletContext]="{ isSignUp: true }"
+          />
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
   </p-card>
 
   <div class="text-center">
@@ -62,3 +64,73 @@
     </a>
   </div>
 </div>
+
+<ng-template #authFormTemplate let-isSignUp="isSignUp">
+  <form
+    [formGroup]="authForm"
+    (ngSubmit)="onSubmit()"
+    class="flex flex-col gap-4"
+  >
+    @if (isSignUp) {
+      <div class="flex flex-col gap-2">
+        <label for="name" class="font-medium">Name</label>
+        <input
+          pInputText
+          id="name"
+          formControlName="name"
+          placeholder="Ada Lovelace"
+          autocomplete="name"
+          class="w-full"
+        />
+      </div>
+    }
+
+    <div class="flex flex-col gap-2">
+      <label for="email" class="font-medium">Email</label>
+      <input
+        pInputText
+        id="email"
+        type="email"
+        formControlName="email"
+        placeholder="you@example.com"
+        autocomplete="email"
+        class="w-full"
+      />
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label for="password" class="font-medium">Password</label>
+      <p-password
+        id="password"
+        formControlName="password"
+        [feedback]="false"
+        [toggleMask]="true"
+        placeholder="At least 8 characters"
+        [autocomplete]="isSignUp ? 'new-password' : 'current-password'"
+        styleClass="w-full"
+        inputStyleClass="w-full"
+      />
+    </div>
+
+    @if (authService.formErrorMessage()) {
+      <p-message severity="error" [text]="authService.formErrorMessage()!" />
+    }
+
+    @if (authService.error()) {
+      <p-message severity="warn" [text]="authService.error()!.message" />
+    }
+
+    <p-button
+      type="submit"
+      [label]="submitLabel()"
+      [icon]="isSignUp ? 'pi pi-user-plus' : 'pi pi-sign-in'"
+      styleClass="w-full"
+      [disabled]="authForm.invalid || authService.isLoading()"
+      [loading]="authService.isLoading()"
+    />
+
+    <p class="text-center text-sm leading-6 text-gray-500">
+      This demo uses a real Better Auth session and a Convex-protected route.
+    </p>
+  </form>
+</ng-template>

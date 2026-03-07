@@ -160,6 +160,25 @@ describe('Auth Guards', () => {
 
       expect(router.url).toBe('/auth/signin');
     }));
+
+    it('waits for Convex confirmation before allowing navigation', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(true);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigate(['/dashboard']);
+      tick();
+
+      expect(router.url).toBe('/');
+
+      setAuthOnChange?.(true);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/dashboard');
+    }));
   });
 
   describe('CONVEX_AUTH_GUARD_CONFIG', () => {

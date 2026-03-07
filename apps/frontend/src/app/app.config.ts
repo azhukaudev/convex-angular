@@ -16,7 +16,7 @@ import { providePrimeNG } from 'primeng/config';
 
 import { environment } from '../environments/environment';
 import { appRoutes } from './app.routes';
-import { MockAuthService } from './auth/mock-auth.service';
+import { DemoAuthService } from './auth/demo-auth.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -37,14 +37,13 @@ export const appConfig: ApplicationConfig = {
       },
     }),
     provideConvex(environment.convexUrl),
-    // Auth integration with mock provider
     {
       provide: CONVEX_AUTH_GUARD_CONFIG,
       useValue: {
         loginRoute: '/auth/login',
       },
     },
-    { provide: CONVEX_AUTH, useExisting: MockAuthService },
+    { provide: CONVEX_AUTH, useExisting: DemoAuthService },
     provideConvexAuth(),
   ],
 };

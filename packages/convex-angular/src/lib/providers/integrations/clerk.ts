@@ -5,11 +5,10 @@ import {
   computed,
   inject,
   makeEnvironmentProviders,
-  provideEnvironmentInitializer,
 } from '@angular/core';
 
-import { CONVEX_AUTH_CONFIG, ConvexAuthConfig } from '../../tokens/auth';
-import { injectAuth } from '../inject-auth';
+import { CONVEX_AUTH, ConvexAuthProvider } from '../../tokens/auth';
+import { provideConvexAuth } from '../inject-auth';
 
 /**
  * Interface that your Clerk auth service must implement.
@@ -70,6 +69,11 @@ export interface ClerkAuthProvider {
    * When this changes, Convex will refetch the token.
    */
   orgRole?: Signal<string | null | undefined>;
+
+  /**
+   * Optional provider-owned error signal.
+   */
+  error?: Signal<Error | undefined>;
 }
 
 /**
@@ -140,30 +144,13 @@ export const CLERK_AUTH = new InjectionToken<ClerkAuthProvider>('CLERK_AUTH');
 export function provideClerkAuth(): EnvironmentProviders {
   return makeEnvironmentProviders([
     {
-      provide: CONVEX_AUTH_CONFIG,
-      useFactory: (): ConvexAuthConfig => {
+      provide: CONVEX_AUTH,
+      useFactory: (): ConvexAuthProvider => {
         const clerk = inject(CLERK_AUTH);
-
-        // Create computed signals that bridge Clerk to Convex
-        const isLoading = computed(() => !clerk.isLoaded());
-        const isAuthenticated = computed(() => clerk.isSignedIn() ?? false);
-
-        // Create a version signal that changes when org context changes
-        // This triggers a token refresh when organization changes
-        const tokenVersion = computed(() => {
-          // Access org signals to create dependency (if they exist)
-          clerk.orgId?.();
-          clerk.orgRole?.();
-          // Return a new object each time to trigger change detection
-          return {};
-        });
 
         const fetchAccessToken = async (args: {
           forceRefreshToken: boolean;
         }) => {
-          // Track token version for reactivity (read the signal)
-          tokenVersion();
-
           try {
             return await clerk.getToken({
               template: 'convex',
@@ -175,14 +162,14 @@ export function provideClerkAuth(): EnvironmentProviders {
         };
 
         return {
-          isLoading,
-          isAuthenticated,
+          isLoading: computed(() => !clerk.isLoaded()),
+          isAuthenticated: computed(() => clerk.isSignedIn() ?? false),
+          reauthVersion: computed(() => [clerk.orgId?.(), clerk.orgRole?.()]),
+          error: clerk.error,
           fetchAccessToken,
         };
       },
     },
-    provideEnvironmentInitializer(() => {
-      injectAuth();
-    }),
+    provideConvexAuth(),
   ]);
 }
