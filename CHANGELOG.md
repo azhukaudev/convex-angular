@@ -1,5 +1,15 @@
 # convex-angular
 
+## [1.2.0](https://github.com/azhukaudev/convex-angular/compare/v1.1.0...v1.2.0) (2026-03-07)
+
+### ⚠️ Breaking Changes
+
+- `injectPaginatedQuery(...)` now takes a plain options object, `initialNumItems` accepts `number | Signal<number>`, and the legacy `() => options` form was removed.
+
+### 📖 Documentation
+
+- Update README and JSDoc examples to use object-form `injectPaginatedQuery(...)` options and signal-based `initialNumItems`.
+
 ## [1.1.0](https://github.com/azhukaudev/convex-angular/compare/v1.0.4...v1.1.0) (2026-03-04)
 
 ### ✨ Features
