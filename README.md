@@ -81,6 +81,9 @@ export class AppComponent {
 }
 ```
 
+`data()` is typed as `T | undefined`. Handle the initial/skipped state with
+`?.` or `??` until the first successful result arrives.
+
 ### Mutating data
 
 Use `injectMutation` to mutate the database.
@@ -104,6 +107,9 @@ export class AppComponent {
 }
 ```
 
+`data()` is typed as `T | undefined` and stays undefined until the first
+successful mutation result or after `reset()`.
+
 ### Running actions
 
 Use `injectAction` to run actions.
@@ -124,6 +130,9 @@ export class AppComponent {
   readonly completeAllTodos = injectAction(api.todoFunctions.completeAllTodos);
 }
 ```
+
+`data()` is typed as `T | undefined` and stays undefined until the first
+successful action result or after `reset()`.
 
 ### Paginated queries
 

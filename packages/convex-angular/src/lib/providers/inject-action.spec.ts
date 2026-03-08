@@ -6,6 +6,13 @@ import { FunctionReference } from 'convex/server';
 import { CONVEX } from '../tokens/convex';
 import { ActionReference, injectAction } from './inject-action';
 
+type Assert<T extends true> = T;
+type IsExact<T, Expected> = [T] extends [Expected]
+  ? [Expected] extends [T]
+    ? true
+    : false
+  : false;
+
 // Mock action function reference
 const mockAction = (() => {}) as unknown as FunctionReference<
   'action',
@@ -64,6 +71,29 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       expect(fixture.componentInstance.sendEmail.data()).toBeUndefined();
+    });
+
+    it('should type data as action result or undefined', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      type ActionData = ReturnType<TestComponent['sendEmail']['data']>;
+      const assertActionDataType: Assert<
+        IsExact<ActionData, { success: boolean } | undefined>
+      > = true;
+
+      const typedData: ActionData = fixture.componentInstance.sendEmail.data();
+
+      expect(assertActionDataType).toBe(true);
+      expect(typedData).toBeUndefined();
     });
 
     it('should initialize with no error', () => {

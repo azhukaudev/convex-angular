@@ -48,7 +48,7 @@ export interface ActionResult<Action extends ActionReference> {
    * The data returned by the last successful action call.
    * Undefined until the action completes successfully.
    */
-  data: Signal<FunctionReturnType<Action>>;
+  data: Signal<FunctionReturnType<Action> | undefined>;
 
   /**
    * The error from the last failed action call.
@@ -128,7 +128,7 @@ export function injectAction<Action extends ActionReference>(
   );
 
   // Internal signals for tracking state
-  const data = signal<FunctionReturnType<Action>>(undefined);
+  const data = signal<FunctionReturnType<Action> | undefined>(undefined);
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
   const currentVersion = signal(0);

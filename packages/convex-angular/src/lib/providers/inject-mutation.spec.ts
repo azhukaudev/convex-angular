@@ -6,6 +6,13 @@ import { FunctionReference } from 'convex/server';
 import { CONVEX } from '../tokens/convex';
 import { MutationReference, injectMutation } from './inject-mutation';
 
+type Assert<T extends true> = T;
+type IsExact<T, Expected> = [T] extends [Expected]
+  ? [Expected] extends [T]
+    ? true
+    : false
+  : false;
+
 // Mock mutation function reference
 const mockMutation = (() => {}) as unknown as FunctionReference<
   'mutation',
@@ -64,6 +71,29 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       expect(fixture.componentInstance.addTodo.data()).toBeUndefined();
+    });
+
+    it('should type data as mutation result or undefined', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      type MutationData = ReturnType<TestComponent['addTodo']['data']>;
+      const assertMutationDataType: Assert<
+        IsExact<MutationData, { id: string } | undefined>
+      > = true;
+
+      const typedData: MutationData = fixture.componentInstance.addTodo.data();
+
+      expect(assertMutationDataType).toBe(true);
+      expect(typedData).toBeUndefined();
     });
 
     it('should initialize with no error', () => {

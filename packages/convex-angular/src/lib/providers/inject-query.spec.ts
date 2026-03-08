@@ -12,6 +12,13 @@ import { skipToken } from '../skip-token';
 import { CONVEX } from '../tokens/convex';
 import { QueryReference, injectQuery } from './inject-query';
 
+type Assert<T extends true> = T;
+type IsExact<T, Expected> = [T] extends [Expected]
+  ? [Expected] extends [T]
+    ? true
+    : false
+  : false;
+
 // Mock getFunctionName to avoid needing a real FunctionReference
 jest.mock('convex/server', () => ({
   ...jest.requireActual('convex/server'),
@@ -95,6 +102,29 @@ describe('injectQuery', () => {
       // Data is set by the subscription callback, not initial state
       expect(mockConvexClient.onUpdate).toHaveBeenCalled();
     }));
+
+    it('should type data as query result or undefined', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      type TodosData = ReturnType<TestComponent['todos']['data']>;
+      const assertTodosDataType: Assert<
+        IsExact<TodosData, Array<{ _id: string; title: string }> | undefined>
+      > = true;
+
+      const typedData: TodosData = fixture.componentInstance.todos.data();
+
+      expect(assertTodosDataType).toBe(true);
+      expect(typedData).toBeUndefined();
+    });
 
     it('should set isLoading to true initially', fakeAsync(() => {
       @Component({

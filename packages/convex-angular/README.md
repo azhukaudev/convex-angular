@@ -81,6 +81,9 @@ export class AppComponent {
 }
 ```
 
+`data()` is typed as `T | undefined`. Handle the initial/skipped state with
+`?.` or `??` until the first successful result arrives.
+
 ### Mutating data
 
 Use `injectMutation` to mutate the database.
@@ -93,9 +96,7 @@ import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
-  template: `
-    <button (click)="addTodoItem()">Add Todo</button>
-  `,
+  template: ` <button (click)="addTodoItem()">Add Todo</button> `,
 })
 export class AppComponent {
   readonly addTodo = injectMutation(api.todos.addTodo);
@@ -112,6 +113,9 @@ export class AppComponent {
 
 `mutate()` rejects on failure. `error()` and `status()` are still updated, and
 `onError` still runs before the promise rejects.
+
+`data()` is typed as `T | undefined` and stays undefined until the first
+successful mutation result or after `reset()`.
 
 ### Running actions
 
@@ -142,6 +146,9 @@ export class AppComponent {
 
 `run()` rejects on failure. `error()` and `status()` are still updated, and
 `onError` still runs before the promise rejects.
+
+`data()` is typed as `T | undefined` and stays undefined until the first
+successful action result or after `reset()`.
 
 ### Paginated queries
 

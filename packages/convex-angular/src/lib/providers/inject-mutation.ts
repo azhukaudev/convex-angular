@@ -61,7 +61,7 @@ export interface MutationResult<Mutation extends MutationReference> {
    * The data returned by the last successful mutation call.
    * Undefined until the mutation completes successfully.
    */
-  data: Signal<FunctionReturnType<Mutation>>;
+  data: Signal<FunctionReturnType<Mutation> | undefined>;
 
   /**
    * The error from the last failed mutation call.
@@ -148,7 +148,7 @@ export function injectMutation<Mutation extends MutationReference>(
   );
 
   // Internal signals for tracking state
-  const data = signal<FunctionReturnType<Mutation>>(undefined);
+  const data = signal<FunctionReturnType<Mutation> | undefined>(undefined);
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
   const currentVersion = signal(0);

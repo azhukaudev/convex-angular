@@ -54,10 +54,11 @@ export interface QueryOptions<Query extends QueryReference> {
 export interface QueryResult<Query extends QueryReference> {
   /**
    * The current data from the query subscription.
-   * Initially populated from local cache if available, then updated reactively.
-   * Data is preserved during refetch for better UX.
+   * Undefined until cached data or the first successful result is available.
+   * Data is also undefined when the query is skipped.
+   * The last successful value is preserved during refetch for better UX.
    */
-  data: Signal<FunctionReturnType<Query>>;
+  data: Signal<FunctionReturnType<Query> | undefined>;
 
   /**
    * The current error, if the query subscription failed.
@@ -162,7 +163,7 @@ export function injectQuery<Query extends QueryReference>(
     const destroyRef = inject(DestroyRef);
 
     // Initialize signals
-    const data = signal<FunctionReturnType<Query>>(undefined);
+    const data = signal<FunctionReturnType<Query> | undefined>(undefined);
     const error = signal<Error | undefined>(undefined);
     const isLoading = signal(false);
     const isSkipped = signal(false);
