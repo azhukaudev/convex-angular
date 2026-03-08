@@ -1,5 +1,21 @@
 # convex-angular
 
+## [1.5.0](https://github.com/azhukaudev/convex-angular/compare/v1.4.0...v1.5.0) (2026-03-08)
+
+### ⚠️ Breaking Changes
+
+- Change `injectQuery()`, `injectMutation()`, and `injectAction()` so `data()` is typed as `T | undefined`, matching the existing initial, skipped, and reset runtime states.
+
+### 🐛 Bug Fixes
+
+- Make `injectMutation().mutate()` and `injectAction().run()` reject on failure after updating the reactive error state.
+- Ignore stale mutation and action completions so only the latest invocation updates reactive state.
+
+### 📖 Documentation
+
+- Document rejected promise behavior for `mutate()` and `run()` in both READMEs.
+- Document the corrected `data()` typing in both READMEs.
+
 ## [1.4.0](https://github.com/azhukaudev/convex-angular/compare/v1.3.0...v1.4.0) (2026-03-07)
 
 ### ✨ Features
