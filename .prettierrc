@@ -1,22 +1,11 @@
 {
-  "plugins": [
-    "@ianvs/prettier-plugin-sort-imports",
-    "prettier-plugin-tailwindcss"
-  ],
-  "printWidth": 80,
+  "plugins": ["@ianvs/prettier-plugin-sort-imports", "prettier-plugin-tailwindcss"],
+  "printWidth": 120,
   "singleQuote": true,
   "trailingComma": "all",
-  "importOrder": [
-    "<BUILTIN_MODULES>",
-    "",
-    "<THIRD_PARTY_MODULES>",
-    "",
-    "^@convex-angular/(.*)$",
-    "",
-    "^[.]"
-  ],
+  "importOrder": ["<BUILTIN_MODULES>", "", "<THIRD_PARTY_MODULES>", "", "^@convex-angular/(.*)$", "", "^[.]"],
   "importOrderParserPlugins": ["typescript", "decorators-legacy"],
-  "importOrderTypeScriptVersion": "5.8.3",
+  "importOrderTypeScriptVersion": "5.9.3",
   "importOrderCaseSensitive": true,
   "overrides": [
     {
