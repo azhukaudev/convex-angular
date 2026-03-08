@@ -151,6 +151,7 @@ export function injectMutation<Mutation extends MutationReference>(
   const data = signal<FunctionReturnType<Mutation>>(undefined);
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
+  const currentVersion = signal(0);
 
   // Track if mutation has been called (to distinguish idle from success)
   const hasCompleted = signal(false);
@@ -168,6 +169,7 @@ export function injectMutation<Mutation extends MutationReference>(
    * Reset all state.
    */
   const reset = () => {
+    currentVersion.update((version) => version + 1);
     data.set(undefined);
     error.set(undefined);
     isLoading.set(false);
@@ -180,8 +182,11 @@ export function injectMutation<Mutation extends MutationReference>(
   const mutate = async (
     args: FunctionArgs<Mutation>,
   ): Promise<FunctionReturnType<Mutation>> => {
+    const callVersion = currentVersion() + 1;
+    currentVersion.set(callVersion);
+
     try {
-      // Reset state before new mutation, but keep hasCompleted false until done
+      // Reset state for the latest mutation invocation.
       data.set(undefined);
       error.set(undefined);
       hasCompleted.set(false);
@@ -190,18 +195,24 @@ export function injectMutation<Mutation extends MutationReference>(
       const result = await convex.mutation(mutation, args, {
         optimisticUpdate: options?.optimisticUpdate,
       });
-      data.set(result);
-      hasCompleted.set(true);
-      options?.onSuccess?.(result);
+      if (currentVersion() === callVersion) {
+        data.set(result);
+        hasCompleted.set(true);
+        options?.onSuccess?.(result);
+      }
       return result;
     } catch (err) {
       const errorObj = err instanceof Error ? err : new Error(String(err));
-      error.set(errorObj);
-      hasCompleted.set(true);
-      options?.onError?.(errorObj);
+      if (currentVersion() === callVersion) {
+        error.set(errorObj);
+        hasCompleted.set(true);
+        options?.onError?.(errorObj);
+      }
       throw errorObj;
     } finally {
-      isLoading.set(false);
+      if (currentVersion() === callVersion) {
+        isLoading.set(false);
+      }
     }
   };
 

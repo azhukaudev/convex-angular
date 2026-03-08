@@ -14,6 +14,22 @@ const mockMutation = (() => {}) as unknown as FunctionReference<
   { id: string }
 > as MutationReference;
 
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe('injectMutation', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
   const ignoreRejection = (promise: Promise<unknown>) => {
@@ -686,6 +702,227 @@ describe('injectMutation', () => {
 
       expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
       expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+    }));
+  });
+
+  describe('overlapping mutations', () => {
+    it('should keep only the latest successful result in state', fakeAsync(() => {
+      const first = createDeferred<{ id: string }>();
+      const second = createDeferred<{ id: string }>();
+
+      mockConvexClient.mutation
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let firstResult: unknown;
+      let secondResult: unknown;
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'first' })
+        .then((value) => (firstResult = value));
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'second' })
+        .then((value) => (secondResult = value));
+
+      second.resolve({ id: 'second' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.data()).toEqual({
+        id: 'second',
+      });
+      expect(fixture.componentInstance.addTodo.status()).toBe('success');
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+      expect(secondResult).toEqual({ id: 'second' });
+
+      first.resolve({ id: 'first' });
+      tick();
+
+      expect(firstResult).toEqual({ id: 'first' });
+      expect(fixture.componentInstance.addTodo.data()).toEqual({
+        id: 'second',
+      });
+      expect(fixture.componentInstance.addTodo.status()).toBe('success');
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+    }));
+
+    it('should ignore stale errors when a newer mutation succeeds', fakeAsync(() => {
+      const first = createDeferred<{ id: string }>();
+      const second = createDeferred<{ id: string }>();
+
+      mockConvexClient.mutation
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let firstError: unknown;
+      let secondResult: unknown;
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'first' })
+        .catch((error) => (firstError = error));
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'second' })
+        .then((value) => (secondResult = value));
+
+      second.resolve({ id: 'second' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.data()).toEqual({
+        id: 'second',
+      });
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(secondResult).toEqual({ id: 'second' });
+
+      const staleError = new Error('stale failure');
+      first.reject(staleError);
+      tick();
+
+      expect(firstError).toBe(staleError);
+      expect(fixture.componentInstance.addTodo.data()).toEqual({
+        id: 'second',
+      });
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('success');
+    }));
+
+    it('should let the latest failure win over an older success', fakeAsync(() => {
+      const first = createDeferred<{ id: string }>();
+      const second = createDeferred<{ id: string }>();
+
+      mockConvexClient.mutation
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let firstResult: unknown;
+      let secondError: unknown;
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'first' })
+        .then((value) => (firstResult = value));
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'second' })
+        .catch((error) => (secondError = error));
+
+      const latestError = new Error('latest failure');
+      second.reject(latestError);
+      tick();
+
+      expect(secondError).toBe(latestError);
+      expect(fixture.componentInstance.addTodo.error()).toBe(latestError);
+      expect(fixture.componentInstance.addTodo.status()).toBe('error');
+      expect(fixture.componentInstance.addTodo.isSuccess()).toBe(false);
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+
+      first.resolve({ id: 'first' });
+      tick();
+
+      expect(firstResult).toEqual({ id: 'first' });
+      expect(fixture.componentInstance.addTodo.error()).toBe(latestError);
+      expect(fixture.componentInstance.addTodo.data()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('error');
+    }));
+
+    it('should keep loading tied to the latest mutation only', fakeAsync(() => {
+      const first = createDeferred<{ id: string }>();
+      const second = createDeferred<{ id: string }>();
+
+      mockConvexClient.mutation
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.addTodo.mutate({ title: 'first' });
+      fixture.componentInstance.addTodo.mutate({ title: 'second' });
+
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(true);
+
+      second.resolve({ id: 'second' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+
+      first.resolve({ id: 'first' });
+      tick();
+
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+    }));
+
+    it('should ignore in-flight completions after reset', fakeAsync(() => {
+      const pending = createDeferred<{ id: string }>();
+      mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let result: unknown;
+      fixture.componentInstance.addTodo
+        .mutate({ title: 'test' })
+        .then((value) => (result = value));
+
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(true);
+
+      fixture.componentInstance.addTodo.reset();
+
+      expect(fixture.componentInstance.addTodo.data()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+
+      pending.resolve({ id: 'after-reset' });
+      tick();
+
+      expect(result).toEqual({ id: 'after-reset' });
+      expect(fixture.componentInstance.addTodo.data()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
     }));
   });
 
