@@ -4,26 +4,16 @@
     <h1 class="text-5xl font-extrabold tracking-tight">convex-angular</h1>
     <p class="text-xl text-gray-600">The Angular client for Convex</p>
 
-    <div
-      class="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 font-mono text-sm"
-    >
+    <div class="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 font-mono text-sm">
       <span class="text-gray-500">$</span>
       <code>npm install convex convex-angular</code>
     </div>
 
     <div class="flex gap-3">
-      <a
-        href="https://github.com/azhukaudev/convex-angular"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
+      <a href="https://github.com/azhukaudev/convex-angular" target="_blank" rel="noopener noreferrer">
         <p-button icon="pi pi-github" label="GitHub" severity="secondary" />
       </a>
-      <a
-        href="https://www.npmjs.com/package/convex-angular"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
+      <a href="https://www.npmjs.com/package/convex-angular" target="_blank" rel="noopener noreferrer">
         <p-button icon="pi pi-box" label="npm" severity="secondary" />
       </a>
     </div>
@@ -61,21 +51,14 @@
         <ng-template #header>
           <div class="px-4 pt-4">
             <h3 class="text-lg font-semibold">Basic Example</h3>
-            <p class="text-sm text-gray-600">
-              Todo list using injectQuery, injectMutation, and injectAction
-            </p>
+            <p class="text-sm text-gray-600">Todo list using injectQuery, injectMutation, and injectAction</p>
           </div>
         </ng-template>
         <p class="mb-4 text-sm text-gray-500">
-          Demonstrates fetching data, adding/completing/deleting todos, and
-          running bulk actions.
+          Demonstrates fetching data, adding/completing/deleting todos, and running bulk actions.
         </p>
         <a routerLink="/examples/basic">
-          <p-button
-            icon="pi pi-arrow-right"
-            iconPos="right"
-            label="View Example"
-          />
+          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
         </a>
       </p-card>
 
@@ -83,21 +66,14 @@
         <ng-template #header>
           <div class="px-4 pt-4">
             <h3 class="text-lg font-semibold">Paginated Example</h3>
-            <p class="text-sm text-gray-600">
-              Todo list using injectPaginatedQuery with load more
-            </p>
+            <p class="text-sm text-gray-600">Todo list using injectPaginatedQuery with load more</p>
           </div>
         </ng-template>
         <p class="mb-4 text-sm text-gray-500">
-          Demonstrates paginated queries, loading more items, and resetting
-          pagination.
+          Demonstrates paginated queries, loading more items, and resetting pagination.
         </p>
         <a routerLink="/examples/paginated">
-          <p-button
-            icon="pi pi-arrow-right"
-            iconPos="right"
-            label="View Example"
-          />
+          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
         </a>
       </p-card>
 
@@ -105,21 +81,31 @@
         <ng-template #header>
           <div class="px-4 pt-4">
             <h3 class="text-lg font-semibold">Authentication Example</h3>
-            <p class="text-sm text-gray-600">
-              Better Auth + Convex session verification with injectAuth
-            </p>
+            <p class="text-sm text-gray-600">Better Auth + Convex session verification with injectAuth</p>
           </div>
         </ng-template>
         <p class="mb-4 text-sm text-gray-500">
-          Demonstrates provideConvexAuth, injectAuth, convexAuthGuard, and a
-          protected Convex query using a real Better Auth email/password flow.
+          Demonstrates provideConvexAuth, injectAuth, convexAuthGuard, and a protected Convex query using a real Better
+          Auth email/password flow.
         </p>
         <a routerLink="/auth/login">
-          <p-button
-            icon="pi pi-arrow-right"
-            iconPos="right"
-            label="View Example"
-          />
+          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
+        </a>
+      </p-card>
+
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h3 class="text-lg font-semibold">Multi-query Example</h3>
+            <p class="text-sm text-gray-600">Dynamic keyed queries with injectQueries and skipToken</p>
+          </div>
+        </ng-template>
+        <p class="mb-4 text-sm text-gray-500">
+          Demonstrates multiple live queries, removed keys, skipped keys, and aggregate loading across one keyed query
+          object.
+        </p>
+        <a routerLink="/examples/multi-query">
+          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
         </a>
       </p-card>
     </div>

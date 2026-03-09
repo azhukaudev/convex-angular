@@ -1,0 +1,281 @@
+<div class="mx-auto flex min-h-svh max-w-6xl flex-col gap-8 px-4 py-8">
+  <div class="flex flex-col gap-3">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <h1 class="text-4xl font-extrabold opacity-80">Multi-query Example</h1>
+        <p class="text-sm text-gray-500">
+          Dynamic keyed queries with <code>injectQueries()</code>, removed keys, and <code>skipToken</code>
+        </p>
+      </div>
+      <a href="/" class="text-primary shrink-0 hover:underline">← Home</a>
+    </div>
+
+    <div class="flex flex-wrap gap-3 text-sm">
+      <a routerLink="/examples/basic" class="text-primary hover:underline"> Basic Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/examples/paginated" class="text-primary hover:underline"> Paginated Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/auth/login" class="text-primary hover:underline"> Auth Example </a>
+    </div>
+  </div>
+
+  <p-card>
+    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div class="rounded-lg border border-slate-200 p-4">
+        <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">Aggregate Loading</p>
+        <p class="mt-2 text-2xl font-semibold">
+          {{ queries.isLoading() ? 'pending' : 'settled' }}
+        </p>
+      </div>
+
+      <div class="rounded-lg border border-slate-200 p-4">
+        <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">Current Keys</p>
+        <p class="mt-2 text-sm text-slate-700">
+          {{ activeKeys().length ? activeKeys().join(', ') : 'none' }}
+        </p>
+      </div>
+
+      <div class="rounded-lg border border-slate-200 p-4">
+        <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">Successful Keys</p>
+        <p class="mt-2 text-sm text-slate-700">
+          {{ successfulKeys().length ? successfulKeys().join(', ') : 'none' }}
+        </p>
+      </div>
+
+      <div class="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <p class="font-medium text-slate-900">Demo notes</p>
+        <p class="mt-2">
+          <strong>preview</strong> and <strong>fullList</strong> disappear when removed.
+          <strong>currentUser</strong> stays present and becomes <code>skipped</code>.
+        </p>
+      </div>
+    </div>
+  </p-card>
+
+  <p-card>
+    <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+      <div class="flex flex-col gap-3">
+        <div class="flex items-center gap-3 text-sm font-medium">
+          <p-checkbox inputId="multiQueryShowPreview" [(ngModel)]="showPreview" [binary]="true" />
+          <label for="multiQueryShowPreview">Include preview key</label>
+        </div>
+
+        <div class="flex flex-col gap-2 text-sm">
+          <label for="multiQueryPreviewCount" class="font-medium"> Preview count </label>
+          <p-inputNumber
+            inputId="multiQueryPreviewCount"
+            [(ngModel)]="previewCount"
+            [disabled]="!showPreview()"
+            [min]="1"
+            [max]="20"
+            [showButtons]="true"
+            inputStyleClass="w-full"
+          />
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <div class="flex items-center gap-3 text-sm font-medium">
+          <p-checkbox inputId="multiQueryShowFullList" [(ngModel)]="showFullList" [binary]="true" />
+          <label for="multiQueryShowFullList">Include fullList key</label>
+        </div>
+
+        <div class="flex flex-col gap-2 text-sm">
+          <label for="multiQueryFullCount" class="font-medium"> Full list count </label>
+          <p-inputNumber
+            inputId="multiQueryFullCount"
+            [(ngModel)]="fullCount"
+            [disabled]="!showFullList()"
+            [min]="1"
+            [max]="50"
+            [showButtons]="true"
+            inputStyleClass="w-full"
+          />
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <div class="flex items-center gap-3 text-sm font-medium">
+          <p-checkbox inputId="multiQueryShowCurrentUser" [(ngModel)]="showCurrentUser" [binary]="true" />
+          <label for="multiQueryShowCurrentUser">Enable currentUser query</label>
+        </div>
+
+        <p class="text-sm text-slate-600">
+          This key always stays in the record. When disabled it resolves to
+          <code>skipToken</code> and reports <code>skipped</code>.
+        </p>
+      </div>
+
+      <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        <p class="font-medium">Try this</p>
+        <ol class="mt-2 flex list-decimal flex-col gap-1 pl-4">
+          <li>Toggle preview or fullList off to remove the key.</li>
+          <li>Toggle currentUser off to keep the key as skipped.</li>
+          <li>Change the counts to resubscribe only one key.</li>
+        </ol>
+      </div>
+    </div>
+  </p-card>
+
+  <div class="grid gap-6 xl:grid-cols-3">
+    @if (hasKey('preview')) {
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h2 class="text-lg font-semibold">preview</h2>
+            <p class="text-sm text-gray-600">Removed when its toggle is off</p>
+          </div>
+        </ng-template>
+
+        <div class="flex flex-col gap-4 text-sm">
+          <div class="rounded bg-slate-100 px-3 py-2 font-mono">status: {{ queries.statuses().preview }}</div>
+
+          @if (queries.statuses().preview === 'pending') {
+            <div class="flex items-center gap-2 text-slate-600">
+              <p-progress-spinner aria-label="loading preview" class="size-6" strokeWidth="6" />
+              Loading preview todos...
+            </div>
+          } @else if (queries.errors().preview) {
+            <div class="rounded border border-red-200 bg-red-50 p-3 text-red-700">
+              {{ queries.errors().preview?.message }}
+            </div>
+          } @else {
+            <div class="rounded border border-slate-200 p-3">
+              <p class="mb-2 text-xs tracking-[0.22em] text-slate-400 uppercase">Result count</p>
+              <p class="text-2xl font-semibold">
+                {{ queries.results().preview?.length ?? 0 }}
+              </p>
+            </div>
+
+            <ul class="flex flex-col gap-2">
+              @for (todo of queries.results().preview ?? []; track todo._id) {
+                <li class="rounded border border-slate-200 px-3 py-2">
+                  {{ todo.title }}
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </p-card>
+    }
+
+    @if (hasKey('fullList')) {
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h2 class="text-lg font-semibold">fullList</h2>
+            <p class="text-sm text-gray-600">Same query, different args and a separate keyed state</p>
+          </div>
+        </ng-template>
+
+        <div class="flex flex-col gap-4 text-sm">
+          <div class="rounded bg-slate-100 px-3 py-2 font-mono">status: {{ queries.statuses().fullList }}</div>
+
+          @if (queries.statuses().fullList === 'pending') {
+            <div class="flex items-center gap-2 text-slate-600">
+              <p-progress-spinner aria-label="loading full list" class="size-6" strokeWidth="6" />
+              Loading larger todo list...
+            </div>
+          } @else if (queries.errors().fullList) {
+            <div class="rounded border border-red-200 bg-red-50 p-3 text-red-700">
+              {{ queries.errors().fullList?.message }}
+            </div>
+          } @else {
+            <div class="rounded border border-slate-200 p-3">
+              <p class="mb-2 text-xs tracking-[0.22em] text-slate-400 uppercase">Result count</p>
+              <p class="text-2xl font-semibold">
+                {{ queries.results().fullList?.length ?? 0 }}
+              </p>
+            </div>
+
+            <ul class="flex max-h-80 flex-col gap-2 overflow-auto pr-1">
+              @for (todo of queries.results().fullList ?? []; track todo._id) {
+                <li class="rounded border border-slate-200 px-3 py-2">
+                  {{ todo.title }}
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </p-card>
+    }
+
+    <p-card>
+      <ng-template #header>
+        <div class="px-4 pt-4">
+          <h2 class="text-lg font-semibold">currentUser</h2>
+          <p class="text-sm text-gray-600">This key stays present and flips between skipped and live</p>
+        </div>
+      </ng-template>
+
+      <div class="flex flex-col gap-4 text-sm">
+        <div class="rounded bg-slate-100 px-3 py-2 font-mono">status: {{ queries.statuses().currentUser }}</div>
+
+        @if (queries.statuses().currentUser === 'skipped') {
+          <div class="rounded border border-slate-200 bg-slate-50 p-3 text-slate-600">
+            currentUser is still in the records, but the query is skipped.
+          </div>
+        } @else if (queries.statuses().currentUser === 'pending') {
+          <div class="flex items-center gap-2 text-slate-600">
+            <p-progress-spinner aria-label="loading current user" class="size-6" strokeWidth="6" />
+            Loading authenticated user...
+          </div>
+        } @else if (queries.errors().currentUser) {
+          <div class="rounded border border-red-200 bg-red-50 p-3 text-red-700">
+            {{ queries.errors().currentUser?.message }}
+          </div>
+        } @else if (queries.results().currentUser) {
+          <dl class="grid gap-3 rounded border border-slate-200 p-3">
+            <div class="grid gap-1">
+              <dt class="text-slate-400">Name</dt>
+              <dd class="font-medium">
+                {{ queries.results().currentUser?.name }}
+              </dd>
+            </div>
+            <div class="grid gap-1">
+              <dt class="text-slate-400">Email</dt>
+              <dd class="font-medium">
+                {{ queries.results().currentUser?.email }}
+              </dd>
+            </div>
+            <div class="grid gap-1">
+              <dt class="text-slate-400">Session Id</dt>
+              <dd class="font-mono text-xs break-all">
+                {{ queries.results().currentUser?.sessionId }}
+              </dd>
+            </div>
+          </dl>
+        } @else {
+          <div class="rounded border border-amber-200 bg-amber-50 p-3 text-amber-800">
+            The query ran successfully, but there is no authenticated user for this browser session.
+          </div>
+        }
+      </div>
+    </p-card>
+  </div>
+
+  <p-card>
+    <div class="grid gap-6 xl:grid-cols-3">
+      <div>
+        <h2 class="text-sm font-semibold tracking-[0.22em] text-slate-400 uppercase">statuses()</h2>
+        <pre class="mt-3 overflow-x-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{
+          queries.statuses() | json
+        }}</pre>
+      </div>
+
+      <div>
+        <h2 class="text-sm font-semibold tracking-[0.22em] text-slate-400 uppercase">results()</h2>
+        <pre class="mt-3 overflow-x-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{
+          queries.results() | json
+        }}</pre>
+      </div>
+
+      <div>
+        <h2 class="text-sm font-semibold tracking-[0.22em] text-slate-400 uppercase">errors()</h2>
+        <pre class="mt-3 overflow-x-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{
+          queries.errors() | json
+        }}</pre>
+      </div>
+    </div>
+  </p-card>
+</div>

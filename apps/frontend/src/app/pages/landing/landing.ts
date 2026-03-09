@@ -68,7 +68,7 @@ async send() {
       name: 'injectPaginatedQuery',
       description: 'Infinite scroll and load more patterns',
       code: `readonly todos = injectPaginatedQuery(
-  api.todos.listPaginated,
+  api.todos.listTodosPaginated,
   () => ({}),
   { initialNumItems: 10 }
 );
@@ -77,6 +77,18 @@ async send() {
 // todos.loadMore(10) - load more items
 // todos.canLoadMore() - has more items
 // todos.reset() - reload from start`,
+    },
+    {
+      name: 'injectQueries',
+      description: 'Dynamic keyed query groups with separate signals',
+      code: `readonly queries = injectQueries(() => ({
+  preview: { query: api.todos.listTodos, args: { count: 3 } },
+  currentUser: showUser() ? { query: api.auth.getCurrentUser, args: {} } : skipToken,
+}));
+
+// queries.results() - keyed query results
+// queries.statuses() - per-key status map
+// queries.errors() - per-key error map`,
     },
   ];
 }

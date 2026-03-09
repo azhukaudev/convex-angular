@@ -12,8 +12,11 @@ export const appRoutes: Route[] = [
   },
   {
     path: 'examples/paginated',
-    loadComponent: () =>
-      import('./pages/paginated-todo-list/paginated-todo-list'),
+    loadComponent: () => import('./pages/paginated-todo-list/paginated-todo-list'),
+  },
+  {
+    path: 'examples/multi-query',
+    loadComponent: () => import('./pages/multi-query-demo/multi-query-demo'),
   },
   {
     path: 'auth/login',
