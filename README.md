@@ -8,7 +8,7 @@ The Angular client for Convex.
 
 ## ✨ Features
 
-- 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
+- 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectPrewarmQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
 - 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`
 - 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`
@@ -129,6 +129,36 @@ The multi-query result provides:
 - `errors()` - Keyed query errors
 - `statuses()` - Keyed query statuses
 - `isLoading()` - True while any active query is pending
+
+### Prewarming queries
+
+Use `injectPrewarmQuery` to warm the local Convex cache before a route
+transition or other UI work that is likely to need a query soon.
+
+```typescript
+import { Component, inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { injectPrewarmQuery } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
+
+@Component({
+  selector: 'app-users',
+  template: ` <button (click)="openProfile('user-1')">Open profile</button> `,
+})
+export class UsersComponent {
+  private readonly router = inject(Router);
+  readonly prewarmProfile = injectPrewarmQuery(api.users.getProfile);
+
+  openProfile(userId: string) {
+    this.prewarmProfile.prewarm({ userId });
+    void this.router.navigate(['/users', userId]);
+  }
+}
+```
+
+By default the warm subscription stays alive for 5 seconds. Override that with
+`extendSubscriptionFor` when needed.
 
 ### Mutating data
 
@@ -331,8 +361,9 @@ export class AppComponent {
 ```
 
 This works for all public `inject*` helpers, including `injectQuery`,
-`injectQueries`, `injectPaginatedQuery`, `injectMutation`, `injectAction`,
-`injectConvex`, `injectConvexConnectionState`, and `injectAuth`.
+`injectQueries`, `injectPrewarmQuery`, `injectPaginatedQuery`,
+`injectMutation`, `injectAction`, `injectConvex`,
+`injectConvexConnectionState`, and `injectAuth`.
 
 ## 🔐 Authentication
 
