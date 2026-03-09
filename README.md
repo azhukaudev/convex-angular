@@ -13,6 +13,7 @@ The Angular client for Convex.
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`
 - 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`
 - 📄 Pagination: Built-in support for paginated queries with `loadMore` and `reset`
+- ⚡ Optimistic pagination helpers: `insertAtTop`, `insertAtBottomIfLoaded`, `insertAtPosition`
 - ⏭️ Conditional Queries: Use `skipToken` to conditionally skip queries
 - 📡 Signal Integration: [Angular Signals](https://angular.dev/guide/signals) for reactive state
 - 🧹 Auto Cleanup: Automatic lifecycle management
@@ -251,6 +252,53 @@ The paginated query returns:
 - `error()` - Error if the query failed
 - `loadMore(n)` - Load `n` more items
 - `reset()` - Reset pagination and reload from the beginning
+
+### Optimistic paginated updates
+
+Use the paginated optimistic helpers inside `injectMutation(..., { optimisticUpdate })`
+to keep infinite lists feeling instant.
+
+```typescript
+import { Component } from '@angular/core';
+import { injectMutation, insertAtTop } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
+
+@Component({
+  selector: 'app-root',
+  template: `<button (click)="createTodo()">Add Todo</button>`,
+})
+export class AppComponent {
+  readonly addTodo = injectMutation(api.todos.addTodo, {
+    optimisticUpdate: (localStore, args) => {
+      insertAtTop({
+        paginatedQuery: api.todos.listTodosPaginated,
+        argsToMatch: {},
+        localQueryStore: localStore,
+        item: {
+          _id: 'optimistic-id',
+          _creationTime: Date.now(),
+          title: args.title,
+        },
+      });
+    },
+  });
+
+  async createTodo() {
+    await this.addTodo.mutate({ title: 'Buy groceries' });
+  }
+}
+```
+
+Available helpers:
+
+- `optimisticallyUpdateValueInPaginatedQuery(...)` - update matching items across loaded pages
+- `insertAtTop(...)` - prepend an item to the first loaded page
+- `insertAtBottomIfLoaded(...)` - append an item only when the final page is loaded
+- `insertAtPosition(...)` - insert based on the same sort key/order as the server query
+
+When using `insertAtPosition(...)`, make sure `sortKeyFromItem` matches the server
+query sort exactly. Including a stable tie-breaker such as `_creationTime` is recommended.
 
 ### Conditional queries with skipToken
 

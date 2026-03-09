@@ -12,6 +12,7 @@ export * from './lib/providers/inject-connection-state';
 export * from './lib/providers/inject-convex';
 export * from './lib/providers/inject-mutation';
 export * from './lib/providers/inject-paginated-query';
+export * from './lib/providers/paginated-optimistic-updates';
 export * from './lib/providers/inject-prewarm-query';
 export * from './lib/providers/inject-queries';
 export * from './lib/providers/inject-query';
