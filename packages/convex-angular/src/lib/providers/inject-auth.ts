@@ -13,12 +13,7 @@ import {
 } from '@angular/core';
 import { ConvexClient } from 'convex/browser';
 
-import {
-  CONVEX_AUTH,
-  ConvexAuthProvider,
-  ConvexAuthState,
-  ConvexAuthStatus,
-} from '../tokens/auth';
+import { CONVEX_AUTH, ConvexAuthProvider, ConvexAuthState, ConvexAuthStatus } from '../tokens/auth';
 import { CONVEX } from '../tokens/convex';
 import { runInResolvedInjectionContext } from './injection-context';
 
@@ -35,14 +30,41 @@ interface SequencedError {
   sequence: number;
 }
 
-const CONVEX_AUTH_STATE = new InjectionToken<ConvexAuthState>(
-  'CONVEX_AUTH_STATE',
-  {
-    providedIn: 'any',
-    factory: createConvexAuthState,
-  },
-);
+const CONVEX_AUTH_STATE = new InjectionToken<ConvexAuthState>('CONVEX_AUTH_STATE', {
+  providedIn: 'any',
+  factory: createConvexAuthState,
+});
+const CONVEX_AUTH_PROVIDER_REGISTRATION = new InjectionToken<boolean[]>('CONVEX_AUTH_PROVIDER_REGISTRATION');
+const CONVEX_AUTH_PROVIDER_GUARD = new InjectionToken<true>('CONVEX_AUTH_PROVIDER_GUARD');
 const CONVEX_AUTH_ENABLED = new InjectionToken<boolean>('CONVEX_AUTH_ENABLED');
+
+function assertConvexAuthProviderConfiguration() {
+  const currentScopeRegistrations = inject(CONVEX_AUTH_PROVIDER_REGISTRATION);
+
+  if (currentScopeRegistrations.length > 1) {
+    throw new Error(
+      '`provideConvexAuth()` was registered more than once in the same injector. ' +
+        'Register it exactly once in your root application providers (for example, in `app.config.ts`).',
+    );
+  }
+
+  const parentScopeRegistrations = inject(CONVEX_AUTH_PROVIDER_REGISTRATION, {
+    optional: true,
+    skipSelf: true,
+  });
+
+  if (parentScopeRegistrations && parentScopeRegistrations.length > 0) {
+    throw new Error(
+      '`provideConvexAuth()` must be configured only in your root application providers ' +
+        '(for example, in `app.config.ts`). Remove nested or route-level registrations.',
+    );
+  }
+}
+
+function convexAuthProviderGuardFactory(): true {
+  assertConvexAuthProviderConfiguration();
+  return true;
+}
 
 function normalizeError(error: unknown, prefix: string): Error {
   if (error instanceof Error) {
@@ -118,10 +140,7 @@ function createConvexAuthState(): ConvexAuthState {
   };
 
   const isLoading = computed(() => {
-    return (
-      provider.isLoading() ||
-      (provider.isAuthenticated() && backendAuthenticated() === null)
-    );
+    return provider.isLoading() || (provider.isAuthenticated() && backendAuthenticated() === null);
   });
 
   const isAuthenticated = computed(() => {
@@ -210,10 +229,7 @@ function createConvexAuthState(): ConvexAuthState {
             return token;
           } catch (fetchError) {
             if (generation === currentGeneration) {
-              setInternalError(
-                fetchError,
-                '[convex-angular auth] Token fetch failed',
-              );
+              setInternalError(fetchError, '[convex-angular auth] Token fetch failed');
               backendAuthenticated.set(false);
             }
 
@@ -233,10 +249,7 @@ function createConvexAuthState(): ConvexAuthState {
       );
     } catch (syncError) {
       if (generation === currentGeneration) {
-        setInternalError(
-          syncError,
-          '[convex-angular auth] Convex auth sync failed',
-        );
+        setInternalError(syncError, '[convex-angular auth] Convex auth sync failed');
         backendAuthenticated.set(false);
       }
     }
@@ -283,7 +296,8 @@ export function injectAuth(options?: InjectAuthOptions): ConvexAuthState {
  *
  * Use this to integrate any auth provider with Convex. First, create a service
  * that implements `ConvexAuthProvider`, then provide it using the `CONVEX_AUTH`
- * token, and finally call `provideConvexAuth()`.
+ * token, and finally call `provideConvexAuth()` exactly once in your root
+ * application providers.
  *
  * @returns EnvironmentProviders to add to your application providers
  *
@@ -292,10 +306,23 @@ export function injectAuth(options?: InjectAuthOptions): ConvexAuthState {
 export function provideConvexAuth(): EnvironmentProviders {
   return makeEnvironmentProviders([
     {
-      provide: CONVEX_AUTH_ENABLED,
+      provide: CONVEX_AUTH_PROVIDER_REGISTRATION,
       useValue: true,
+      multi: true,
+    },
+    {
+      provide: CONVEX_AUTH_PROVIDER_GUARD,
+      useFactory: convexAuthProviderGuardFactory,
+    },
+    {
+      provide: CONVEX_AUTH_ENABLED,
+      useFactory: () => {
+        inject(CONVEX_AUTH_PROVIDER_GUARD);
+        return true;
+      },
     },
     provideEnvironmentInitializer(() => {
+      inject(CONVEX_AUTH_PROVIDER_GUARD);
       inject(CONVEX_AUTH_STATE);
     }),
   ]);
@@ -306,18 +333,14 @@ export function provideConvexAuth(): EnvironmentProviders {
  *
  * This registers `{ provide: CONVEX_AUTH, useExisting: authProviderType }` and
  * enables auth sync via `provideConvexAuth()`. Prefer this helper when the auth
- * provider is also injected elsewhere in your app.
+ * provider is also injected elsewhere in your app. Register it exactly once in
+ * your root application providers.
  *
  * @param authProviderType - Injectable service implementing ConvexAuthProvider
  * @returns EnvironmentProviders to add to your application providers
  *
  * @public
  */
-export function provideConvexAuthFromExisting(
-  authProviderType: Type<ConvexAuthProvider>,
-): EnvironmentProviders {
-  return makeEnvironmentProviders([
-    { provide: CONVEX_AUTH, useExisting: authProviderType },
-    provideConvexAuth(),
-  ]);
+export function provideConvexAuthFromExisting(authProviderType: Type<ConvexAuthProvider>): EnvironmentProviders {
+  return makeEnvironmentProviders([{ provide: CONVEX_AUTH, useExisting: authProviderType }, provideConvexAuth()]);
 }

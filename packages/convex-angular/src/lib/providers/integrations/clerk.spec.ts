@@ -1,10 +1,10 @@
-import { Component, signal } from '@angular/core';
+import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 
 import { CONVEX_AUTH } from '../../tokens/auth';
 import { CONVEX } from '../../tokens/convex';
-import { injectAuth } from '../inject-auth';
+import { injectAuth, provideConvexAuth } from '../inject-auth';
 import { CLERK_AUTH, ClerkAuthProvider, provideClerkAuth } from './clerk';
 
 describe('provideClerkAuth', () => {
@@ -194,4 +194,38 @@ describe('provideClerkAuth', () => {
     expect(fixture.componentInstance.auth.status()).toBe('authenticated');
     expect(setAuthFetcher).toBeDefined();
   }));
+
+  it('throws when combined with provideConvexAuth in the same injector', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CONVEX, useValue: mockConvexClient },
+        { provide: CLERK_AUTH, useValue: createClerkProvider() },
+        provideClerkAuth(),
+        provideConvexAuth(),
+      ],
+    });
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
+
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(/registered more than once in the same injector/);
+  });
+
+  it('throws when registered in a child injector after parent auth is configured', () => {
+    configureTestingModule();
+
+    const rootInjector = TestBed.inject(EnvironmentInjector);
+
+    expect(() =>
+      createEnvironmentInjector(
+        [{ provide: CLERK_AUTH, useValue: createClerkProvider() }, provideClerkAuth()],
+        rootInjector,
+      ),
+    ).toThrow(/must be configured only in your root application providers/);
+  });
 });

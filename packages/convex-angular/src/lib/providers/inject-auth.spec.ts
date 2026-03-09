@@ -1,29 +1,17 @@
-import {
-  Component,
-  EnvironmentInjector,
-  Injectable,
-  createEnvironmentInjector,
-  signal,
-} from '@angular/core';
+import { Component, EnvironmentInjector, Injectable, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import { CONVEX } from '../tokens/convex';
-import {
-  injectAuth,
-  provideConvexAuth,
-  provideConvexAuthFromExisting,
-} from './inject-auth';
+import { injectAuth, provideConvexAuth, provideConvexAuthFromExisting } from './inject-auth';
 
 @Injectable()
 class ExistingAuthProvider implements ConvexAuthProvider {
   readonly isLoading = signal(false);
   readonly isAuthenticated = signal(false);
   readonly error = signal<Error | undefined>(undefined);
-  readonly fetchAccessToken = jest.fn(
-    async (_args: { forceRefreshToken: boolean }) => 'token',
-  );
+  readonly fetchAccessToken = jest.fn(async (_args: { forceRefreshToken: boolean }) => 'token');
 }
 
 describe('injectAuth', () => {
@@ -31,19 +19,12 @@ describe('injectAuth', () => {
   let mockSetAuth: jest.Mock;
   let mockClearAuth: jest.Mock;
   let mockHasAuth: jest.Mock;
-  let fetchAccessToken: jest.Mock<
-    Promise<string | null | undefined>,
-    [{ forceRefreshToken: boolean }]
-  >;
+  let fetchAccessToken: jest.Mock<Promise<string | null | undefined>, [{ forceRefreshToken: boolean }]>;
   let providerLoading: ReturnType<typeof signal<boolean>>;
   let providerAuthenticated: ReturnType<typeof signal<boolean>>;
   let providerError: ReturnType<typeof signal<Error | undefined>>;
   let reauthVersion: ReturnType<typeof signal<number>>;
-  let setAuthFetcher:
-    | ((args: {
-        forceRefreshToken: boolean;
-      }) => Promise<string | null | undefined>)
-    | undefined;
+  let setAuthFetcher: ((args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>) | undefined;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
 
   function createProvider(): ConvexAuthProvider {
@@ -56,10 +37,7 @@ describe('injectAuth', () => {
     };
   }
 
-  function configureTestingModule(
-    authProvider: ConvexAuthProvider = createProvider(),
-    extraProviders: unknown[] = [],
-  ) {
+  function configureTestingModule(authProvider: ConvexAuthProvider = createProvider(), extraProviders: unknown[] = []) {
     TestBed.configureTestingModule({
       providers: [
         { provide: CONVEX, useValue: mockConvexClient },
@@ -127,17 +105,12 @@ describe('injectAuth', () => {
       readonly auth = injectAuth();
     }
 
-    expect(() => TestBed.createComponent(TestComponent)).toThrow(
-      /Could not find Convex auth state/,
-    );
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(/Could not find Convex auth state/);
   });
 
   it('throws when provideConvexAuth is configured without CONVEX_AUTH', () => {
     TestBed.configureTestingModule({
-      providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
-        provideConvexAuth(),
-      ],
+      providers: [{ provide: CONVEX, useValue: mockConvexClient }, provideConvexAuth()],
     });
 
     @Component({
@@ -148,8 +121,30 @@ describe('injectAuth', () => {
       readonly auth = injectAuth();
     }
 
-    expect(() => TestBed.createComponent(TestComponent)).toThrow(
-      /Could not find `CONVEX_AUTH`/,
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(/Could not find `CONVEX_AUTH`/);
+  });
+
+  it('throws when provideConvexAuth is registered multiple times in one injector', () => {
+    configureTestingModule(createProvider(), [provideConvexAuth()]);
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
+
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(/registered more than once in the same injector/);
+  });
+
+  it('throws when provideConvexAuth is registered in a child injector', () => {
+    configureTestingModule();
+
+    const rootInjector = TestBed.inject(EnvironmentInjector);
+
+    expect(() => createEnvironmentInjector([provideConvexAuth()], rootInjector)).toThrow(
+      /must be configured only in your root application providers/,
     );
   });
 
@@ -374,10 +369,7 @@ describe('injectAuth', () => {
     providerAuthenticated.set(true);
     configureTestingModule();
 
-    const childInjector = createEnvironmentInjector(
-      [],
-      TestBed.inject(EnvironmentInjector),
-    );
+    const childInjector = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
 
     injectAuth({ injectRef: childInjector });
     tick();
@@ -436,4 +428,60 @@ describe('provideConvexAuthFromExisting', () => {
 
     expect(mockConvexClient.setAuth).toHaveBeenCalledTimes(1);
   }));
+
+  it('throws when combined with provideConvexAuth in the same injector', () => {
+    const mockConvexClient = {
+      setAuth: jest.fn(),
+      client: {
+        clearAuth: jest.fn(),
+        hasAuth: jest.fn().mockReturnValue(false),
+      },
+    } as unknown as jest.Mocked<ConvexClient>;
+
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CONVEX, useValue: mockConvexClient },
+        ExistingAuthProvider,
+        provideConvexAuthFromExisting(ExistingAuthProvider),
+        provideConvexAuth(),
+      ],
+    });
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
+
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(/registered more than once in the same injector/);
+  });
+
+  it('throws when registered in a child injector after parent auth is configured', () => {
+    const mockConvexClient = {
+      setAuth: jest.fn(),
+      client: {
+        clearAuth: jest.fn(),
+        hasAuth: jest.fn().mockReturnValue(false),
+      },
+    } as unknown as jest.Mocked<ConvexClient>;
+
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: CONVEX, useValue: mockConvexClient },
+        ExistingAuthProvider,
+        provideConvexAuthFromExisting(ExistingAuthProvider),
+      ],
+    });
+
+    const rootInjector = TestBed.inject(EnvironmentInjector);
+
+    expect(() =>
+      createEnvironmentInjector(
+        [ExistingAuthProvider, provideConvexAuthFromExisting(ExistingAuthProvider)],
+        rootInjector,
+      ),
+    ).toThrow(/must be configured only in your root application providers/);
+  });
 });
