@@ -8,7 +8,7 @@ The Angular client for Convex.
 
 ## ✨ Features
 
-- 🔌 Core providers: `provideConvex`, `injectQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
+- 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
 - 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`
 - 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`
@@ -83,6 +83,52 @@ export class AppComponent {
 
 `data()` is typed as `T | undefined`. Handle the initial/skipped state with
 `?.` or `??` until the first successful result arrives.
+
+### Fetching multiple queries
+
+Use `injectQueries` when you need to subscribe to a dynamic set of keyed queries
+and read their results together.
+
+```typescript
+import { Component, signal } from '@angular/core';
+import { injectQueries, skipToken } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
+
+@Component({
+  selector: 'app-dashboard',
+  template: `
+    @if (queries.isLoading()) {
+      <p>Loading dashboard...</p>
+    }
+
+    @if (queries.statuses().user === 'success') {
+      <p>Welcome back, {{ queries.results().user?.name }}</p>
+    }
+
+    <ul>
+      @for (todo of queries.results().todos ?? []; track todo._id) {
+        <li>{{ todo.title }}</li>
+      }
+    </ul>
+  `,
+})
+export class DashboardComponent {
+  readonly userId = signal<string | null>('user-1');
+
+  readonly queries = injectQueries(() => ({
+    user: this.userId() ? { query: api.users.getProfile, args: { userId: this.userId() } } : skipToken,
+    todos: { query: api.todos.listTodos, args: { count: 10 } },
+  }));
+}
+```
+
+The multi-query result provides:
+
+- `results()` - Keyed query results
+- `errors()` - Keyed query errors
+- `statuses()` - Keyed query statuses
+- `isLoading()` - True while any active query is pending
 
 ### Mutating data
 
@@ -311,8 +357,8 @@ export class AppComponent {
 ```
 
 This works for all public `inject*` helpers, including `injectQuery`,
-`injectPaginatedQuery`, `injectMutation`, `injectAction`, `injectConvex`, and
-`injectConvexConnectionState`, and `injectAuth`.
+`injectQueries`, `injectPaginatedQuery`, `injectMutation`, `injectAction`,
+`injectConvex`, `injectConvexConnectionState`, and `injectAuth`.
 
 ## 🔐 Authentication
 
