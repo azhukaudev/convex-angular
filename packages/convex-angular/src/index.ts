@@ -8,6 +8,7 @@ export * from './lib/types';
 
 // Core providers
 export * from './lib/providers/inject-action';
+export * from './lib/providers/inject-connection-state';
 export * from './lib/providers/inject-convex';
 export * from './lib/providers/inject-mutation';
 export * from './lib/providers/inject-paginated-query';

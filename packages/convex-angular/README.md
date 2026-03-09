@@ -8,7 +8,7 @@ The Angular client for Convex.
 
 ## ✨ Features
 
-- 🔌 Core providers: `provideConvex`, `injectQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, and `injectConvex`
+- 🔌 Core providers: `provideConvex`, `injectQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
 - 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`
 - 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`
@@ -180,11 +180,7 @@ import { api } from '../convex/_generated/api';
   `,
 })
 export class AppComponent {
-  readonly todos = injectPaginatedQuery(
-    api.todos.listTodosPaginated,
-    () => ({}),
-    { initialNumItems: 10 },
-  );
+  readonly todos = injectPaginatedQuery(api.todos.listTodosPaginated, () => ({}), { initialNumItems: 10 });
 }
 ```
 
@@ -228,9 +224,7 @@ export class AppComponent {
   readonly userId = signal<string | null>(null);
 
   // Query is skipped when userId is null
-  readonly user = injectQuery(api.users.getProfile, () =>
-    this.userId() ? { userId: this.userId() } : skipToken,
-  );
+  readonly user = injectQuery(api.users.getProfile, () => (this.userId() ? { userId: this.userId() } : skipToken));
 }
 ```
 
@@ -260,6 +254,27 @@ export class AppComponent {
   completeAllTodos() {
     this.convex.action(api.todoFunctions.completeAllTodos, {});
   }
+}
+```
+
+### Monitoring connection state
+
+Use `injectConvexConnectionState` to react to online/offline and reconnecting changes.
+
+```typescript
+import { Component } from '@angular/core';
+import { injectConvexConnectionState } from 'convex-angular';
+
+@Component({
+  selector: 'app-connection-indicator',
+  template: `
+    @if (!connectionState().isWebSocketConnected) {
+      <p>Reconnecting to Convex...</p>
+    }
+  `,
+})
+export class ConnectionIndicatorComponent {
+  readonly connectionState = injectConvexConnectionState();
 }
 ```
 
@@ -297,7 +312,7 @@ export class AppComponent {
 
 This works for all public `inject*` helpers, including `injectQuery`,
 `injectPaginatedQuery`, `injectMutation`, `injectAction`, `injectConvex`, and
-`injectAuth`.
+`injectConvexConnectionState`, and `injectAuth`.
 
 ## 🔐 Authentication
 
@@ -350,12 +365,7 @@ import { Injectable, Signal, computed, inject } from '@angular/core';
 import { Clerk } from '@clerk/clerk-js'; // Your Clerk instance
 
 // app.config.ts
-import {
-  CLERK_AUTH,
-  ClerkAuthProvider,
-  provideClerkAuth,
-  provideConvex,
-} from 'convex-angular';
+import { CLERK_AUTH, ClerkAuthProvider, provideClerkAuth, provideConvex } from 'convex-angular';
 
 @Injectable({ providedIn: 'root' })
 export class ClerkAuthService implements ClerkAuthProvider {
@@ -364,9 +374,7 @@ export class ClerkAuthService implements ClerkAuthProvider {
   readonly isLoaded = computed(() => this.clerk.loaded());
   readonly isSignedIn = computed(() => !!this.clerk.user());
   readonly orgId = computed(() => this.clerk.organization()?.id);
-  readonly orgRole = computed(
-    () => this.clerk.organization()?.membership?.role,
-  );
+  readonly orgRole = computed(() => this.clerk.organization()?.membership?.role);
 
   async getToken(options?: { template?: string; skipCache?: boolean }) {
     try {
@@ -402,12 +410,7 @@ import { Injectable, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { AuthService } from '@auth0/auth0-angular';
 // app.config.ts
-import {
-  AUTH0_AUTH,
-  Auth0AuthProvider,
-  provideAuth0Auth,
-  provideConvex,
-} from 'convex-angular';
+import { AUTH0_AUTH, Auth0AuthProvider, provideAuth0Auth, provideConvex } from 'convex-angular';
 import { firstValueFrom } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -420,9 +423,7 @@ export class Auth0AuthService implements Auth0AuthProvider {
   });
 
   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
-    return firstValueFrom(
-      this.auth0.getAccessTokenSilently({ cacheMode: options?.cacheMode }),
-    );
+    return firstValueFrom(this.auth0.getAccessTokenSilently({ cacheMode: options?.cacheMode }));
   }
 }
 
@@ -448,12 +449,7 @@ For other auth providers, implement the `ConvexAuthProvider` interface and use
 // custom-auth.service.ts
 import { Injectable, signal } from '@angular/core';
 // app.config.ts
-import {
-  CONVEX_AUTH,
-  ConvexAuthProvider,
-  provideConvex,
-  provideConvexAuthFromExisting,
-} from 'convex-angular';
+import { CONVEX_AUTH, ConvexAuthProvider, provideConvex, provideConvexAuthFromExisting } from 'convex-angular';
 
 @Injectable({ providedIn: 'root' })
 export class CustomAuthService implements ConvexAuthProvider {
@@ -478,11 +474,7 @@ export class CustomAuthService implements ConvexAuthProvider {
     });
   }
 
-  async fetchAccessToken({
-    forceRefreshToken,
-  }: {
-    forceRefreshToken: boolean;
-  }) {
+  async fetchAccessToken({ forceRefreshToken }: { forceRefreshToken: boolean }) {
     return myAuthProvider.getToken({ refresh: forceRefreshToken });
   }
 }
@@ -525,11 +517,7 @@ export class ConvexAuthService implements ConvexAuthProvider {
   readonly isLoading = signal(true);
   readonly isAuthenticated = signal(false);
 
-  async fetchAccessToken({
-    forceRefreshToken,
-  }: {
-    forceRefreshToken: boolean;
-  }) {
+  async fetchAccessToken({ forceRefreshToken }: { forceRefreshToken: boolean }) {
     return myAuthProvider.getToken({ refresh: forceRefreshToken });
   }
 }
@@ -567,18 +555,10 @@ Use structural directives to conditionally render content based on auth state.
 Import the directives in your component:
 
 ```typescript
-import {
-  CvaAuthLoadingDirective,
-  CvaAuthenticatedDirective,
-  CvaUnauthenticatedDirective,
-} from 'convex-angular';
+import { CvaAuthLoadingDirective, CvaAuthenticatedDirective, CvaUnauthenticatedDirective } from 'convex-angular';
 
 @Component({
-  imports: [
-    CvaAuthenticatedDirective,
-    CvaUnauthenticatedDirective,
-    CvaAuthLoadingDirective,
-  ],
+  imports: [CvaAuthenticatedDirective, CvaUnauthenticatedDirective, CvaAuthLoadingDirective],
   // ...
 })
 export class AppComponent {}
@@ -596,22 +576,17 @@ import { convexAuthGuard } from 'convex-angular';
 export const routes: Routes = [
   {
     path: 'dashboard',
-    loadComponent: () =>
-      import('./dashboard/dashboard.component').then(
-        (m) => m.DashboardComponent,
-      ),
+    loadComponent: () => import('./dashboard/dashboard.component').then((m) => m.DashboardComponent),
     canActivate: [convexAuthGuard],
   },
   {
     path: 'profile',
-    loadComponent: () =>
-      import('./profile/profile.component').then((m) => m.ProfileComponent),
+    loadComponent: () => import('./profile/profile.component').then((m) => m.ProfileComponent),
     canActivate: [convexAuthGuard],
   },
   {
     path: 'login',
-    loadComponent: () =>
-      import('./login/login.component').then((m) => m.LoginComponent),
+    loadComponent: () => import('./login/login.component').then((m) => m.LoginComponent),
   },
 ];
 ```
