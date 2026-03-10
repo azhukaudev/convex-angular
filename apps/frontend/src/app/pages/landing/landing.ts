@@ -90,5 +90,18 @@ async send() {
 // queries.statuses() - per-key status map
 // queries.errors() - per-key error map`,
     },
+    {
+      name: 'injectConvexConnectionState',
+      description: 'Live connection diagnostics for network-aware UI',
+      code: `readonly connectionState = injectConvexConnectionState();
+
+readonly isReconnecting = computed(
+  () => !connectionState().isWebSocketConnected
+);
+
+// connectionState().connectionRetries
+// connectionState().hasInflightRequests
+// connectionState().inflightMutations`,
+    },
   ];
 }

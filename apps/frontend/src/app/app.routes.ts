@@ -19,6 +19,10 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./pages/multi-query-demo/multi-query-demo'),
   },
   {
+    path: 'examples/connection-state',
+    loadComponent: () => import('./pages/connection-state-demo/connection-state-demo'),
+  },
+  {
     path: 'auth/login',
     loadComponent: () => import('./pages/auth-login/auth-login'),
   },

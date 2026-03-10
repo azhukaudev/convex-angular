@@ -1,0 +1,156 @@
+<div class="mx-auto flex min-h-svh max-w-6xl flex-col gap-8 px-4 py-8">
+  <div class="flex flex-col gap-3">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <h1 class="text-4xl font-extrabold opacity-80">Connection State Example</h1>
+        <p class="text-sm text-gray-500">Live diagnostics powered by <code>injectConvexConnectionState()</code></p>
+      </div>
+      <a href="/" class="text-primary shrink-0 hover:underline">← Home</a>
+    </div>
+
+    <div class="flex flex-wrap gap-3 text-sm">
+      <a routerLink="/examples/basic" class="text-primary hover:underline"> Basic Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/examples/paginated" class="text-primary hover:underline"> Paginated Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/examples/multi-query" class="text-primary hover:underline"> Multi-query Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/auth/login" class="text-primary hover:underline"> Auth Example </a>
+    </div>
+  </div>
+
+  <p-card>
+    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+      <div class="max-w-3xl">
+        <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">Current Transport State</p>
+        <div class="mt-3 flex items-center gap-3">
+          <span
+            class="inline-flex rounded-full px-3 py-1 text-sm font-semibold"
+            [ngClass]="{
+              'bg-emerald-100 text-emerald-800': statusTone() === 'success',
+              'bg-amber-100 text-amber-900': statusTone() === 'warn',
+              'bg-red-100 text-red-800': statusTone() === 'danger',
+            }"
+          >
+            {{ statusLabel() }}
+          </span>
+          <span class="text-sm text-slate-500">
+            {{ connectionState().connectionCount }} total connection attempts
+          </span>
+        </div>
+        <p class="mt-4 text-sm leading-6 text-slate-600">
+          {{ statusDescription() }}
+        </p>
+      </div>
+
+      <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900 md:max-w-sm">
+        <p class="font-semibold">Try this live</p>
+        <ol class="mt-2 flex list-decimal flex-col gap-1 pl-4">
+          <li>Open DevTools and switch the browser network to offline.</li>
+          <li>Go back online and watch the retries and reconnect status.</li>
+          <li>Open other example pages to create queries and mutations.</li>
+          <li>Return here to inspect inflight request counters and the event log.</li>
+        </ol>
+      </div>
+    </div>
+  </p-card>
+
+  <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+    <p-card>
+      <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">Inflight Requests</p>
+      <p class="mt-2 text-3xl font-semibold">
+        {{ connectionState().hasInflightRequests ? 'yes' : 'no' }}
+      </p>
+      <p class="mt-2 text-sm text-slate-500">Oldest active request: {{ oldestInflightLabel() }}</p>
+    </p-card>
+
+    <p-card>
+      <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">Mutations / Actions</p>
+      <p class="mt-2 text-3xl font-semibold">
+        {{ connectionState().inflightMutations }} /
+        {{ connectionState().inflightActions }}
+      </p>
+      <p class="mt-2 text-sm text-slate-500">Current live work queued in the Convex client.</p>
+    </p-card>
+
+    <p-card>
+      <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">Retry Count</p>
+      <p class="mt-2 text-3xl font-semibold">
+        {{ connectionState().connectionRetries }}
+      </p>
+      <p class="mt-2 text-sm text-slate-500">Increments when the client reconnects after interruption.</p>
+    </p-card>
+
+    <p-card>
+      <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">Ever Connected</p>
+      <p class="mt-2 text-3xl font-semibold">
+        {{ connectionState().hasEverConnected ? 'yes' : 'no' }}
+      </p>
+      <p class="mt-2 text-sm text-slate-500">Useful for distinguishing first-load startup from reconnects.</p>
+    </p-card>
+  </div>
+
+  <div class="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+    <p-card>
+      <ng-template #header>
+        <div class="px-4 pt-4">
+          <h2 class="text-lg font-semibold">Transition Log</h2>
+          <p class="text-sm text-gray-600">Captures meaningful changes from the live connection signal.</p>
+        </div>
+      </ng-template>
+
+      <div class="flex flex-col gap-3">
+        @for (entry of logEntries(); track entry.signature + entry.timestamp.getTime()) {
+          <div class="rounded-xl border border-slate-200 p-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="font-semibold text-slate-900">{{ entry.title }}</p>
+              <p class="text-xs text-slate-500">
+                {{ entry.timestamp | date: 'mediumTime' }}
+              </p>
+            </div>
+            <p class="mt-2 text-sm text-slate-600">{{ entry.details }}</p>
+          </div>
+        } @empty {
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            Waiting for the first connection-state event...
+          </div>
+        }
+      </div>
+    </p-card>
+
+    <div class="grid gap-6">
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h2 class="text-lg font-semibold">Transport Facts</h2>
+            <p class="text-sm text-gray-600">Handy fields to bind directly in production UIs.</p>
+          </div>
+        </ng-template>
+
+        <dl class="grid gap-3 text-sm">
+          @for (fact of transportFacts(); track fact.label) {
+            <div class="rounded-lg border border-slate-200 px-3 py-2">
+              <dt class="text-xs tracking-[0.2em] text-slate-400 uppercase">
+                {{ fact.label }}
+              </dt>
+              <dd class="mt-1 font-medium text-slate-900">{{ fact.value }}</dd>
+            </div>
+          }
+        </dl>
+      </p-card>
+
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h2 class="text-lg font-semibold">Raw ConnectionState</h2>
+            <p class="text-sm text-gray-600">Full signal payload from Convex for debugging and inspection.</p>
+          </div>
+        </ng-template>
+
+        <pre class="overflow-x-auto rounded-md bg-slate-950 p-4 text-xs text-slate-100">{{
+          connectionState() | json
+        }}</pre>
+      </p-card>
+    </div>
+  </div>
+</div>
