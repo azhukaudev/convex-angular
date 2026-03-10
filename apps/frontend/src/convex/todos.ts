@@ -18,10 +18,16 @@ export const listTodosPaginated = query({
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    return await ctx.db
-      .query('todos')
-      .order('desc')
-      .paginate(args.paginationOpts);
+    return await ctx.db.query('todos').order('desc').paginate(args.paginationOpts);
+  },
+});
+
+export const getTodoById = query({
+  args: {
+    id: v.id('todos'),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
   },
 });
 

@@ -1,0 +1,253 @@
+<div class="mx-auto flex min-h-svh max-w-6xl flex-col gap-8 px-4 py-8">
+  <div class="flex flex-col gap-3">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <h1 class="text-4xl font-extrabold opacity-80">Prewarm Query Example</h1>
+        <p class="text-sm text-gray-500">
+          Compare a cold detail query with <code>injectPrewarmQuery()</code>
+          warming the cache before navigation.
+        </p>
+      </div>
+      <a href="/" class="text-primary shrink-0 hover:underline">← Home</a>
+    </div>
+
+    <div class="flex flex-wrap gap-3 text-sm">
+      <a routerLink="/examples/basic" class="text-primary hover:underline"> Basic Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/examples/paginated" class="text-primary hover:underline"> Paginated Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/examples/multi-query" class="text-primary hover:underline"> Multi-query Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/examples/connection-state" class="text-primary hover:underline"> Connection State Example </a>
+    </div>
+  </div>
+
+  <p-card>
+    <div class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+      <div>
+        <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">How this demo works</p>
+        <div class="mt-3 space-y-3 text-sm leading-6 text-slate-600">
+          <p>
+            Both buttons open the same todo detail query. The difference is that
+            <strong>Prewarm + Open</strong> starts a temporary background subscription first, then navigates after a
+            short lead time.
+          </p>
+          <p>
+            For the clearest comparison, turn on browser network throttling such as <strong>Slow 3G</strong> before
+            trying both buttons. This page still uses <code>injectQuery()</code> for the real detail view.
+          </p>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div class="flex flex-col gap-2 text-sm">
+          <label for="prewarmLead" class="font-medium text-slate-900"> Prewarm lead time (ms) </label>
+          <p-inputNumber
+            inputId="prewarmLead"
+            [(ngModel)]="prewarmLeadMs"
+            [min]="0"
+            [max]="3000"
+            [step]="50"
+            [showButtons]="true"
+            inputStyleClass="w-full"
+          />
+        </div>
+      </div>
+    </div>
+  </p-card>
+
+  <div class="grid gap-6 xl:grid-cols-[1fr_1fr]">
+    <p-card>
+      <ng-template #header>
+        <div class="px-4 pt-4">
+          <h2 class="text-lg font-semibold">Todo List</h2>
+          <p class="text-sm text-gray-600">Open a todo normally or prewarm the detail query first.</p>
+        </div>
+      </ng-template>
+
+      @if (todos.isLoading()) {
+        <div class="flex justify-center py-8">
+          <p-progress-spinner aria-label="loading todos" class="size-10" strokeWidth="8" />
+        </div>
+      } @else if (todos.error()) {
+        <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          {{ todos.error()?.message }}
+        </div>
+      } @else if (!todos.data()?.length) {
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          No todos are available yet. Create a few in the
+          <a routerLink="/examples/basic" class="font-medium underline"> Basic Example </a>
+          and come back here.
+        </div>
+      } @else {
+        <div class="flex flex-col gap-3">
+          @for (todo of todos.data(); track todo._id) {
+            <div
+              class="rounded-xl border p-4"
+              [class.border-sky-300]="isSelected(todo._id)"
+              [class.bg-sky-50]="isSelected(todo._id)"
+              [class.border-slate-200]="!isSelected(todo._id)"
+            >
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p class="font-medium text-slate-900">{{ todo.title }}</p>
+                  <p class="mt-1 text-xs tracking-[0.22em] text-slate-400 uppercase">
+                    {{ todo.completed ? 'Completed' : 'Open' }}
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                  <p-button
+                    label="Open normally"
+                    size="small"
+                    severity="secondary"
+                    (onClick)="openNormally(todo._id)"
+                  />
+                  <p-button label="Prewarm + Open" size="small" (onClick)="prewarmAndOpen(todo._id)" />
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </p-card>
+
+    <p-card>
+      <ng-template #header>
+        <div class="px-4 pt-4">
+          <h2 class="text-lg font-semibold">Detail Panel</h2>
+          <p class="text-sm text-gray-600">
+            This is the real <code>injectQuery(api.todos.getTodoById)</code>
+            subscriber.
+          </p>
+        </div>
+      </ng-template>
+
+      <div class="flex flex-col gap-4">
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="rounded-xl border border-slate-200 p-4">
+            <p class="text-xs tracking-[0.22em] text-slate-400 uppercase">Mode</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900">
+              {{ selectedMode() ?? 'idle' }}
+            </p>
+            <p class="mt-2 text-sm text-slate-500">{{ currentSummary() }}</p>
+          </div>
+
+          <div class="rounded-xl border border-slate-200 p-4">
+            <p class="text-xs tracking-[0.22em] text-slate-400 uppercase">Query Status</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900">
+              {{ detailStatusLabel() }}
+            </p>
+            <p class="mt-2 text-sm text-slate-500">
+              Time to data:
+              {{ timeToDataMs() === null ? '—' : timeToDataMs() + 'ms' }}
+            </p>
+            <p class="text-sm text-slate-500">
+              Prewarm head start:
+              {{ prewarmHeadStartMs() === null ? '—' : prewarmHeadStartMs() + 'ms' }}
+            </p>
+          </div>
+        </div>
+
+        @if (isPrewarmPending()) {
+          <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            Warming the cache for {{ selectedTodoTitle() ?? 'the selected todo' }}
+            before navigation...
+          </div>
+        }
+
+        @if (!selectedTodoId()) {
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
+            Choose a todo from the list to start the comparison.
+          </div>
+        } @else if (todoDetail.isLoading()) {
+          <div class="flex items-center gap-3 rounded-xl border border-slate-200 p-6 text-slate-600">
+            <p-progress-spinner aria-label="loading todo detail" class="size-8" strokeWidth="6" />
+            Loading detail query for {{ selectedTodoTitle() ?? 'selected todo' }}...
+          </div>
+        } @else if (todoDetail.error()) {
+          <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {{ todoDetail.error()?.message }}
+          </div>
+        } @else if (selectedTodo()) {
+          <div class="rounded-2xl bg-slate-950 p-5 text-slate-100">
+            <p class="text-xs tracking-[0.26em] text-slate-400 uppercase">Resolved Todo Detail</p>
+            <h3 class="mt-4 text-2xl font-semibold">{{ selectedTodo()?.title }}</h3>
+            <dl class="mt-4 grid gap-3 text-sm">
+              <div class="grid gap-1">
+                <dt class="text-slate-400">Completed</dt>
+                <dd class="font-medium">
+                  {{ selectedTodo()?.completed ? 'yes' : 'no' }}
+                </dd>
+              </div>
+              <div class="grid gap-1">
+                <dt class="text-slate-400">Document Id</dt>
+                <dd class="font-mono text-xs break-all">
+                  {{ selectedTodo()?._id }}
+                </dd>
+              </div>
+              <div class="grid gap-1">
+                <dt class="text-slate-400">Suggested test mode</dt>
+                <dd class="font-medium">Use browser network throttling</dd>
+              </div>
+            </dl>
+          </div>
+        } @else {
+          <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            The detail query finished, but the todo no longer exists.
+          </div>
+        }
+
+        <div class="flex justify-end">
+          <p-button
+            label="Clear selection"
+            severity="secondary"
+            size="small"
+            [disabled]="!selectedTodoId() && !isPrewarmPending()"
+            (onClick)="clearSelection()"
+          />
+        </div>
+      </div>
+    </p-card>
+  </div>
+
+  <p-card>
+    <ng-template #header>
+      <div class="px-4 pt-4">
+        <h2 class="text-lg font-semibold">Recent Runs</h2>
+        <p class="text-sm text-gray-600">Compare the measured time to data between cold and prewarmed opens.</p>
+      </div>
+    </ng-template>
+
+    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      @for (entry of history(); track entry.token) {
+        <div class="rounded-xl border border-slate-200 p-4 text-sm">
+          <p class="font-medium text-slate-900">{{ entry.title }}</p>
+          <p class="mt-1 text-xs tracking-[0.22em] text-slate-400 uppercase">{{ entry.mode }} run</p>
+          <dl class="mt-3 grid gap-2 text-slate-600">
+            <div class="flex items-center justify-between gap-3">
+              <dt>Time to data</dt>
+              <dd class="font-semibold text-slate-900">
+                {{ entry.timeToDataMs === null ? '—' : entry.timeToDataMs + 'ms' }}
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Prewarm lead</dt>
+              <dd class="font-semibold text-slate-900">
+                {{ entry.prewarmLeadMs === null ? '—' : entry.prewarmLeadMs + 'ms' }}
+              </dd>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <dt>Finished</dt>
+              <dd class="text-xs">{{ entry.timestamp | date: 'mediumTime' }}</dd>
+            </div>
+          </dl>
+        </div>
+      } @empty {
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          No runs yet. Open a todo from the list to start measuring.
+        </div>
+      }
+    </div>
+  </p-card>
+</div>

@@ -103,5 +103,17 @@ readonly isReconnecting = computed(
 // connectionState().hasInflightRequests
 // connectionState().inflightMutations`,
     },
+    {
+      name: 'injectPrewarmQuery',
+      description: 'Warm a future query before navigation or UI reveal',
+      code: `readonly prewarmTodo = injectPrewarmQuery(api.todos.getTodoById);
+
+openTodo(todoId: string) {
+  this.prewarmTodo.prewarm({ id: todoId });
+  void this.router.navigate(['/todos', todoId]);
+}
+
+// Best for route transitions and intent-driven UI`,
+    },
   ];
 }

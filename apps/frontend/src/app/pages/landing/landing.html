@@ -123,6 +123,21 @@
           <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
         </a>
       </p-card>
+
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h3 class="text-lg font-semibold">Prewarm Query Example</h3>
+            <p class="text-sm text-gray-600">Compare cold loads against injectPrewarmQuery</p>
+          </div>
+        </ng-template>
+        <p class="mb-4 text-sm text-gray-500">
+          Demonstrates prewarming a detail query before navigation, with timing data to compare cold and warmed opens.
+        </p>
+        <a routerLink="/examples/prewarm-query">
+          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
+        </a>
+      </p-card>
     </div>
   </section>
 

@@ -23,6 +23,10 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./pages/connection-state-demo/connection-state-demo'),
   },
   {
+    path: 'examples/prewarm-query',
+    loadComponent: () => import('./pages/prewarm-query-demo/prewarm-query-demo'),
+  },
+  {
     path: 'auth/login',
     loadComponent: () => import('./pages/auth-login/auth-login'),
   },
