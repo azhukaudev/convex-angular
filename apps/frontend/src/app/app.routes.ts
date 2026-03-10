@@ -27,6 +27,10 @@ export const appRoutes: Route[] = [
     loadComponent: () => import('./pages/prewarm-query-demo/prewarm-query-demo'),
   },
   {
+    path: 'examples/paginated-optimistic',
+    loadComponent: () => import('./pages/paginated-optimistic-demo/paginated-optimistic-demo'),
+  },
+  {
     path: 'auth/login',
     loadComponent: () => import('./pages/auth-login/auth-login'),
   },

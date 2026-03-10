@@ -1,0 +1,273 @@
+<div class="mx-auto flex min-h-svh max-w-6xl flex-col gap-8 px-4 py-8">
+  <div class="flex flex-col gap-3">
+    <div class="flex items-center justify-between gap-4">
+      <div>
+        <h1 class="text-4xl font-extrabold opacity-80">Paginated Optimistic Helpers</h1>
+        <p class="text-sm text-gray-500">
+          Dedicated demo data for <code>insertAtTop()</code>, <code>insertAtBottomIfLoaded()</code>,
+          <code>insertAtPosition()</code>, and <code>optimisticallyUpdateValueInPaginatedQuery()</code>.
+        </p>
+      </div>
+      <a href="/" class="text-primary shrink-0 hover:underline">← Home</a>
+    </div>
+
+    <div class="flex flex-wrap gap-3 text-sm">
+      <a routerLink="/examples/paginated" class="text-primary hover:underline"> Paginated Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/examples/basic" class="text-primary hover:underline"> Basic Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/examples/prewarm-query" class="text-primary hover:underline"> Prewarm Query Example </a>
+      <span class="text-gray-300">•</span>
+      <a routerLink="/examples/connection-state" class="text-primary hover:underline"> Connection State Example </a>
+    </div>
+  </div>
+
+  <p-card>
+    <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+      <div>
+        <p class="text-xs tracking-[0.24em] text-slate-400 uppercase">How to read this demo</p>
+        <div class="mt-3 space-y-3 text-sm leading-6 text-slate-600">
+          <p>
+            This page uses a dedicated paginated dataset sorted by ascending
+            <code>rank</code>. Each action button triggers a mutation wired to a different optimistic pagination helper.
+          </p>
+          <p>
+            Switch lanes to confirm <code>argsToMatch</code> keeps optimistic changes scoped to the active query. Use
+            <strong>Load More</strong>
+            until the list is exhausted before trying
+            <code>insertAtBottomIfLoaded()</code>.
+          </p>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+        <p class="font-semibold">Try this sequence</p>
+        <ol class="mt-2 flex list-decimal flex-col gap-1 pl-4">
+          <li>Reset the current lane to the baseline ranks.</li>
+          <li>Run <strong>Insert At Top</strong> before loading more pages.</li>
+          <li>Run <strong>Insert At Position</strong> and watch it slot into the correct page.</li>
+          <li>Load all pages, then run <strong>Insert At Bottom If Loaded</strong>.</li>
+          <li>Toggle any row to see the in-place optimistic update helper.</li>
+        </ol>
+      </div>
+    </div>
+  </p-card>
+
+  <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+    <div class="grid gap-6">
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h2 class="text-lg font-semibold">Controls</h2>
+            <p class="text-sm text-gray-600">Change the lane, page size, and pagination state.</p>
+          </div>
+        </ng-template>
+
+        <div class="grid gap-4 text-sm md:grid-cols-2 xl:grid-cols-1">
+          <label class="flex flex-col gap-2">
+            <span class="font-medium text-slate-900">Lane</span>
+            <select [(ngModel)]="selectedLane" class="rounded-md border border-slate-300 bg-white px-3 py-2">
+              <option value="alpha">alpha</option>
+              <option value="beta">beta</option>
+            </select>
+          </label>
+
+          <div class="flex flex-col gap-2">
+            <label for="optimisticPageSize" class="font-medium text-slate-900"> Page size </label>
+            <p-inputNumber
+              inputId="optimisticPageSize"
+              [(ngModel)]="pageSize"
+              [min]="1"
+              [max]="6"
+              [showButtons]="true"
+              inputStyleClass="w-full"
+            />
+          </div>
+
+          <div class="flex flex-wrap gap-2 md:col-span-2 xl:col-span-1">
+            <p-button label="Reset lane data" icon="pi pi-refresh" severity="secondary" (onClick)="handleResetLane()" />
+            <p-button
+              label="Reset pagination"
+              icon="pi pi-replay"
+              severity="secondary"
+              (onClick)="handleResetPagination()"
+            />
+            <p-button
+              label="Load More"
+              icon="pi pi-arrow-down"
+              [disabled]="!items.canLoadMore()"
+              (onClick)="handleLoadMore()"
+            />
+          </div>
+        </div>
+      </p-card>
+
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h2 class="text-lg font-semibold">Helper Buttons</h2>
+            <p class="text-sm text-gray-600">Each button is backed by one optimistic pagination helper.</p>
+          </div>
+        </ng-template>
+
+        <div class="grid gap-3">
+          <p-button
+            label="Insert At Top"
+            icon="pi pi-angle-double-up"
+            [disabled]="!canInsertAtTop()"
+            (onClick)="handleInsertAtTop()"
+          />
+          <p-button
+            label="Insert At Position"
+            icon="pi pi-sort-alt"
+            severity="secondary"
+            [disabled]="!canInsertAtPosition()"
+            (onClick)="handleInsertAtPosition()"
+          />
+          <p-button
+            label="Insert At Bottom If Loaded"
+            icon="pi pi-angle-double-down"
+            severity="secondary"
+            [disabled]="!canInsertAtBottom()"
+            (onClick)="handleInsertAtBottom()"
+          />
+          <p class="text-xs text-slate-500">
+            Bottom insertion stays disabled until every page in the active lane has been loaded.
+          </p>
+        </div>
+      </p-card>
+
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h2 class="text-lg font-semibold">Helper Reference</h2>
+            <p class="text-sm text-gray-600">What each helper is demonstrating in this dataset.</p>
+          </div>
+        </ng-template>
+
+        <div class="grid gap-3 text-sm">
+          @for (helper of helperCards; track helper.name) {
+            <div class="rounded-xl border border-slate-200 p-4">
+              <p class="font-semibold text-slate-900">{{ helper.name }}()</p>
+              <p class="mt-2 text-slate-600">{{ helper.note }}</p>
+            </div>
+          }
+        </div>
+      </p-card>
+    </div>
+
+    <div class="grid gap-6">
+      <p-card>
+        <ng-template #header>
+          <div class="px-4 pt-4">
+            <h2 class="text-lg font-semibold">Live Paginated List</h2>
+            <p class="text-sm text-gray-600">Sorted ascending by <code>rank</code> within the selected lane.</p>
+          </div>
+        </ng-template>
+
+        @if (items.isLoadingFirstPage()) {
+          <div class="flex justify-center py-10">
+            <p-progress-spinner aria-label="loading optimistic pagination demo" class="size-10" strokeWidth="8" />
+          </div>
+        } @else if (items.error()) {
+          <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {{ items.error()?.message }}
+          </div>
+        } @else if (!items.results().length) {
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            No items are loaded for {{ selectedLane() }} yet. Reset the lane to seed the demo data.
+          </div>
+        } @else {
+          <div class="flex flex-col gap-3">
+            @for (item of items.results(); track trackByItemId($index, item)) {
+              <div class="rounded-xl border border-slate-200 p-4">
+                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <p class="font-medium text-slate-900">{{ item.title }}</p>
+                      <span
+                        class="rounded-full px-2 py-1 text-xs font-semibold"
+                        [class.bg-emerald-100]="item.completed"
+                        [class.text-emerald-800]="item.completed"
+                        [class.bg-slate-100]="!item.completed"
+                        [class.text-slate-700]="!item.completed"
+                      >
+                        {{ item.completed ? 'completed' : 'open' }}
+                      </span>
+                    </div>
+                    <div class="mt-2 flex flex-wrap gap-3 text-xs tracking-[0.2em] text-slate-400 uppercase">
+                      <span>lane {{ item.lane }}</span>
+                      <span>rank {{ item.rank.toFixed(3) }}</span>
+                    </div>
+                  </div>
+
+                  <p-button
+                    [label]="item.completed ? 'Mark Open' : 'Mark Completed'"
+                    size="small"
+                    severity="secondary"
+                    (onClick)="handleToggleCompleted(item)"
+                  />
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </p-card>
+
+      <div class="grid gap-6 md:grid-cols-2">
+        <p-card>
+          <ng-template #header>
+            <div class="px-4 pt-4">
+              <h2 class="text-lg font-semibold">Diagnostics</h2>
+              <p class="text-sm text-gray-600">Current state of the active paginated query.</p>
+            </div>
+          </ng-template>
+
+          <dl class="grid gap-3 text-sm">
+            <div class="rounded-lg border border-slate-200 px-3 py-2">
+              <dt class="text-xs tracking-[0.2em] text-slate-400 uppercase">Lane</dt>
+              <dd class="mt-1 font-medium text-slate-900">{{ diagnostics().lane }}</dd>
+            </div>
+            <div class="rounded-lg border border-slate-200 px-3 py-2">
+              <dt class="text-xs tracking-[0.2em] text-slate-400 uppercase">Loaded Count</dt>
+              <dd class="mt-1 font-medium text-slate-900">{{ diagnostics().loadedCount }}</dd>
+            </div>
+            <div class="rounded-lg border border-slate-200 px-3 py-2">
+              <dt class="text-xs tracking-[0.2em] text-slate-400 uppercase">Can Load More</dt>
+              <dd class="mt-1 font-medium text-slate-900">
+                {{ diagnostics().canLoadMore ? 'yes' : 'no' }}
+              </dd>
+            </div>
+            <div class="rounded-lg border border-slate-200 px-3 py-2">
+              <dt class="text-xs tracking-[0.2em] text-slate-400 uppercase">Exhausted</dt>
+              <dd class="mt-1 font-medium text-slate-900">
+                {{ diagnostics().isExhausted ? 'yes' : 'no' }}
+              </dd>
+            </div>
+            <div class="rounded-lg border border-slate-200 px-3 py-2">
+              <dt class="text-xs tracking-[0.2em] text-slate-400 uppercase">Lowest Rank</dt>
+              <dd class="mt-1 font-medium text-slate-900">{{ diagnostics().lowestRank }}</dd>
+            </div>
+            <div class="rounded-lg border border-slate-200 px-3 py-2">
+              <dt class="text-xs tracking-[0.2em] text-slate-400 uppercase">Highest Rank</dt>
+              <dd class="mt-1 font-medium text-slate-900">{{ diagnostics().highestRank }}</dd>
+            </div>
+          </dl>
+        </p-card>
+
+        <p-card>
+          <ng-template #header>
+            <div class="px-4 pt-4">
+              <h2 class="text-lg font-semibold">Last Operation</h2>
+              <p class="text-sm text-gray-600">Human-readable explanation of the latest optimistic update.</p>
+            </div>
+          </ng-template>
+
+          <div class="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">
+            {{ lastOperation() }}
+          </div>
+        </p-card>
+      </div>
+    </div>
+  </div>
+</div>

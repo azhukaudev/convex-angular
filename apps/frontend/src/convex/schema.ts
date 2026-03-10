@@ -7,4 +7,12 @@ export default defineSchema({
     description: v.string(),
     completed: v.boolean(),
   }),
+  optimisticDemoItems: defineTable({
+    title: v.string(),
+    lane: v.union(v.literal('alpha'), v.literal('beta')),
+    rank: v.number(),
+    completed: v.boolean(),
+  })
+    .index('by_lane', ['lane'])
+    .index('by_lane_rank', ['lane', 'rank']),
 });

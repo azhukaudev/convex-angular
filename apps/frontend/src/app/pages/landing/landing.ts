@@ -115,5 +115,23 @@ openTodo(todoId: string) {
 
 // Best for route transitions and intent-driven UI`,
     },
+    {
+      name: 'Paginated optimistic helpers',
+      description: 'Keep infinite lists responsive during inserts and inline edits',
+      code: `readonly insertMiddle = injectMutation(
+  api.optimisticPaginationDemo.createItem,
+  {
+    optimisticUpdate: (localStore, args) =>
+      insertAtPosition({
+        paginatedQuery: api.optimisticPaginationDemo.listItemsPaginated,
+        argsToMatch: { lane: args.lane },
+        sortOrder: 'asc',
+        sortKeyFromItem: (item) => item.rank,
+        localQueryStore: localStore,
+        item: optimisticItem,
+      }),
+  }
+);`,
+    },
   ];
 }

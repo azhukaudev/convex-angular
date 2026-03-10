@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as http from "../http.js";
+import type * as optimisticPaginationDemo from "../optimisticPaginationDemo.js";
 import type * as todoFunctions from "../todoFunctions.js";
 import type * as todos from "../todos.js";
 
@@ -22,6 +23,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   http: typeof http;
+  optimisticPaginationDemo: typeof optimisticPaginationDemo;
   todoFunctions: typeof todoFunctions;
   todos: typeof todos;
 }>;
