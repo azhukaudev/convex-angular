@@ -30,13 +30,9 @@ interface SequencedError {
   sequence: number;
 }
 
-const CONVEX_AUTH_STATE = new InjectionToken<ConvexAuthState>('CONVEX_AUTH_STATE', {
-  providedIn: 'any',
-  factory: createConvexAuthState,
-});
+const CONVEX_AUTH_STATE = new InjectionToken<ConvexAuthState>('CONVEX_AUTH_STATE');
 const CONVEX_AUTH_PROVIDER_REGISTRATION = new InjectionToken<boolean[]>('CONVEX_AUTH_PROVIDER_REGISTRATION');
 const CONVEX_AUTH_PROVIDER_GUARD = new InjectionToken<true>('CONVEX_AUTH_PROVIDER_GUARD');
-const CONVEX_AUTH_ENABLED = new InjectionToken<boolean>('CONVEX_AUTH_ENABLED');
 
 function assertConvexAuthProviderConfiguration() {
   const currentScopeRegistrations = inject(CONVEX_AUTH_PROVIDER_REGISTRATION);
@@ -75,13 +71,6 @@ function normalizeError(error: unknown, prefix: string): Error {
 }
 
 function createConvexAuthState(): ConvexAuthState {
-  const enabled = inject(CONVEX_AUTH_ENABLED, { optional: true });
-  if (!enabled) {
-    throw new Error(
-      'Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, or `provideAuth0Auth()` in your application providers.',
-    );
-  }
-
   const provider = inject(CONVEX_AUTH, { optional: true });
   if (!provider) {
     throw new Error(
@@ -315,10 +304,10 @@ export function provideConvexAuth(): EnvironmentProviders {
       useFactory: convexAuthProviderGuardFactory,
     },
     {
-      provide: CONVEX_AUTH_ENABLED,
+      provide: CONVEX_AUTH_STATE,
       useFactory: () => {
         inject(CONVEX_AUTH_PROVIDER_GUARD);
-        return true;
+        return createConvexAuthState();
       },
     },
     provideEnvironmentInitializer(() => {

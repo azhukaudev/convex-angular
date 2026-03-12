@@ -365,19 +365,24 @@ describe('injectAuth', () => {
     expect(mockSetAuth).toHaveBeenCalledTimes(1);
   }));
 
-  it('binds cleanup to the provided injector', fakeAsync(() => {
+  it('reuses the root auth state across child injectors and does not clear auth on child destroy', fakeAsync(() => {
     providerAuthenticated.set(true);
     configureTestingModule();
 
-    const childInjector = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
+    const rootInjector = TestBed.inject(EnvironmentInjector);
+    const childInjector = createEnvironmentInjector([], rootInjector);
 
-    injectAuth({ injectRef: childInjector });
+    const rootAuth = injectAuth({ injectRef: rootInjector });
+    const childAuth = injectAuth({ injectRef: childInjector });
     tick();
+
+    expect(childAuth).toBe(rootAuth);
+    expect(mockSetAuth).toHaveBeenCalledTimes(1);
 
     mockHasAuth.mockReturnValue(true);
     childInjector.destroy();
 
-    expect(mockClearAuth).toHaveBeenCalledTimes(1);
+    expect(mockClearAuth).not.toHaveBeenCalled();
   }));
 });
 
