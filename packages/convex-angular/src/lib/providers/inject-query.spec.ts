@@ -1,9 +1,4 @@
-import {
-  Component,
-  EnvironmentInjector,
-  createEnvironmentInjector,
-  signal,
-} from '@angular/core';
+import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
@@ -13,11 +8,7 @@ import { CONVEX } from '../tokens/convex';
 import { QueryReference, injectQuery } from './inject-query';
 
 type Assert<T extends true> = T;
-type IsExact<T, Expected> = [T] extends [Expected]
-  ? [Expected] extends [T]
-    ? true
-    : false
-  : false;
+type IsExact<T, Expected> = [T] extends [Expected] ? ([Expected] extends [T] ? true : false) : false;
 
 // Mock getFunctionName to avoid needing a real FunctionReference
 jest.mock('convex/server', () => ({
@@ -37,18 +28,24 @@ describe('injectQuery', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
   let mockUnsubscribe: jest.Mock;
   let mockLocalQueryResult: jest.Mock;
+  let subscriptions: Array<{
+    onUpdate: (result: any) => void;
+    onError: (err: Error) => void;
+  }>;
   let onUpdateCallback: (result: any) => void;
   let onErrorCallback: (err: Error) => void;
 
   beforeEach(() => {
     mockUnsubscribe = jest.fn();
     mockLocalQueryResult = jest.fn().mockReturnValue(undefined);
+    subscriptions = [];
 
     mockConvexClient = {
       client: {
         localQueryResult: mockLocalQueryResult,
       },
       onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
+        subscriptions.push({ onUpdate, onError });
         onUpdateCallback = onUpdate;
         onErrorCallback = onError;
         return mockUnsubscribe;
@@ -116,9 +113,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
 
       type TodosData = ReturnType<TestComponent['todos']['data']>;
-      const assertTodosDataType: Assert<
-        IsExact<TodosData, Array<{ _id: string; title: string }> | undefined>
-      > = true;
+      const assertTodosDataType: Assert<IsExact<TodosData, Array<{ _id: string; title: string }> | undefined>> = true;
 
       const typedData: TodosData = fixture.componentInstance.todos.data();
 
@@ -412,9 +407,7 @@ describe('injectQuery', () => {
       })
       class TestComponent {
         readonly userId = signal<string | null>(null);
-        readonly todos = injectQuery(mockQuery, () =>
-          this.userId() ? { count: 10 } : skipToken,
-        );
+        readonly todos = injectQuery(mockQuery, () => (this.userId() ? { count: 10 } : skipToken));
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -441,9 +434,7 @@ describe('injectQuery', () => {
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
-        readonly todos = injectQuery(mockQuery, () =>
-          this.shouldSkip() ? skipToken : { count: 10 },
-        );
+        readonly todos = injectQuery(mockQuery, () => (this.shouldSkip() ? skipToken : { count: 10 }));
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -473,9 +464,7 @@ describe('injectQuery', () => {
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
-        readonly todos = injectQuery(mockQuery, () =>
-          this.shouldSkip() ? skipToken : { count: 10 },
-        );
+        readonly todos = injectQuery(mockQuery, () => (this.shouldSkip() ? skipToken : { count: 10 }));
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -500,9 +489,7 @@ describe('injectQuery', () => {
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
-        readonly todos = injectQuery(mockQuery, () =>
-          this.shouldSkip() ? skipToken : { count: 10 },
-        );
+        readonly todos = injectQuery(mockQuery, () => (this.shouldSkip() ? skipToken : { count: 10 }));
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -537,9 +524,7 @@ describe('injectQuery', () => {
       })
       class TestComponent {
         readonly shouldSkip = signal(true);
-        readonly todos = injectQuery(mockQuery, () =>
-          this.shouldSkip() ? skipToken : { count: 10 },
-        );
+        readonly todos = injectQuery(mockQuery, () => (this.shouldSkip() ? skipToken : { count: 10 }));
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -622,6 +607,74 @@ describe('injectQuery', () => {
 
       expect(mockUnsubscribe).toHaveBeenCalled();
     }));
+
+    it('should ignore stale updates when args change', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly count = signal(10);
+        readonly todos = injectQuery(mockQuery, () => ({
+          count: this.count(),
+        }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const firstSubscription = subscriptions[0];
+
+      fixture.componentInstance.count.set(20);
+      fixture.detectChanges();
+      tick();
+
+      const secondSubscription = subscriptions[1];
+      const latestData = [{ _id: '2', title: 'Latest todo' }];
+
+      secondSubscription.onUpdate(latestData);
+      expect(fixture.componentInstance.todos.data()).toEqual(latestData);
+
+      firstSubscription.onUpdate([{ _id: '1', title: 'Stale todo' }]);
+
+      expect(fixture.componentInstance.todos.data()).toEqual(latestData);
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+    }));
+
+    it('should ignore stale errors when args change', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly count = signal(10);
+        readonly todos = injectQuery(mockQuery, () => ({
+          count: this.count(),
+        }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const firstSubscription = subscriptions[0];
+
+      fixture.componentInstance.count.set(20);
+      fixture.detectChanges();
+      tick();
+
+      const secondSubscription = subscriptions[1];
+      const latestData = [{ _id: '2', title: 'Latest todo' }];
+
+      secondSubscription.onUpdate(latestData);
+      firstSubscription.onError(new Error('stale failure'));
+
+      expect(fixture.componentInstance.todos.data()).toEqual(latestData);
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+    }));
   });
 
   describe('cleanup', () => {
@@ -643,6 +696,35 @@ describe('injectQuery', () => {
       fixture.destroy();
 
       expect(mockUnsubscribe).toHaveBeenCalled();
+    }));
+
+    it('should ignore stale updates after transitioning to skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(false);
+        readonly todos = injectQuery(mockQuery, () => (this.shouldSkip() ? skipToken : { count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const firstSubscription = subscriptions[0];
+
+      fixture.componentInstance.shouldSkip.set(true);
+      fixture.detectChanges();
+      tick();
+
+      firstSubscription.onUpdate([{ _id: '1', title: 'Stale todo' }]);
+      firstSubscription.onError(new Error('stale failure'));
+
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+      expect(fixture.componentInstance.todos.status()).toBe('skipped');
     }));
   });
 
@@ -753,9 +835,7 @@ describe('injectQuery', () => {
       })
       class TestComponent {
         readonly shouldSkip = signal(true);
-        readonly todos = injectQuery(mockQuery, () =>
-          this.shouldSkip() ? skipToken : { count: 10 },
-        );
+        readonly todos = injectQuery(mockQuery, () => (this.shouldSkip() ? skipToken : { count: 10 }));
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -1099,10 +1179,7 @@ describe('injectQuery', () => {
     }));
 
     it('should clean up subscriptions when the provided injector is destroyed', fakeAsync(() => {
-      const childInjector = createEnvironmentInjector(
-        [],
-        TestBed.inject(EnvironmentInjector),
-      );
+      const childInjector = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
 
       injectQuery(mockQuery, () => ({ count: 10 }), {
         injectRef: childInjector,
@@ -1117,10 +1194,7 @@ describe('injectQuery', () => {
     }));
 
     it('should let injectRef override the ambient component scope', fakeAsync(() => {
-      const childInjector = createEnvironmentInjector(
-        [],
-        TestBed.inject(EnvironmentInjector),
-      );
+      const childInjector = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
 
       @Component({
         template: '',

@@ -1,19 +1,11 @@
-import {
-  Component,
-  EnvironmentInjector,
-  createEnvironmentInjector,
-  signal,
-} from '@angular/core';
+import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, PaginationResult } from 'convex/server';
 
 import { skipToken } from '../skip-token';
 import { CONVEX } from '../tokens/convex';
-import {
-  PaginatedQueryReference,
-  injectPaginatedQuery,
-} from './inject-paginated-query';
+import { PaginatedQueryReference, injectPaginatedQuery } from './inject-paginated-query';
 
 // Mock paginated query function reference
 const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
@@ -26,20 +18,24 @@ const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
 describe('injectPaginatedQuery', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
   let mockUnsubscribe: jest.Mock;
+  let subscriptions: Array<{
+    onUpdate: (result: any) => void;
+    onError: (err: Error) => void;
+  }>;
   let onUpdateCallback: (result: any) => void;
   let onErrorCallback: (err: Error) => void;
 
   beforeEach(() => {
     mockUnsubscribe = jest.fn();
+    subscriptions = [];
 
     mockConvexClient = {
-      onPaginatedUpdate_experimental: jest.fn(
-        (_query, _args, _options, onUpdate, onError) => {
-          onUpdateCallback = onUpdate;
-          onErrorCallback = onError;
-          return mockUnsubscribe;
-        },
-      ),
+      onPaginatedUpdate_experimental: jest.fn((_query, _args, _options, onUpdate, onError) => {
+        subscriptions.push({ onUpdate, onError });
+        onUpdateCallback = onUpdate;
+        onErrorCallback = onError;
+        return mockUnsubscribe;
+      }),
     } as unknown as jest.Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
@@ -81,20 +77,16 @@ describe('injectPaginatedQuery', () => {
     })
     class TestComponent {
       readonly category = signal('work');
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({ category: this.category() }),
-        { initialNumItems: 20 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({ category: this.category() }), {
+        initialNumItems: 20,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
     fixture.detectChanges();
     tick();
 
-    expect(
-      mockConvexClient.onPaginatedUpdate_experimental,
-    ).toHaveBeenCalledWith(
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledWith(
       mockPaginatedQuery,
       { category: 'work' },
       { initialNumItems: 20 },
@@ -353,9 +345,7 @@ describe('injectPaginatedQuery', () => {
 
     // Should have called unsubscribe and resubscribed
     expect(mockUnsubscribe).toHaveBeenCalled();
-    expect(
-      mockConvexClient.onPaginatedUpdate_experimental,
-    ).toHaveBeenCalledTimes(2);
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
   }));
 
   it('should resubscribe when args change', fakeAsync(() => {
@@ -365,20 +355,16 @@ describe('injectPaginatedQuery', () => {
     })
     class TestComponent {
       readonly category = signal('work');
-      readonly todos = injectPaginatedQuery(
-        mockPaginatedQuery,
-        () => ({ category: this.category() }),
-        { initialNumItems: 10 },
-      );
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({ category: this.category() }), {
+        initialNumItems: 10,
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
     fixture.detectChanges();
     tick();
 
-    expect(
-      mockConvexClient.onPaginatedUpdate_experimental,
-    ).toHaveBeenCalledTimes(1);
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
 
     // Change args
     fixture.componentInstance.category.set('personal');
@@ -386,12 +372,8 @@ describe('injectPaginatedQuery', () => {
     tick();
 
     expect(mockUnsubscribe).toHaveBeenCalled();
-    expect(
-      mockConvexClient.onPaginatedUpdate_experimental,
-    ).toHaveBeenCalledTimes(2);
-    expect(
-      mockConvexClient.onPaginatedUpdate_experimental,
-    ).toHaveBeenLastCalledWith(
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenLastCalledWith(
       mockPaginatedQuery,
       { category: 'personal' },
       { initialNumItems: 10 },
@@ -416,9 +398,7 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    expect(
-      mockConvexClient.onPaginatedUpdate_experimental,
-    ).toHaveBeenCalledTimes(1);
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
 
     // Change the reactive page size
     fixture.componentInstance.pageSize.set(20);
@@ -426,18 +406,99 @@ describe('injectPaginatedQuery', () => {
     tick();
 
     expect(mockUnsubscribe).toHaveBeenCalled();
-    expect(
-      mockConvexClient.onPaginatedUpdate_experimental,
-    ).toHaveBeenCalledTimes(2);
-    expect(
-      mockConvexClient.onPaginatedUpdate_experimental,
-    ).toHaveBeenLastCalledWith(
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenLastCalledWith(
       mockPaginatedQuery,
       {},
       { initialNumItems: 20 },
       expect.any(Function),
       expect.any(Function),
     );
+  }));
+
+  it('should ignore stale updates and stale loadMore handlers when args change', fakeAsync(() => {
+    const staleLoadMore = jest.fn().mockReturnValue(true);
+    const latestLoadMore = jest.fn().mockReturnValue(true);
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly category = signal('work');
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({ category: this.category() }), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const firstSubscription = subscriptions[0];
+
+    fixture.componentInstance.category.set('personal');
+    fixture.detectChanges();
+    tick();
+
+    const secondSubscription = subscriptions[1];
+    const latestResults = [{ _id: '2', name: 'Latest todo' }];
+
+    secondSubscription.onUpdate({
+      results: latestResults,
+      status: 'CanLoadMore',
+      loadMore: latestLoadMore,
+    });
+
+    firstSubscription.onUpdate({
+      results: [{ _id: '1', name: 'Stale todo' }],
+      status: 'CanLoadMore',
+      loadMore: staleLoadMore,
+    });
+
+    expect(fixture.componentInstance.todos.results()).toEqual(latestResults);
+    expect(fixture.componentInstance.todos.status()).toBe('success');
+
+    fixture.componentInstance.todos.loadMore(5);
+
+    expect(latestLoadMore).toHaveBeenCalledWith(5);
+    expect(staleLoadMore).not.toHaveBeenCalled();
+  }));
+
+  it('should ignore stale errors after reset', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const firstSubscription = subscriptions[0];
+
+    fixture.componentInstance.todos.reset();
+    fixture.detectChanges();
+    tick();
+
+    const secondSubscription = subscriptions[1];
+    const latestResults = [{ _id: '2', name: 'Latest todo' }];
+
+    secondSubscription.onUpdate({
+      results: latestResults,
+      status: 'CanLoadMore',
+      loadMore: jest.fn(),
+    });
+    firstSubscription.onError(new Error('stale failure'));
+
+    expect(fixture.componentInstance.todos.results()).toEqual(latestResults);
+    expect(fixture.componentInstance.todos.error()).toBeUndefined();
+    expect(fixture.componentInstance.todos.status()).toBe('success');
   }));
 
   it('should unsubscribe on component destroy', fakeAsync(() => {
@@ -499,20 +560,14 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => skipToken,
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => skipToken, { initialNumItems: 10 });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
       tick();
 
-      expect(
-        mockConvexClient.onPaginatedUpdate_experimental,
-      ).not.toHaveBeenCalled();
+      expect(mockConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
     }));
 
     it('should set isSkipped to true when skipToken is returned', fakeAsync(() => {
@@ -521,11 +576,7 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => skipToken,
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => skipToken, { initialNumItems: 10 });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -541,11 +592,7 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => skipToken,
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => skipToken, { initialNumItems: 10 });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -561,11 +608,7 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => skipToken,
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => skipToken, { initialNumItems: 10 });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -599,9 +642,7 @@ describe('injectPaginatedQuery', () => {
 
       // Initially skipped
       expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
-      expect(
-        mockConvexClient.onPaginatedUpdate_experimental,
-      ).not.toHaveBeenCalled();
+      expect(mockConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
 
       // Set category to enable query
       fixture.componentInstance.category.set('work');
@@ -609,9 +650,7 @@ describe('injectPaginatedQuery', () => {
       tick();
 
       expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
-      expect(
-        mockConvexClient.onPaginatedUpdate_experimental,
-      ).toHaveBeenCalled();
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalled();
     }));
 
     it('should clear results when transitioning to skipped', fakeAsync(() => {
@@ -621,11 +660,9 @@ describe('injectPaginatedQuery', () => {
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => (this.shouldSkip() ? skipToken : {}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => (this.shouldSkip() ? skipToken : {}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -660,20 +697,16 @@ describe('injectPaginatedQuery', () => {
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => (this.shouldSkip() ? skipToken : {}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => (this.shouldSkip() ? skipToken : {}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
       tick();
 
-      expect(
-        mockConvexClient.onPaginatedUpdate_experimental,
-      ).toHaveBeenCalled();
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalled();
       expect(mockUnsubscribe).not.toHaveBeenCalled();
 
       // Skip the query
@@ -691,11 +724,9 @@ describe('injectPaginatedQuery', () => {
       })
       class TestComponent {
         readonly shouldSkip = signal(false);
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => (this.shouldSkip() ? skipToken : {}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => (this.shouldSkip() ? skipToken : {}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -723,6 +754,41 @@ describe('injectPaginatedQuery', () => {
       expect(mockUnsubscribe).toHaveBeenCalledTimes(2);
     }));
 
+    it('should ignore stale callbacks after transitioning to skipped', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(false);
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => (this.shouldSkip() ? skipToken : {}), {
+          initialNumItems: 10,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const firstSubscription = subscriptions[0];
+
+      fixture.componentInstance.shouldSkip.set(true);
+      fixture.detectChanges();
+      tick();
+
+      firstSubscription.onUpdate({
+        results: [{ _id: '1', name: 'Stale todo' }],
+        status: 'CanLoadMore',
+        loadMore: jest.fn(),
+      });
+      firstSubscription.onError(new Error('stale failure'));
+
+      expect(fixture.componentInstance.todos.results()).toEqual([]);
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
+      expect(fixture.componentInstance.todos.status()).toBe('skipped');
+    }));
+
     it('should resubscribe when transitioning from skipped to active', fakeAsync(() => {
       @Component({
         template: '',
@@ -730,20 +796,16 @@ describe('injectPaginatedQuery', () => {
       })
       class TestComponent {
         readonly shouldSkip = signal(true);
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => (this.shouldSkip() ? skipToken : {}),
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => (this.shouldSkip() ? skipToken : {}), {
+          initialNumItems: 10,
+        });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
       tick();
 
-      expect(
-        mockConvexClient.onPaginatedUpdate_experimental,
-      ).not.toHaveBeenCalled();
+      expect(mockConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
       expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
 
       // Enable the query
@@ -751,9 +813,7 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(
-        mockConvexClient.onPaginatedUpdate_experimental,
-      ).toHaveBeenCalled();
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalled();
       expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
       expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
     }));
@@ -764,11 +824,7 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => skipToken,
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => skipToken, { initialNumItems: 10 });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -876,11 +932,7 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => skipToken,
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => skipToken, { initialNumItems: 10 });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -962,11 +1014,7 @@ describe('injectPaginatedQuery', () => {
         standalone: true,
       })
       class TestComponent {
-        readonly todos = injectPaginatedQuery(
-          mockPaginatedQuery,
-          () => skipToken,
-          { initialNumItems: 10 },
-        );
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => skipToken, { initialNumItems: 10 });
       }
 
       const fixture = TestBed.createComponent(TestComponent);
@@ -1097,9 +1145,7 @@ describe('injectPaginatedQuery', () => {
       });
       tick();
 
-      expect(
-        mockConvexClient.onPaginatedUpdate_experimental,
-      ).toHaveBeenCalledWith(
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledWith(
         mockPaginatedQuery,
         {},
         { initialNumItems: 10 },
@@ -1118,10 +1164,7 @@ describe('injectPaginatedQuery', () => {
     }));
 
     it('should clean up subscriptions when the provided injector is destroyed', fakeAsync(() => {
-      const childInjector = createEnvironmentInjector(
-        [],
-        TestBed.inject(EnvironmentInjector),
-      );
+      const childInjector = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
 
       injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
         initialNumItems: 10,

@@ -1,18 +1,5 @@
-import {
-  DestroyRef,
-  EnvironmentInjector,
-  Signal,
-  computed,
-  effect,
-  inject,
-  signal,
-  untracked,
-} from '@angular/core';
-import {
-  FunctionReference,
-  FunctionReturnType,
-  getFunctionName,
-} from 'convex/server';
+import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
+import { FunctionReference, FunctionReturnType, getFunctionName } from 'convex/server';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { QueryStatus } from '../types';
@@ -182,6 +169,7 @@ export function injectQuery<Query extends QueryReference>(
 
     // Track current subscription for cleanup
     let unsubscribe: (() => void) | undefined;
+    let activeGeneration = 0;
     const cleanupSubscription = () => {
       const currentUnsubscribe = unsubscribe;
       if (!currentUnsubscribe) {
@@ -195,6 +183,8 @@ export function injectQuery<Query extends QueryReference>(
     effect(() => {
       const args = argsFn();
       refetchVersion(); // Track for manual refetch
+      const generation = activeGeneration + 1;
+      activeGeneration = generation;
 
       // Cleanup previous subscription
       cleanupSubscription();
@@ -216,10 +206,7 @@ export function injectQuery<Query extends QueryReference>(
       // Initialize with cached data if available (only if no existing data)
       // Use untracked to avoid creating a reactive dependency on data
       if (untracked(data) === undefined) {
-        const cachedData = convex.client.localQueryResult(
-          getFunctionName(query),
-          args,
-        );
+        const cachedData = convex.client.localQueryResult(getFunctionName(query), args);
         if (cachedData !== undefined) {
           data.set(cachedData);
         }
@@ -230,12 +217,20 @@ export function injectQuery<Query extends QueryReference>(
         query,
         args,
         (result: FunctionReturnType<Query>) => {
+          if (generation !== activeGeneration) {
+            return;
+          }
+
           data.set(result);
           error.set(undefined);
           isLoading.set(false);
           options?.onSuccess?.(result);
         },
         (err: Error) => {
+          if (generation !== activeGeneration) {
+            return;
+          }
+
           // Preserve existing data on error for better UX
           error.set(err);
           isLoading.set(false);
@@ -245,7 +240,10 @@ export function injectQuery<Query extends QueryReference>(
     });
 
     // Cleanup subscription when the owning scope is destroyed
-    destroyRef.onDestroy(() => cleanupSubscription());
+    destroyRef.onDestroy(() => {
+      activeGeneration += 1;
+      cleanupSubscription();
+    });
 
     // Refetch function
     const refetch = () => {
