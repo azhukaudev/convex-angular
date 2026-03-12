@@ -1,4 +1,5 @@
 import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, isSignal, signal } from '@angular/core';
+import { ConvexClient } from 'convex/browser';
 import {
   FunctionArgs,
   FunctionReference,
@@ -27,6 +28,43 @@ interface ClientPaginatedResult<T> {
   results: T[];
   status: ClientPaginationStatus;
   loadMore: (numItems: number) => boolean;
+}
+
+type ExperimentalPaginatedSubscriptionClient = {
+  onPaginatedUpdate_experimental: ConvexClient['onPaginatedUpdate_experimental'];
+};
+
+function getPaginatedSubscriptionClient(convex: ConvexClient): ExperimentalPaginatedSubscriptionClient {
+  const paginatedClient = convex as ConvexClient & Partial<ExperimentalPaginatedSubscriptionClient>;
+
+  if (typeof paginatedClient.onPaginatedUpdate_experimental !== 'function') {
+    throw new Error(
+      '[convex-angular] `injectPaginatedQuery()` requires a Convex client with experimental paginated query support.',
+    );
+  }
+
+  return paginatedClient as ExperimentalPaginatedSubscriptionClient;
+}
+
+function subscribeToPaginatedQuery<Query extends PaginatedQueryReference>(
+  convex: ConvexClient,
+  query: Query,
+  args: PaginatedQueryArgs<Query>,
+  initialNumItems: number,
+  onUpdate: (result: ClientPaginatedResult<PaginatedQueryItem<Query>>) => void,
+  onError: (err: Error) => void,
+): () => void {
+  const paginatedClient = getPaginatedSubscriptionClient(convex);
+
+  return paginatedClient.onPaginatedUpdate_experimental(
+    query,
+    args as FunctionArgs<Query>,
+    { initialNumItems },
+    (rawResult) => {
+      onUpdate(rawResult as unknown as ClientPaginatedResult<PaginatedQueryItem<Query>>);
+    },
+    onError,
+  );
 }
 
 /**
@@ -156,6 +194,8 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
  * Load data reactively from a paginated query to create a growing list.
  *
  * This can be used to power "infinite scroll" UIs.
+ * This helper currently relies on Convex's experimental paginated
+ * subscription client APIs.
  *
  * @example
  * ```typescript
@@ -267,17 +307,17 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       isSkipped.set(false);
       currentLoadMore = undefined;
 
-      unsubscribe = convex.onPaginatedUpdate_experimental(
+      unsubscribe = subscribeToPaginatedQuery(
+        convex,
         query,
-        args as FunctionArgs<Query>,
-        { initialNumItems },
+        args,
+        initialNumItems,
         (rawResult) => {
           if (generation !== activeGeneration) {
             return;
           }
 
-          // Cast to the actual runtime type (Convex types don't match implementation)
-          const result = rawResult as unknown as ClientPaginatedResult<PaginatedQueryItem<Query>>;
+          const result = rawResult;
 
           // Store the loadMore function
           currentLoadMore = result.loadMore;

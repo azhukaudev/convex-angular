@@ -70,6 +70,32 @@ describe('injectPaginatedQuery', () => {
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
   }));
 
+  it('should throw a clear error when experimental paginated subscriptions are unavailable', fakeAsync(() => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [{ provide: CONVEX, useValue: {} as ConvexClient }],
+    });
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+
+    expect(() => {
+      fixture.detectChanges();
+      tick();
+    }).toThrow(
+      '[convex-angular] `injectPaginatedQuery()` requires a Convex client with experimental paginated query support.',
+    );
+  }));
+
   it('should subscribe to paginated query with correct arguments', fakeAsync(() => {
     @Component({
       template: '',
@@ -93,6 +119,33 @@ describe('injectPaginatedQuery', () => {
       expect.any(Function),
       expect.any(Function),
     );
+  }));
+
+  it('should subscribe through the pagination adapter when support is available', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    onUpdateCallback({
+      results: [{ _id: '1', name: 'Todo 1' }],
+      status: 'CanLoadMore',
+      loadMore: jest.fn(),
+    });
+    fixture.detectChanges();
+
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Todo 1' }]);
+    expect(fixture.componentInstance.todos.status()).toBe('success');
   }));
 
   it('should update signals when LoadingFirstPage status is received', fakeAsync(() => {
