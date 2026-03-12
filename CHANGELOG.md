@@ -1,5 +1,29 @@
 # convex-angular
 
+## [1.6.0](https://github.com/azhukaudev/convex-angular/compare/v1.5.0...v1.6.0) (2026-03-12)
+
+### ✨ Features
+
+- Add `injectQueries()` for keyed multi-query subscriptions with per-key `results()`, `errors()`, `statuses()`, and aggregate `isLoading()`.
+- Add `injectPrewarmQuery()` to warm the local Convex cache before navigation or other anticipated UI work.
+- Add `injectConvexConnectionState()` for reactive Convex connection diagnostics.
+- Add paginated optimistic update helpers for updating cached paginated query results during optimistic mutations.
+
+### ⚠️ Breaking Changes
+
+- Enforce root-only `provideConvexAuth()` registration by throwing on duplicate or nested auth provider setup.
+
+### 🐛 Bug Fixes
+
+- Ignore stale `injectQuery()` subscription callbacks so outdated responses do not overwrite newer state.
+- Ignore stale `injectPaginatedQuery()` callbacks and throw a clear error when experimental paginated query support is unavailable on the Convex client.
+- Scope Convex auth state to the root injector to prevent inconsistent auth sync across nested provider scopes.
+
+### 📖 Documentation
+
+- Document `injectQueries()`, `injectPrewarmQuery()`, `injectConvexConnectionState()`, and paginated optimistic update helpers in both READMEs.
+- Add new frontend examples for multi-query subscriptions, connection state, prewarming queries, and paginated optimistic updates.
+
 ## [1.5.0](https://github.com/azhukaudev/convex-angular/compare/v1.4.0...v1.5.0) (2026-03-08)
 
 ### ⚠️ Breaking Changes
