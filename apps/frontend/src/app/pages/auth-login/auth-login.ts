@@ -1,17 +1,6 @@
 import { NgTemplateOutlet } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  effect,
-  inject,
-  signal,
-} from '@angular/core';
-import {
-  NonNullableFormBuilder,
-  ReactiveFormsModule,
-  Validators,
-} from '@angular/forms';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -55,9 +44,7 @@ export default class AuthLogin {
     password: ['', [Validators.required, Validators.minLength(8)]],
   });
 
-  readonly submitLabel = computed(() =>
-    this.mode() === 'sign-up' ? 'Create Account' : 'Sign In',
-  );
+  readonly submitLabel = computed(() => (this.mode() === 'sign-up' ? 'Create Account' : 'Sign In'));
 
   constructor() {
     effect(() => {
@@ -65,10 +52,7 @@ export default class AuthLogin {
       const isSignUp = this.mode() === 'sign-up';
 
       if (isSignUp) {
-        nameControl.setValidators([
-          Validators.required,
-          Validators.minLength(2),
-        ]);
+        nameControl.setValidators([Validators.required, Validators.minLength(2)]);
       } else {
         nameControl.setValidators([Validators.minLength(2)]);
       }
@@ -86,7 +70,7 @@ export default class AuthLogin {
     this.mode.set(mode);
   }
 
-  onTabChange(value: string | number): void {
+  onTabChange(value: string | number | undefined): void {
     if (this.isAuthMode(value)) {
       this.setMode(value);
     }
@@ -109,7 +93,7 @@ export default class AuthLogin {
     }
   }
 
-  private isAuthMode(value: string | number): value is AuthMode {
+  private isAuthMode(value: unknown): value is AuthMode {
     return value === 'sign-in' || value === 'sign-up';
   }
 }
