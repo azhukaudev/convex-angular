@@ -1,22 +1,10 @@
-import {
-  ApplicationConfig,
-  provideBrowserGlobalErrorListeners,
-  provideZoneChangeDetection,
-} from '@angular/core';
+import { ApplicationConfig, provideBrowserGlobalErrorListeners, provideZoneChangeDetection } from '@angular/core';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideRouter } from '@angular/router';
 import Aura from '@primeuix/themes/aura';
-import {
-  CONVEX_AUTH,
-  CONVEX_AUTH_GUARD_CONFIG,
-  provideConvex,
-  provideConvexAuth,
-} from 'convex-angular';
 import { providePrimeNG } from 'primeng/config';
 
-import { environment } from '../environments/environment';
 import { appRoutes } from './app.routes';
-import { DemoAuthService } from './auth/demo-auth.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -36,14 +24,5 @@ export const appConfig: ApplicationConfig = {
         },
       },
     }),
-    provideConvex(environment.convexUrl),
-    {
-      provide: CONVEX_AUTH_GUARD_CONFIG,
-      useValue: {
-        loginRoute: '/auth/login',
-      },
-    },
-    { provide: CONVEX_AUTH, useExisting: DemoAuthService },
-    provideConvexAuth(),
   ],
 };

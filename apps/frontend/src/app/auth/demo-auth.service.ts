@@ -1,8 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import {
-  convexClient,
-  crossDomainClient,
-} from '@convex-dev/better-auth/client/plugins';
+import { convexClient, crossDomainClient } from '@convex-dev/better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/client';
 import { ConvexAuthProvider } from 'convex-angular';
 
@@ -32,9 +29,8 @@ type TokenExchangeResult = {
   } | null;
 };
 
-@Injectable({ providedIn: 'root' })
-export class DemoAuthService implements ConvexAuthProvider {
-  private readonly authClient = createAuthClient({
+function createDemoAuthClient() {
+  return createAuthClient({
     baseURL: environment.convexSiteUrl,
     plugins: [
       convexClient(),
@@ -43,6 +39,13 @@ export class DemoAuthService implements ConvexAuthProvider {
       }),
     ],
   });
+}
+
+type DemoAuthClient = ReturnType<typeof createDemoAuthClient>;
+
+@Injectable()
+export class DemoAuthService implements ConvexAuthProvider {
+  private authClient: DemoAuthClient | null = null;
 
   readonly isLoading = signal(true);
   readonly isAuthenticated = signal(false);
@@ -70,13 +73,19 @@ export class DemoAuthService implements ConvexAuthProvider {
     void this.refreshSession();
   }
 
+  private getAuthClient(): DemoAuthClient {
+    this.authClient ??= createDemoAuthClient();
+
+    return this.authClient;
+  }
+
   async signIn(email: string, password: string): Promise<boolean> {
     this.formErrorMessage.set(null);
     this.error.set(undefined);
     this.isLoading.set(true);
 
     try {
-      const result = await this.authClient.signIn.email({
+      const result = await this.getAuthClient().signIn.email({
         email,
         password,
         callbackURL: this.getSuccessUrl(),
@@ -84,9 +93,7 @@ export class DemoAuthService implements ConvexAuthProvider {
       });
 
       if (result.error) {
-        this.formErrorMessage.set(
-          result.error.message ?? 'Unable to sign in with those credentials.',
-        );
+        this.formErrorMessage.set(result.error.message ?? 'Unable to sign in with those credentials.');
         this.applySession(null);
         this.isLoading.set(false);
         return false;
@@ -95,26 +102,20 @@ export class DemoAuthService implements ConvexAuthProvider {
       await this.refreshSession();
       return this.isAuthenticated();
     } catch (error) {
-      this.error.set(
-        this.normalizeError(error, '[demo auth] Better Auth sign-in failed'),
-      );
+      this.error.set(this.normalizeError(error, '[demo auth] Better Auth sign-in failed'));
       this.applySession(null);
       this.isLoading.set(false);
       return false;
     }
   }
 
-  async signUp(
-    name: string,
-    email: string,
-    password: string,
-  ): Promise<boolean> {
+  async signUp(name: string, email: string, password: string): Promise<boolean> {
     this.formErrorMessage.set(null);
     this.error.set(undefined);
     this.isLoading.set(true);
 
     try {
-      const result = await this.authClient.signUp.email({
+      const result = await this.getAuthClient().signUp.email({
         name,
         email,
         password,
@@ -123,9 +124,7 @@ export class DemoAuthService implements ConvexAuthProvider {
       });
 
       if (result.error) {
-        this.formErrorMessage.set(
-          result.error.message ?? 'Unable to create that account.',
-        );
+        this.formErrorMessage.set(result.error.message ?? 'Unable to create that account.');
         this.applySession(null);
         this.isLoading.set(false);
         return false;
@@ -134,9 +133,7 @@ export class DemoAuthService implements ConvexAuthProvider {
       await this.refreshSession();
       return this.isAuthenticated();
     } catch (error) {
-      this.error.set(
-        this.normalizeError(error, '[demo auth] Better Auth sign-up failed'),
-      );
+      this.error.set(this.normalizeError(error, '[demo auth] Better Auth sign-up failed'));
       this.applySession(null);
       this.isLoading.set(false);
       return false;
@@ -149,24 +146,17 @@ export class DemoAuthService implements ConvexAuthProvider {
     this.isLoading.set(true);
 
     try {
-      const result = await this.authClient.signOut({
+      const result = await this.getAuthClient().signOut({
         fetchOptions: { throw: false },
       });
 
       if (result.error && !this.isExpectedAuthStatus(result.error.status)) {
-        this.error.set(
-          this.normalizeError(
-            result.error,
-            '[demo auth] Better Auth sign-out failed',
-          ),
-        );
+        this.error.set(this.normalizeError(result.error, '[demo auth] Better Auth sign-out failed'));
       }
     } catch (error) {
-      this.error.set(
-        this.normalizeError(error, '[demo auth] Better Auth sign-out failed'),
-      );
+      this.error.set(this.normalizeError(error, '[demo auth] Better Auth sign-out failed'));
     } finally {
-      this.authClient.updateSession();
+      this.getAuthClient().updateSession();
       this.applySession(null);
       this.isLoading.set(false);
     }
@@ -184,34 +174,22 @@ export class DemoAuthService implements ConvexAuthProvider {
     this.isLoading.set(true);
 
     try {
-      const result = await this.authClient.getSession({
+      const result = await this.getAuthClient().getSession({
         fetchOptions: { throw: false },
       });
 
       if (result.error && !this.isExpectedAuthStatus(result.error.status)) {
-        this.error.set(
-          this.normalizeError(
-            result.error,
-            '[demo auth] Better Auth session refresh failed',
-          ),
-        );
+        this.error.set(this.normalizeError(result.error, '[demo auth] Better Auth session refresh failed'));
       } else {
         this.error.set(undefined);
       }
 
       const sessionData =
-        result.data ??
-        (this.authClient.getSessionData?.() as AuthSessionSnapshot | null) ??
-        null;
+        result.data ?? (this.getAuthClient().getSessionData?.() as AuthSessionSnapshot | null) ?? null;
 
       this.applySession(sessionData);
     } catch (error) {
-      this.error.set(
-        this.normalizeError(
-          error,
-          '[demo auth] Better Auth session refresh failed',
-        ),
-      );
+      this.error.set(this.normalizeError(error, '[demo auth] Better Auth session refresh failed'));
       this.applySession(null);
     } finally {
       this.isLoading.set(false);
@@ -222,11 +200,7 @@ export class DemoAuthService implements ConvexAuthProvider {
     this.formErrorMessage.set(null);
   }
 
-  readonly fetchAccessToken = async ({
-    forceRefreshToken,
-  }: {
-    forceRefreshToken: boolean;
-  }): Promise<string | null> => {
+  readonly fetchAccessToken = async ({ forceRefreshToken }: { forceRefreshToken: boolean }): Promise<string | null> => {
     if (!this.isAuthenticated()) {
       return null;
     }
@@ -241,8 +215,8 @@ export class DemoAuthService implements ConvexAuthProvider {
 
     const tokenGeneration = this.tokenGeneration;
 
-    const request = this.authClient.convex
-      .token({
+    const request = this.getAuthClient()
+      .convex.token({
         fetchOptions: { throw: false },
       })
       .then(({ data, error }: TokenExchangeResult) => {
@@ -252,12 +226,7 @@ export class DemoAuthService implements ConvexAuthProvider {
 
         if (error) {
           if (!this.isExpectedAuthStatus(error.status)) {
-            this.error.set(
-              this.normalizeError(
-                error,
-                '[demo auth] Convex token exchange failed',
-              ),
-            );
+            this.error.set(this.normalizeError(error, '[demo auth] Convex token exchange failed'));
           }
           this.cachedToken = null;
           return null;
@@ -272,12 +241,7 @@ export class DemoAuthService implements ConvexAuthProvider {
           return null;
         }
 
-        this.error.set(
-          this.normalizeError(
-            error,
-            '[demo auth] Convex token exchange failed',
-          ),
-        );
+        this.error.set(this.normalizeError(error, '[demo auth] Convex token exchange failed'));
         this.cachedToken = null;
         return null;
       })
@@ -319,13 +283,9 @@ export class DemoAuthService implements ConvexAuthProvider {
   }
 
   private getSuccessUrl(): string {
-    const baseUrl =
-      environment.siteUrl ||
-      (typeof window !== 'undefined' ? window.location.origin : '');
+    const baseUrl = environment.siteUrl || (typeof window !== 'undefined' ? window.location.origin : '');
 
-    return baseUrl
-      ? new URL('/auth/success', baseUrl).toString()
-      : '/auth/success';
+    return baseUrl ? new URL('/auth/success', baseUrl).toString() : '/auth/success';
   }
 
   private isExpectedAuthStatus(status?: number): boolean {
@@ -337,12 +297,7 @@ export class DemoAuthService implements ConvexAuthProvider {
       return new Error(`${prefix}: ${error.message}`);
     }
 
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'message' in error &&
-      typeof error.message === 'string'
-    ) {
+    if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
       return new Error(`${prefix}: ${error.message}`);
     }
 
