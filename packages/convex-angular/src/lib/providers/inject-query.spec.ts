@@ -23,6 +23,12 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
   { count: number },
   Array<{ _id: string; title: string }>
 > as QueryReference;
+const mockFilteredQuery = (() => {}) as unknown as FunctionReference<
+  'query',
+  'public',
+  { filters: { channel: string; listId: string } },
+  Array<{ _id: string; title: string }>
+> as QueryReference;
 
 describe('injectQuery', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
@@ -738,6 +744,38 @@ describe('injectQuery', () => {
       expect(fixture.componentInstance.todos.data()).toEqual(initialData);
       expect(fixture.componentInstance.todos.isLoading()).toBe(true);
       expect(fixture.componentInstance.todos.status()).toBe('pending');
+    }));
+
+    it('should not resubscribe when args are logically equal but object key order changes', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly args = signal<{ filters: { channel: string; listId: string } }>({
+          filters: { channel: 'general', listId: 'list-1' },
+        });
+        readonly todos = injectQuery(mockFilteredQuery, () => this.args());
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const initialData = [{ _id: '1', title: 'Todo 1' }];
+      onUpdateCallback(initialData);
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+
+      fixture.componentInstance.args.set({
+        filters: { listId: 'list-1', channel: 'general' },
+      });
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.data()).toEqual(initialData);
+      expect(fixture.componentInstance.todos.status()).toBe('success');
     }));
   });
 

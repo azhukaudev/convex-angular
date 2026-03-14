@@ -14,6 +14,12 @@ const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
   { paginationOpts: any },
   PaginationResult<{ _id: string; name: string }>
 > as PaginatedQueryReference;
+const mockFilteredPaginatedQuery = (() => {}) as unknown as FunctionReference<
+  'query',
+  'public',
+  { paginationOpts: any; filters: { channel: string; listId: string } },
+  PaginationResult<{ _id: string; name: string }>
+> as PaginatedQueryReference;
 
 describe('injectPaginatedQuery', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
@@ -526,6 +532,50 @@ describe('injectPaginatedQuery', () => {
       expect.any(Function),
       expect.any(Function),
     );
+  }));
+
+  it('should not resubscribe when args are logically equal but object key order changes', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly filters = signal<{ channel: string; listId: string }>({
+        channel: 'general',
+        listId: 'list-1',
+      });
+      readonly todos = injectPaginatedQuery(
+        mockFilteredPaginatedQuery,
+        () => ({ filters: this.filters() }),
+        { initialNumItems: 10 },
+      );
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const loadMore = jest.fn();
+    const initialResults = [{ _id: '1', name: 'Todo 1' }];
+    onUpdateCallback({
+      results: initialResults,
+      status: 'CanLoadMore',
+      loadMore,
+    });
+    fixture.detectChanges();
+
+    fixture.componentInstance.filters.set({
+      listId: 'list-1',
+      channel: 'general',
+    });
+    fixture.detectChanges();
+    tick();
+
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+    expect(mockUnsubscribe).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.todos.results()).toEqual(initialResults);
+    expect(fixture.componentInstance.todos.status()).toBe('success');
+    expect(fixture.componentInstance.todos.canLoadMore()).toBe(true);
   }));
 
   it('should ignore stale updates and stale loadMore handlers when args change', fakeAsync(() => {

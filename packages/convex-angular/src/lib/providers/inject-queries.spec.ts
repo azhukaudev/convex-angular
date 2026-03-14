@@ -35,10 +35,17 @@ const mockStatsQuery = (() => {}) as unknown as FunctionReference<
   { teamId: string },
   { total: number }
 >;
+const mockSearchQuery = (() => {}) as unknown as FunctionReference<
+  'query',
+  'public',
+  { filters: { channel: string; listId: string } },
+  { name: string }
+>;
 
 queryNames.set(mockUserQuery, 'users:get');
 queryNames.set(mockTodosQuery, 'todos:list');
 queryNames.set(mockStatsQuery, 'stats:get');
+queryNames.set(mockSearchQuery, 'users:search');
 
 describe('injectQueries', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
@@ -377,6 +384,46 @@ describe('injectQueries', () => {
     });
     expect(fixture.componentInstance.queries.statuses()).toEqual({
       user: 'pending',
+    });
+  }));
+
+  it('does not resubscribe a keyed query when only arg object key order changes', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly filters = signal<{ channel: string; listId: string }>({
+        channel: 'general',
+        listId: 'list-1',
+      });
+      readonly queries = injectQueries(() => ({
+        user: { query: mockSearchQuery, args: { filters: this.filters() } },
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const initialResult = { name: 'Ali' };
+    onUpdateByKey.get(keyFor('users:search', { filters: { channel: 'general', listId: 'list-1' } }))?.(initialResult);
+
+    fixture.componentInstance.filters.set({
+      listId: 'list-1',
+      channel: 'general',
+    });
+    fixture.detectChanges();
+    tick();
+
+    expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+    expect(unsubscribeByKey.get(keyFor('users:search', { filters: { channel: 'general', listId: 'list-1' } })))
+      .not.toHaveBeenCalled();
+    expect(fixture.componentInstance.queries.results()).toEqual({
+      user: initialResult,
+    });
+    expect(fixture.componentInstance.queries.statuses()).toEqual({
+      user: 'success',
     });
   }));
 

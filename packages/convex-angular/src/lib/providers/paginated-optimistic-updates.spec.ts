@@ -224,6 +224,33 @@ describe('paginated optimistic updates', () => {
         }),
       ).toEqual([{ author: 'Dana', read: false }]);
     });
+
+    it('matches logically equal args even when object key order differs', () => {
+      const localQueryStore = new LocalQueryStoreFake();
+
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: { channel: 'general', listId: 'list-1' },
+        pages: [[{ author: 'Alice', read: false }]],
+        isDone: true,
+      });
+
+      optimisticallyUpdateValueInPaginatedQuery(
+        localQueryStore,
+        mockPaginatedQuery,
+        { listId: 'list-1', channel: 'general' },
+        (currentValue) => ({ ...currentValue, read: true }),
+      );
+
+      expect(
+        getPaginatedQueryResults({
+          localQueryStore,
+          query: mockPaginatedQuery,
+          argsToMatch: { channel: 'general', listId: 'list-1' },
+        }),
+      ).toEqual([{ author: 'Alice', read: true }]);
+    });
   });
 
   describe('insertAtTop', () => {

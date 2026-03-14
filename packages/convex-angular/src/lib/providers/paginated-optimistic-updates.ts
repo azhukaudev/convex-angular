@@ -1,8 +1,9 @@
 import { OptimisticLocalStore } from 'convex/browser';
 import { FunctionArgs, FunctionReference, FunctionReturnType, PaginationOptions } from 'convex/server';
-import { Value, compareValues, convexToJson } from 'convex/values';
+import { Value, compareValues } from 'convex/values';
 
 import { PaginatedQueryArgs, PaginatedQueryItem, PaginatedQueryReference } from './inject-paginated-query';
+import { serializeConvexArgsStable } from './serialize-convex-args-stable';
 
 type LocalQueryResult<Query extends FunctionReference<'query'>> = {
   args: FunctionArgs<Query>;
@@ -42,7 +43,7 @@ export function optimisticallyUpdateValueInPaginatedQuery<Query extends Paginate
   args: PaginatedQueryArgs<Query>,
   updateValue: (currentValue: PaginatedQueryItem<Query>) => PaginatedQueryItem<Query>,
 ): void {
-  const expectedArgs = JSON.stringify(convexToJson(args as Value));
+  const expectedArgs = serializeConvexArgsStable(args as Record<string, Value>);
 
   for (const queryResult of localStore.getAllQueries(query)) {
     if (queryResult.value === undefined) {
@@ -53,7 +54,7 @@ export function optimisticallyUpdateValueInPaginatedQuery<Query extends Paginate
       Object.entries(queryResult.args).filter(([key]) => key !== 'paginationOpts'),
     ) as PaginatedQueryArgs<Query>;
 
-    if (JSON.stringify(convexToJson(innerArgs as Value)) !== expectedArgs) {
+    if (serializeConvexArgsStable(innerArgs as Record<string, Value>) !== expectedArgs) {
       continue;
     }
 
@@ -143,15 +144,13 @@ export function insertAtPosition<Query extends PaginatedQueryReference>(options:
       continue;
     }
 
-    const key = JSON.stringify(
-      convexToJson(
-        Object.fromEntries(
-          Object.entries(queryResult.args).map(([argKey, value]) => [
-            argKey,
-            argKey === 'paginationOpts' ? { id: (value as PaginationOptions & { id: string }).id } : value,
-          ]),
-        ) as Value,
-      ),
+    const key = serializeConvexArgsStable(
+      Object.fromEntries(
+        Object.entries(queryResult.args).map(([argKey, value]) => [
+          argKey,
+          argKey === 'paginationOpts' ? { id: (value as PaginationOptions & { id: string }).id } : value,
+        ]),
+      ) as Record<string, Value>,
     );
     queryGroups[key] ??= [];
     queryGroups[key].push(queryResult);

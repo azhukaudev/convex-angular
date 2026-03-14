@@ -1,7 +1,8 @@
 import { DestroyRef } from '@angular/core';
-import { Value, convexToJson } from 'convex/values';
+import { Value } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
+import { serializeConvexArgsStable } from './serialize-convex-args-stable';
 
 type Unsubscribe = () => void;
 
@@ -33,7 +34,7 @@ export interface SubscriptionController<T> {
 }
 
 export function serializeArgs(args: Record<string, Value>): string {
-  return JSON.stringify(convexToJson(args));
+  return serializeConvexArgsStable(args);
 }
 
 export function createSubscriptionController<T>(
