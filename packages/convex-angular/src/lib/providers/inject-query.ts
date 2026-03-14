@@ -1,5 +1,6 @@
 import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FunctionReference, FunctionReturnType, getFunctionName } from 'convex/server';
+import { Value, convexToJson } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { QueryStatus } from '../types';
@@ -87,6 +88,10 @@ export interface QueryResult<Query extends QueryReference> {
   refetch: () => void;
 }
 
+function serializeArgs(args: Record<string, Value>): string {
+  return JSON.stringify(convexToJson(args));
+}
+
 /**
  * Subscribe to a Convex query reactively.
  *
@@ -170,6 +175,7 @@ export function injectQuery<Query extends QueryReference>(
     // Track current subscription for cleanup
     let unsubscribe: (() => void) | undefined;
     let activeGeneration = 0;
+    let previousArgsKey: string | undefined;
     const cleanupSubscription = () => {
       const currentUnsubscribe = unsubscribe;
       if (!currentUnsubscribe) {
@@ -201,15 +207,17 @@ export function injectQuery<Query extends QueryReference>(
       // Not skipped - try to get cached data and start subscription
       isSkipped.set(false);
       isLoading.set(true);
-      // Note: We preserve existing data during refetch for better UX
+      const argsKey = serializeArgs(args as Record<string, Value>);
+      const hasPreviousArgs = previousArgsKey !== undefined;
+      previousArgsKey = argsKey;
 
-      // Initialize with cached data if available (only if no existing data)
-      // Use untracked to avoid creating a reactive dependency on data
-      if (untracked(data) === undefined) {
-        const cachedData = convex.client.localQueryResult(getFunctionName(query), args);
-        if (cachedData !== undefined) {
-          data.set(cachedData);
-        }
+      // Prefer the warm cache for the current args. When the new args are not
+      // cached yet, preserve the previous value during the pending resubscribe.
+      const cachedData = convex.client.localQueryResult(getFunctionName(query), args);
+      if (cachedData !== undefined) {
+        data.set(cachedData);
+      } else if (!hasPreviousArgs && untracked(data) !== undefined) {
+        data.set(undefined);
       }
 
       // Subscribe to the query

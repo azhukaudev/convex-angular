@@ -675,6 +675,70 @@ describe('injectQuery', () => {
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
       expect(fixture.componentInstance.todos.status()).toBe('success');
     }));
+
+    it('should hydrate from local cache when args change to a warm query', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly count = signal(10);
+        readonly todos = injectQuery(mockQuery, () => ({
+          count: this.count(),
+        }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const initialData = [{ _id: '1', title: 'Todo 10' }];
+      const cachedData = [{ _id: '2', title: 'Todo 20 (cached)' }];
+      onUpdateCallback(initialData);
+
+      mockLocalQueryResult.mockImplementation((queryName: string, args: { count: number }) => {
+        if (queryName === 'todos:listTodos' && args.count === 20) {
+          return cachedData;
+        }
+        return undefined;
+      });
+
+      fixture.componentInstance.count.set(20);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toEqual(cachedData);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+      expect(fixture.componentInstance.todos.status()).toBe('pending');
+    }));
+
+    it('should preserve previous data when args change and the new query is not cached', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly count = signal(10);
+        readonly todos = injectQuery(mockQuery, () => ({
+          count: this.count(),
+        }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const initialData = [{ _id: '1', title: 'Todo 10' }];
+      onUpdateCallback(initialData);
+
+      fixture.componentInstance.count.set(20);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toEqual(initialData);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+      expect(fixture.componentInstance.todos.status()).toBe('pending');
+    }));
   });
 
   describe('cleanup', () => {
@@ -1007,6 +1071,39 @@ describe('injectQuery', () => {
 
       expect(fixture.componentInstance.todos.data()).toEqual(initialData);
       expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+    }));
+
+    it('should hydrate from local cache during refetch for the same args', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const initialData = [{ _id: '1', title: 'Todo' }];
+      const cachedData = [{ _id: '2', title: 'Todo (cached)' }];
+      onUpdateCallback(initialData);
+
+      mockLocalQueryResult.mockImplementation((queryName: string, args: { count: number }) => {
+        if (queryName === 'todos:listTodos' && args.count === 10) {
+          return cachedData;
+        }
+        return undefined;
+      });
+
+      fixture.componentInstance.todos.refetch();
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toEqual(cachedData);
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+      expect(fixture.componentInstance.todos.status()).toBe('pending');
     }));
 
     it('should set isLoading to true on refetch', fakeAsync(() => {
