@@ -1,11 +1,12 @@
 import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FunctionReference, FunctionReturnType, getFunctionName } from 'convex/server';
-import { Value, convexToJson } from 'convex/values';
+import { Value } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { QueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
+import { createSubscriptionController, serializeArgs } from './query-subscription-lifecycle';
 
 /**
  * A FunctionReference that refers to a Convex query.
@@ -88,10 +89,6 @@ export interface QueryResult<Query extends QueryReference> {
   refetch: () => void;
 }
 
-function serializeArgs(args: Record<string, Value>): string {
-  return JSON.stringify(convexToJson(args));
-}
-
 /**
  * Subscribe to a Convex query reactively.
  *
@@ -172,85 +169,68 @@ export function injectQuery<Query extends QueryReference>(
       return 'success';
     });
 
-    // Track current subscription for cleanup
-    let unsubscribe: (() => void) | undefined;
-    let activeGeneration = 0;
-    let previousArgsKey: string | undefined;
-    const cleanupSubscription = () => {
-      const currentUnsubscribe = unsubscribe;
-      if (!currentUnsubscribe) {
-        return;
-      }
-      unsubscribe = undefined;
-      currentUnsubscribe();
-    };
-
-    // Effect to reactively subscribe when args change
-    effect(() => {
-      const args = argsFn();
-      refetchVersion(); // Track for manual refetch
-      const generation = activeGeneration + 1;
-      activeGeneration = generation;
-
-      // Cleanup previous subscription
-      cleanupSubscription();
-
-      // If skipToken, reset state and don't subscribe
-      if (args === skipToken) {
+    const subscription = createSubscriptionController<Query['_args']>(destroyRef, {
+      onSkip: () => {
         data.set(undefined);
         error.set(undefined);
         isLoading.set(false);
         isSkipped.set(true);
+      },
+      onPending: (args, { hadPreviousSubscription }) => {
+        isSkipped.set(false);
+        isLoading.set(true);
+
+        // Prefer the warm cache for the current args. When the new args are not
+        // cached yet, preserve the previous value during the pending resubscribe.
+        const cachedData = convex.client.localQueryResult(getFunctionName(query), args);
+        if (cachedData !== undefined) {
+          data.set(cachedData);
+        } else if (!hadPreviousSubscription && untracked(data) !== undefined) {
+          data.set(undefined);
+        }
+      },
+      subscribe: (args, controls) =>
+        convex.onUpdate(
+          query,
+          args,
+          (result: FunctionReturnType<Query>) => {
+            if (!controls.isCurrent()) {
+              return;
+            }
+
+            data.set(result);
+            error.set(undefined);
+            isLoading.set(false);
+            options?.onSuccess?.(result);
+          },
+          (err: Error) => {
+            if (!controls.isCurrent()) {
+              return;
+            }
+
+            // Preserve existing data on error for better UX
+            error.set(err);
+            isLoading.set(false);
+            options?.onError?.(err);
+          },
+        ),
+    });
+
+    // Effect to reactively subscribe when args change
+    effect(() => {
+      const args = argsFn();
+      const version = refetchVersion();
+
+      if (args === skipToken) {
+        subscription.sync(skipToken);
         return;
       }
 
-      // Not skipped - try to get cached data and start subscription
-      isSkipped.set(false);
-      isLoading.set(true);
       const argsKey = serializeArgs(args as Record<string, Value>);
-      const hasPreviousArgs = previousArgsKey !== undefined;
-      previousArgsKey = argsKey;
-
-      // Prefer the warm cache for the current args. When the new args are not
-      // cached yet, preserve the previous value during the pending resubscribe.
-      const cachedData = convex.client.localQueryResult(getFunctionName(query), args);
-      if (cachedData !== undefined) {
-        data.set(cachedData);
-      } else if (!hasPreviousArgs && untracked(data) !== undefined) {
-        data.set(undefined);
-      }
-
-      // Subscribe to the query
-      unsubscribe = convex.onUpdate(
-        query,
-        args,
-        (result: FunctionReturnType<Query>) => {
-          if (generation !== activeGeneration) {
-            return;
-          }
-
-          data.set(result);
-          error.set(undefined);
-          isLoading.set(false);
-          options?.onSuccess?.(result);
-        },
-        (err: Error) => {
-          if (generation !== activeGeneration) {
-            return;
-          }
-
-          // Preserve existing data on error for better UX
-          error.set(err);
-          isLoading.set(false);
-          options?.onError?.(err);
-        },
-      );
-    });
-
-    // Cleanup subscription when the owning scope is destroyed
-    destroyRef.onDestroy(() => {
-      activeGeneration += 1;
-      cleanupSubscription();
+      subscription.sync({
+        identity: `${argsKey}:${version}`,
+        value: args,
+      });
     });
 
     // Refetch function

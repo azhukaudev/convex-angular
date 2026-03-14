@@ -313,6 +313,115 @@ describe('injectQueries', () => {
     expect(initialTodosSubscription).not.toHaveBeenCalled();
   }));
 
+  it('hydrates a changed key from warm cache before the next update arrives', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly userId = signal('user-1');
+      readonly queries = injectQueries(() => ({
+        user: { query: mockUserQuery, args: { userId: this.userId() } },
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))?.({
+      name: 'Ali',
+    });
+    localResultsByKey.set(keyFor('users:get', { userId: 'user-2' }), {
+      name: 'Bea (cached)',
+    });
+
+    fixture.componentInstance.userId.set('user-2');
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.queries.results()).toEqual({
+      user: { name: 'Bea (cached)' },
+    });
+    expect(fixture.componentInstance.queries.statuses()).toEqual({
+      user: 'pending',
+    });
+  }));
+
+  it('preserves the previous value when a changed key has no warm cache entry', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly userId = signal('user-1');
+      readonly queries = injectQueries(() => ({
+        user: { query: mockUserQuery, args: { userId: this.userId() } },
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))?.({
+      name: 'Ali',
+    });
+
+    fixture.componentInstance.userId.set('user-2');
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.queries.results()).toEqual({
+      user: { name: 'Ali' },
+    });
+    expect(fixture.componentInstance.queries.statuses()).toEqual({
+      user: 'pending',
+    });
+  }));
+
+  it('ignores stale updates and errors after a keyed resubscribe', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly userId = signal('user-1');
+      readonly queries = injectQueries(() => ({
+        user: { query: mockUserQuery, args: { userId: this.userId() } },
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const staleUpdate = onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }));
+    const staleError = onErrorByKey.get(keyFor('users:get', { userId: 'user-1' }));
+
+    fixture.componentInstance.userId.set('user-2');
+    fixture.detectChanges();
+    tick();
+
+    onUpdateByKey.get(keyFor('users:get', { userId: 'user-2' }))?.({
+      name: 'Bea',
+    });
+    staleUpdate?.({
+      name: 'Stale',
+    });
+    staleError?.(new Error('stale failure'));
+
+    expect(fixture.componentInstance.queries.results()).toEqual({
+      user: { name: 'Bea' },
+    });
+    expect(fixture.componentInstance.queries.errors()).toEqual({
+      user: undefined,
+    });
+    expect(fixture.componentInstance.queries.statuses()).toEqual({
+      user: 'success',
+    });
+  }));
+
   it('cleans up all subscriptions when the component is destroyed', fakeAsync(() => {
     @Component({
       template: '',

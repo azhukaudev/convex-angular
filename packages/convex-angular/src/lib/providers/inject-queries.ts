@@ -1,12 +1,13 @@
 import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
 import { FunctionReturnType, getFunctionName } from 'convex/server';
-import { Value, convexToJson } from 'convex/values';
+import { Value } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { QueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { QueryReference } from './inject-query';
 import { runInResolvedInjectionContext } from './injection-context';
+import { SubscriptionController, createSubscriptionController, serializeArgs } from './query-subscription-lifecycle';
 
 /**
  * A keyed query request used by injectQueries.
@@ -34,13 +35,6 @@ type QueryErrorsRecord<Definitions extends QueriesDefinition> = {
 type QueryStatusesRecord<Definitions extends QueriesDefinition> = {
   [Key in keyof Definitions]: QueryStatus;
 };
-
-interface ActiveQuerySubscription {
-  key: string;
-  queryName: string;
-  argsKey: string;
-  unsubscribe: () => void;
-}
 
 /**
  * Options for injectQueries.
@@ -82,10 +76,6 @@ export interface QueriesResult<Definitions extends QueriesDefinition> {
    * True while at least one active query is waiting for its first result.
    */
   isLoading: Signal<boolean>;
-}
-
-function serializeArgs(args: Record<string, Value>): string {
-  return JSON.stringify(convexToJson(args));
 }
 
 function cloneWithoutKey<T extends Record<string, unknown>>(source: T, key: string): T {
@@ -142,36 +132,84 @@ export function injectQueries<Definitions extends QueriesDefinition>(
     const results = signal<Record<string, unknown>>({});
     const errors = signal<Record<string, Error | undefined>>({});
     const statuses = signal<Record<string, QueryStatus>>({});
-    const activeSubscriptions = new Map<string, ActiveQuerySubscription>();
+    const controllers = new Map<
+      string,
+      SubscriptionController<{
+        query: QueryReference;
+        args: Record<string, Value>;
+        queryName: string;
+      }>
+    >();
 
-    const cleanupSubscription = (key: string) => {
-      const activeSubscription = activeSubscriptions.get(key);
-      if (!activeSubscription) {
-        return;
+    const getController = (key: string) => {
+      let controller = controllers.get(key);
+      if (controller) {
+        return controller;
       }
 
-      activeSubscriptions.delete(key);
-      activeSubscription.unsubscribe();
+      controller = createSubscriptionController(destroyRef, {
+        onSkip: () => {
+          results.update((current) => setKey(current, key, undefined));
+          errors.update((current) => setKey(current, key, undefined));
+          statuses.update((current) => setKey(current, key, 'skipped'));
+        },
+        onPending: (definition) => {
+          errors.update((current) => setKey(current, key, undefined));
+          statuses.update((current) => setKey(current, key, 'pending'));
+
+          if (!(key in untracked(results))) {
+            results.update((current) => setKey(current, key, undefined));
+          }
+
+          const cachedResult = convex.client.localQueryResult(definition.queryName, definition.args) as
+            | FunctionReturnType<typeof definition.query>
+            | undefined;
+
+          if (cachedResult !== undefined) {
+            results.update((current) => setKey(current, key, cachedResult));
+          }
+        },
+        subscribe: (definition, controls) =>
+          convex.onUpdate(
+            definition.query,
+            definition.args,
+            (result) => {
+              if (!controls.isCurrent()) {
+                return;
+              }
+
+              results.update((current) => setKey(current, key, result));
+              errors.update((current) => setKey(current, key, undefined));
+              statuses.update((current) => setKey(current, key, 'success'));
+            },
+            (error) => {
+              if (!controls.isCurrent()) {
+                return;
+              }
+
+              errors.update((current) => setKey(current, key, error));
+              statuses.update((current) => setKey(current, key, 'error'));
+            },
+          ),
+      });
+
+      controllers.set(key, controller);
+      return controller;
     };
 
     const removeKey = (key: string) => {
-      cleanupSubscription(key);
+      controllers.get(key)?.dispose();
+      controllers.delete(key);
       results.update((current) => cloneWithoutKey(current, key));
       errors.update((current) => cloneWithoutKey(current, key));
       statuses.update((current) => cloneWithoutKey(current, key));
-    };
-
-    const cleanupAll = () => {
-      for (const key of Array.from(activeSubscriptions.keys())) {
-        cleanupSubscription(key);
-      }
     };
 
     effect(() => {
       const definitions = definitionsFn();
       const nextKeys = new Set(Object.keys(definitions));
 
-      for (const key of Array.from(activeSubscriptions.keys())) {
+      for (const key of Array.from(controllers.keys())) {
         if (!nextKeys.has(key)) {
           removeKey(key);
         }
@@ -179,76 +217,25 @@ export function injectQueries<Definitions extends QueriesDefinition>(
 
       for (const key of Object.keys(definitions)) {
         const definition = definitions[key];
+        const controller = getController(key);
 
         if (definition === skipToken) {
-          cleanupSubscription(key);
-          results.update((current) => setKey(current, key, undefined));
-          errors.update((current) => setKey(current, key, undefined));
-          statuses.update((current) => setKey(current, key, 'skipped'));
+          controller.sync(skipToken);
           continue;
         }
 
         const queryName = getFunctionName(definition.query);
         const argsKey = serializeArgs(definition.args as Record<string, Value>);
-        const activeSubscription = activeSubscriptions.get(key);
-        const isSameSubscription =
-          activeSubscription?.queryName === queryName && activeSubscription.argsKey === argsKey;
-
-        if (isSameSubscription) {
-          continue;
-        }
-
-        cleanupSubscription(key);
-        errors.update((current) => setKey(current, key, undefined));
-        statuses.update((current) => setKey(current, key, 'pending'));
-
-        if (!(key in untracked(results))) {
-          results.update((current) => setKey(current, key, undefined));
-        }
-
-        const cachedResult = convex.client.localQueryResult(queryName, definition.args) as
-          | FunctionReturnType<typeof definition.query>
-          | undefined;
-
-        if (cachedResult !== undefined) {
-          results.update((current) => setKey(current, key, cachedResult));
-        }
-
-        const subscription: ActiveQuerySubscription = {
-          key,
-          queryName,
-          argsKey,
-          unsubscribe: () => {},
-        };
-
-        const unsubscribe = convex.onUpdate(
-          definition.query,
-          definition.args,
-          (result) => {
-            if (activeSubscriptions.get(key) !== subscription) {
-              return;
-            }
-
-            results.update((current) => setKey(current, key, result));
-            errors.update((current) => setKey(current, key, undefined));
-            statuses.update((current) => setKey(current, key, 'success'));
+        controller.sync({
+          identity: `${queryName}:${argsKey}`,
+          value: {
+            query: definition.query,
+            args: definition.args as Record<string, Value>,
+            queryName,
           },
-          (error) => {
-            if (activeSubscriptions.get(key) !== subscription) {
-              return;
-            }
-
-            errors.update((current) => setKey(current, key, error));
-            statuses.update((current) => setKey(current, key, 'error'));
-          },
-        );
-
-        subscription.unsubscribe = unsubscribe;
-        activeSubscriptions.set(key, subscription);
+        });
       }
     });
-
-    destroyRef.onDestroy(() => cleanupAll());
 
     const isLoading = computed(() => Object.values(statuses()).some((status) => status === 'pending'));
 
