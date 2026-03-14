@@ -99,7 +99,7 @@ describe('Auth Guards', () => {
       TestBed.configureTestingModule({ providers });
     }
 
-    it('should redirect to /login when not authenticated', fakeAsync(() => {
+    it('should redirect to /login with returnUrl when not authenticated', fakeAsync(() => {
       isLoading.set(false);
       isAuthenticated.set(false);
       setupTestBed();
@@ -110,10 +110,10 @@ describe('Auth Guards', () => {
       tick();
       flush();
 
-      expect(router.url).toBe('/login');
+      expect(router.url).toBe('/login?returnUrl=%2Fdashboard');
     }));
 
-    it('should use custom login route from config', fakeAsync(() => {
+    it('should use custom login route from config and preserve its query params', fakeAsync(() => {
       isLoading.set(false);
       isAuthenticated.set(false);
 
@@ -147,7 +147,7 @@ describe('Auth Guards', () => {
           provideRouter(customRoutes),
           {
             provide: CONVEX_AUTH_GUARD_CONFIG,
-            useValue: { loginRoute: '/auth/signin' },
+            useValue: { loginRoute: '/auth/signin?source=guard#entry' },
           },
         ],
       });
@@ -158,7 +158,31 @@ describe('Auth Guards', () => {
       tick();
       flush();
 
-      expect(router.url).toBe('/auth/signin');
+      const redirectUrl = router.parseUrl(router.url);
+
+      expect(router.url.startsWith('/auth/signin?')).toBe(true);
+      expect(redirectUrl.queryParams).toEqual({
+        source: 'guard',
+        returnUrl: '/dashboard',
+      });
+      expect(redirectUrl.fragment).toBe('entry');
+    }));
+
+    it('preserves path, query params, and fragment in returnUrl', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(false);
+      setupTestBed();
+
+      const router = TestBed.inject(Router);
+
+      router.navigateByUrl('/dashboard?tab=activity#details');
+      tick();
+      flush();
+
+      const redirectUrl = router.parseUrl(router.url);
+
+      expect(router.url.startsWith('/login?')).toBe(true);
+      expect(redirectUrl.queryParams.returnUrl).toBe('/dashboard?tab=activity#details');
     }));
 
     it('waits for Convex confirmation before allowing navigation', fakeAsync(() => {

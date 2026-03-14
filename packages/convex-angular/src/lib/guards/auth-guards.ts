@@ -39,13 +39,23 @@ export interface ConvexAuthGuardConfig {
 export const CONVEX_AUTH_GUARD_CONFIG =
   new InjectionToken<ConvexAuthGuardConfig>('CONVEX_AUTH_GUARD_CONFIG');
 
+function createLoginRedirectTree(router: Router, loginRoute: string, returnUrl: string): UrlTree {
+  const loginUrlTree = router.parseUrl(loginRoute);
+  loginUrlTree.queryParams = {
+    ...loginUrlTree.queryParams,
+    returnUrl,
+  };
+
+  return loginUrlTree;
+}
+
 /**
  * Route guard that requires authentication.
  *
  * This guard will:
  * 1. Wait for auth to finish loading
  * 2. Allow navigation if the user is authenticated
- * 3. Redirect to the login route if the user is not authenticated
+ * 3. Redirect to the login route with `returnUrl` if the user is not authenticated
  *
  * @example
  * ```typescript
@@ -75,7 +85,7 @@ export const CONVEX_AUTH_GUARD_CONFIG =
  *
  * @public
  */
-export const convexAuthGuard: CanActivateFn = (): Observable<
+export const convexAuthGuard: CanActivateFn = (_route, state): Observable<
   boolean | UrlTree
 > => {
   const auth = injectAuth();
@@ -97,8 +107,8 @@ export const convexAuthGuard: CanActivateFn = (): Observable<
       if (status === 'authenticated') {
         return true;
       }
-      // Redirect to login
-      return router.createUrlTree([loginRoute]);
+
+      return createLoginRedirectTree(router, loginRoute, state.url);
     }),
   );
 };

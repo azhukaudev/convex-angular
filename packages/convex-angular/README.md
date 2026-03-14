@@ -728,7 +728,12 @@ export const routes: Routes = [
 ];
 ```
 
-By default, unauthenticated users are redirected to `/login`. To customize the redirect route:
+By default, unauthenticated users are redirected to `/login` with a
+`returnUrl` query param preserving the blocked destination. For example,
+visiting `/profile?tab=security#sessions` while signed out redirects to
+`/login?returnUrl=%2Fprofile%3Ftab%3Dsecurity%23sessions`.
+
+To customize the redirect route:
 
 ```typescript
 // app.config.ts

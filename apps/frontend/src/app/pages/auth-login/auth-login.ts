@@ -1,7 +1,7 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputTextModule } from 'primeng/inputtext';
@@ -33,6 +33,7 @@ type AuthMode = 'sign-in' | 'sign-up';
   },
 })
 export default class AuthLogin {
+  private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly fb = inject(NonNullableFormBuilder);
   readonly authService = inject(DemoAuthService);
@@ -89,11 +90,21 @@ export default class AuthLogin {
         : await this.authService.signIn(email, password);
 
     if (success) {
-      await this.router.navigate(['/auth/success']);
+      await this.router.navigateByUrl(this.getSuccessUrl());
     }
   }
 
   private isAuthMode(value: unknown): value is AuthMode {
     return value === 'sign-in' || value === 'sign-up';
+  }
+
+  private getSuccessUrl(): string {
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+
+    if (!returnUrl || !returnUrl.startsWith('/') || returnUrl.startsWith('//')) {
+      return '/auth/success';
+    }
+
+    return returnUrl;
   }
 }
