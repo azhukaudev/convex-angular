@@ -326,7 +326,35 @@ describe('injectPaginatedQuery', () => {
     expect(result).toBe(false);
   }));
 
-  it('should preserve existing results on error', fakeAsync(() => {
+  it('should report no load-more capability after a first-page error', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const testError = new Error('Test error');
+    onErrorCallback(testError);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.todos.results()).toEqual([]);
+    expect(fixture.componentInstance.todos.error()).toBe(testError);
+    expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(false);
+    expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
+    expect(fixture.componentInstance.todos.canLoadMore()).toBe(false);
+    expect(fixture.componentInstance.todos.status()).toBe('error');
+    expect(fixture.componentInstance.todos.loadMore(5)).toBe(false);
+  }));
+
+  it('should preserve existing results and load-more capability on error after data loads', fakeAsync(() => {
     @Component({
       template: '',
       standalone: true,
@@ -363,7 +391,7 @@ describe('injectPaginatedQuery', () => {
     expect(fixture.componentInstance.todos.error()).toBe(testError);
     expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(false);
     expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
-    expect(fixture.componentInstance.todos.canLoadMore()).toBe(true); // Allow retry
+    expect(fixture.componentInstance.todos.canLoadMore()).toBe(true);
   }));
 
   it('should reset pagination when reset() is called', fakeAsync(() => {
@@ -399,6 +427,37 @@ describe('injectPaginatedQuery', () => {
     // Should have called unsubscribe and resubscribed
     expect(mockUnsubscribe).toHaveBeenCalled();
     expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+  }));
+
+  it('should resubscribe from the first page when reset() is used after a first-page error', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    onErrorCallback(new Error('Test error'));
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.todos.status()).toBe('error');
+    expect(fixture.componentInstance.todos.canLoadMore()).toBe(false);
+
+    fixture.componentInstance.todos.reset();
+    fixture.detectChanges();
+    tick();
+
+    expect(mockUnsubscribe).toHaveBeenCalled();
+    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+    expect(fixture.componentInstance.todos.status()).toBe('pending');
+    expect(fixture.componentInstance.todos.error()).toBeUndefined();
   }));
 
   it('should resubscribe when args change', fakeAsync(() => {

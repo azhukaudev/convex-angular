@@ -368,8 +368,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
           error.set(err);
           isLoadingFirstPage.set(false);
           isLoadingMore.set(false);
-          // Allow retry via loadMore
-          canLoadMore.set(true);
+          canLoadMore.set(currentLoadMore !== undefined);
           isExhausted.set(false);
           options.onError?.(err);
         },

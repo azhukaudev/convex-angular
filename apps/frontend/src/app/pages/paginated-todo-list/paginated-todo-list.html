@@ -148,7 +148,7 @@
       @if (todos.error()) {
         <div class="text-sm text-red-500">
           Error: {{ todos.error()?.message }}
-          <button class="ml-2 underline" (click)="handleLoadMore()">
+          <button class="ml-2 underline" (click)="handleRetry()">
             Retry
           </button>
         </div>

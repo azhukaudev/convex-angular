@@ -79,6 +79,15 @@ export default class PaginatedTodoList {
     this.todos.loadMore(this.pageSize());
   }
 
+  handleRetry() {
+    if (this.todos.canLoadMore()) {
+      this.todos.loadMore(this.pageSize());
+      return;
+    }
+
+    this.todos.reset();
+  }
+
   handleReset() {
     this.todos.reset();
   }

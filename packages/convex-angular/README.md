@@ -270,14 +270,14 @@ The paginated query returns:
 - `results()` - Accumulated results from all loaded pages
 - `isLoadingFirstPage()` - True when loading the first page
 - `isLoadingMore()` - True when loading additional pages
-- `canLoadMore()` - True when more items are available
+- `canLoadMore()` - True when the current subscription can load another page
 - `isExhausted()` - True when all items have been loaded
 - `isSkipped()` - True when the query is skipped via `skipToken`
 - `isSuccess()` - True when the first page has loaded successfully
 - `status()` - `'pending' | 'success' | 'error' | 'skipped'`
 - `error()` - Error if the query failed
 - `loadMore(n)` - Load `n` more items
-- `reset()` - Reset pagination and reload from the beginning
+- `reset()` - Reset pagination and reload from the beginning; also use this to retry first-page failures
 
 ### Optimistic paginated updates
 
