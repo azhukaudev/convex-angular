@@ -514,11 +514,7 @@ export class ClerkAuthService implements ClerkAuthProvider {
   readonly orgRole = computed(() => this.clerk.organization()?.membership?.role);
 
   async getToken(options?: { template?: string; skipCache?: boolean }) {
-    try {
-      return (await this.clerk.session?.getToken(options)) ?? null;
-    } catch {
-      return null;
-    }
+    return (await this.clerk.session?.getToken(options)) ?? null;
   }
 }
 
@@ -536,6 +532,8 @@ If your Clerk service exposes upstream failures, forward them via the optional
 `error` signal so `injectAuth().error()` can surface them. Clerk integrations
 can also expose reactive auth context like `orgId`/`orgRole`; `provideClerkAuth()`
 uses that state to refresh the token when organization context changes.
+Return `null` only when the user is signed out or no token is available. Let
+real token-fetch failures throw so `injectAuth().error()` can surface them.
 
 ### Auth0 Integration
 
@@ -635,6 +633,8 @@ Optional `ConvexAuthProvider` hooks:
 Return `null` or `undefined` from `fetchAccessToken(...)` when the user is
 signed out or no token is available. That keeps auth unauthenticated without
 marking it as an error.
+Let unexpected token-fetch failures throw so they become `injectAuth().error()`
+instead of being treated as ordinary sign-out.
 
 If you wire `CONVEX_AUTH` manually, use `useExisting` (not `useClass`) when the
 auth provider is also injected elsewhere, otherwise you can end up with two

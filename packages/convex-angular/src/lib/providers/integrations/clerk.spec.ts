@@ -159,14 +159,47 @@ describe('provideClerkAuth', () => {
     });
   });
 
-  it('returns null when Clerk token fetching throws', async () => {
+  it('rethrows when Clerk token fetching fails', async () => {
     getToken.mockRejectedValue(new Error('boom'));
     configureTestingModule();
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    await expect(provider.fetchAccessToken({ forceRefreshToken: true })).resolves.toBeNull();
+    await expect(provider.fetchAccessToken({ forceRefreshToken: true })).rejects.toThrow('boom');
   });
+
+  it('surfaces Clerk token fetch failures through injectAuth().error()', fakeAsync(() => {
+    isSignedIn.set(true);
+    getToken.mockRejectedValue(new Error('boom'));
+    configureTestingModule();
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    let token: string | null | undefined;
+    setAuthFetcher?.({ forceRefreshToken: true }).then((value) => {
+      token = value;
+    });
+    tick();
+    fixture.detectChanges();
+
+    expect(token).toBeNull();
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+    expect(fixture.componentInstance.auth.error()).toEqual(
+      expect.objectContaining({
+        message: '[convex-angular auth] Token fetch failed: boom',
+      }),
+    );
+  }));
 
   it('bundles provideConvexAuth so injectAuth works without separate setup', fakeAsync(() => {
     isSignedIn.set(true);

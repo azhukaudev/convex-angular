@@ -114,11 +114,7 @@ export const CLERK_AUTH = new InjectionToken<ClerkAuthProvider>('CLERK_AUTH');
  *   readonly orgRole = computed(() => this.clerk.organization()?.membership?.role);
  *
  *   async getToken(options?: { template?: string; skipCache?: boolean }) {
- *     try {
- *       return await this.clerk.session?.getToken(options) ?? null;
- *     } catch {
- *       return null;
- *     }
+ *     return (await this.clerk.session?.getToken(options)) ?? null;
  *   }
  * }
  *
@@ -150,16 +146,11 @@ export function provideClerkAuth(): EnvironmentProviders {
 
         const fetchAccessToken = async (args: {
           forceRefreshToken: boolean;
-        }) => {
-          try {
-            return await clerk.getToken({
-              template: 'convex',
-              skipCache: args.forceRefreshToken,
-            });
-          } catch {
-            return null;
-          }
-        };
+        }) =>
+          clerk.getToken({
+            template: 'convex',
+            skipCache: args.forceRefreshToken,
+          });
 
         return {
           isLoading: computed(() => !clerk.isLoaded()),

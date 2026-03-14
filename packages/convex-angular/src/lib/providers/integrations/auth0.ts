@@ -99,15 +99,11 @@ export const AUTH0_AUTH = new InjectionToken<Auth0AuthProvider>('AUTH0_AUTH');
  *   readonly isAuthenticated = toSignal(this.auth0.isAuthenticated$, { initialValue: false });
  *
  *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
- *     try {
- *       return await firstValueFrom(
- *         this.auth0.getAccessTokenSilently({
- *           cacheMode: options?.cacheMode,
- *         })
- *       );
- *     } catch {
- *       throw new Error('Failed to get access token');
- *     }
+ *     return firstValueFrom(
+ *       this.auth0.getAccessTokenSilently({
+ *         cacheMode: options?.cacheMode,
+ *       })
+ *     );
  *   }
  * }
  *
@@ -141,15 +137,10 @@ export function provideAuth0Auth(): EnvironmentProviders {
           isLoading: computed(() => auth0.isLoading()),
           isAuthenticated: computed(() => auth0.isAuthenticated()),
           error: auth0.error,
-          fetchAccessToken: async (args) => {
-            try {
-              return await auth0.getAccessTokenSilently({
-                cacheMode: args.forceRefreshToken ? 'off' : 'on',
-              });
-            } catch {
-              return null;
-            }
-          },
+          fetchAccessToken: (args) =>
+            auth0.getAccessTokenSilently({
+              cacheMode: args.forceRefreshToken ? 'off' : 'on',
+            }),
         };
       },
     },
