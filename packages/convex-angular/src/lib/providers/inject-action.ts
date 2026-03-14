@@ -1,4 +1,4 @@
-import { EnvironmentInjector, Signal, computed, signal } from '@angular/core';
+import { DestroyRef, EnvironmentInjector, Signal, computed, inject, signal } from '@angular/core';
 import { FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { ActionStatus } from '../types';
@@ -121,10 +121,13 @@ export function injectAction<Action extends ActionReference>(
   action: Action,
   options?: ActionOptions<Action>,
 ): ActionResult<Action> {
-  const convex = runInResolvedInjectionContext(
+  const { convex, destroyRef } = runInResolvedInjectionContext(
     injectAction,
     options?.injectRef,
-    () => injectConvex(),
+    () => ({
+      convex: injectConvex(),
+      destroyRef: inject(DestroyRef),
+    }),
   );
 
   // Internal signals for tracking state
@@ -132,6 +135,7 @@ export function injectAction<Action extends ActionReference>(
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
   const currentVersion = signal(0);
+  let isDestroyed = false;
 
   // Track if action has been called (to distinguish idle from success)
   const hasCompleted = signal(false);
@@ -156,12 +160,21 @@ export function injectAction<Action extends ActionReference>(
     hasCompleted.set(false);
   };
 
+  destroyRef.onDestroy(() => {
+    isDestroyed = true;
+    reset();
+  });
+
   /**
    * Execute the action with the given arguments.
    */
   const run = async (
     args: Action['_args'],
   ): Promise<FunctionReturnType<Action>> => {
+    if (isDestroyed) {
+      return convex.action(action, args);
+    }
+
     const callVersion = currentVersion() + 1;
     currentVersion.set(callVersion);
 

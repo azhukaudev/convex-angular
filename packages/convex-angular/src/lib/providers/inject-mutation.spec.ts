@@ -1,4 +1,4 @@
-import { Component, EnvironmentInjector } from '@angular/core';
+import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
@@ -954,6 +954,84 @@ describe('injectMutation', () => {
       expect(fixture.componentInstance.addTodo.status()).toBe('idle');
       expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
     }));
+
+    it('should ignore a pending success after the owning component is destroyed', fakeAsync(() => {
+      const pending = createDeferred<{ id: string }>();
+      const onSuccess = jest.fn();
+      mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation, { onSuccess });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let result: unknown;
+      fixture.componentInstance.addTodo.mutate({ title: 'test' }).then((value) => (result = value));
+
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(true);
+
+      fixture.destroy();
+
+      expect(fixture.componentInstance.addTodo.data()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+
+      pending.resolve({ id: 'after-destroy' });
+      tick();
+
+      expect(result).toEqual({ id: 'after-destroy' });
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.addTodo.data()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+    }));
+
+    it('should ignore a pending failure after the owning component is destroyed', fakeAsync(() => {
+      const pending = createDeferred<{ id: string }>();
+      const onError = jest.fn();
+      mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation, { onError });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let rejection: unknown;
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }).catch((error) => (rejection = error)));
+
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(true);
+
+      fixture.destroy();
+
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+
+      const destroyedError = new Error('after destroy');
+      pending.reject(destroyedError);
+      tick();
+
+      expect(rejection).toBe(destroyedError);
+      expect(onError).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.addTodo.data()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
+      expect(fixture.componentInstance.addTodo.status()).toBe('idle');
+      expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+    }));
   });
 
   describe('injectRef', () => {
@@ -971,6 +1049,70 @@ describe('injectMutation', () => {
         { title: 'test' },
         { optimisticUpdate: undefined },
       );
+    }));
+
+    it('should ignore a pending success after the provided injector is destroyed', fakeAsync(() => {
+      const pending = createDeferred<{ id: string }>();
+      const onSuccess = jest.fn();
+      mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
+
+      const parentInjector = TestBed.inject(EnvironmentInjector);
+      const childInjector = createEnvironmentInjector([], parentInjector);
+      const addTodo = injectMutation(mockMutation, { injectRef: childInjector, onSuccess });
+
+      let result: unknown;
+      addTodo.mutate({ title: 'test' }).then((value) => (result = value));
+
+      expect(addTodo.isLoading()).toBe(true);
+
+      childInjector.destroy();
+
+      expect(addTodo.data()).toBeUndefined();
+      expect(addTodo.error()).toBeUndefined();
+      expect(addTodo.status()).toBe('idle');
+      expect(addTodo.isLoading()).toBe(false);
+
+      pending.resolve({ id: 'after-destroy' });
+      tick();
+
+      expect(result).toEqual({ id: 'after-destroy' });
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(addTodo.data()).toBeUndefined();
+      expect(addTodo.error()).toBeUndefined();
+      expect(addTodo.status()).toBe('idle');
+      expect(addTodo.isLoading()).toBe(false);
+    }));
+
+    it('should ignore a pending failure after the provided injector is destroyed', fakeAsync(() => {
+      const pending = createDeferred<{ id: string }>();
+      const onError = jest.fn();
+      mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
+
+      const parentInjector = TestBed.inject(EnvironmentInjector);
+      const childInjector = createEnvironmentInjector([], parentInjector);
+      const addTodo = injectMutation(mockMutation, { injectRef: childInjector, onError });
+
+      let rejection: unknown;
+      ignoreRejection(addTodo.mutate({ title: 'test' }).catch((error) => (rejection = error)));
+
+      expect(addTodo.isLoading()).toBe(true);
+
+      childInjector.destroy();
+
+      expect(addTodo.error()).toBeUndefined();
+      expect(addTodo.status()).toBe('idle');
+      expect(addTodo.isLoading()).toBe(false);
+
+      const destroyedError = new Error('after destroy');
+      pending.reject(destroyedError);
+      tick();
+
+      expect(rejection).toBe(destroyedError);
+      expect(onError).not.toHaveBeenCalled();
+      expect(addTodo.data()).toBeUndefined();
+      expect(addTodo.error()).toBeUndefined();
+      expect(addTodo.status()).toBe('idle');
+      expect(addTodo.isLoading()).toBe(false);
     }));
 
     it('should still throw outside an injection context without injectRef', () => {

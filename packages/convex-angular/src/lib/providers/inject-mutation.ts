@@ -1,4 +1,4 @@
-import { EnvironmentInjector, Signal, computed, signal } from '@angular/core';
+import { DestroyRef, EnvironmentInjector, Signal, computed, inject, signal } from '@angular/core';
 import { OptimisticUpdate } from 'convex/browser';
 import {
   FunctionArgs,
@@ -141,10 +141,13 @@ export function injectMutation<Mutation extends MutationReference>(
   mutation: Mutation,
   options?: MutationOptions<Mutation>,
 ): MutationResult<Mutation> {
-  const convex = runInResolvedInjectionContext(
+  const { convex, destroyRef } = runInResolvedInjectionContext(
     injectMutation,
     options?.injectRef,
-    () => injectConvex(),
+    () => ({
+      convex: injectConvex(),
+      destroyRef: inject(DestroyRef),
+    }),
   );
 
   // Internal signals for tracking state
@@ -152,6 +155,7 @@ export function injectMutation<Mutation extends MutationReference>(
   const error = signal<Error | undefined>(undefined);
   const isLoading = signal(false);
   const currentVersion = signal(0);
+  let isDestroyed = false;
 
   // Track if mutation has been called (to distinguish idle from success)
   const hasCompleted = signal(false);
@@ -176,12 +180,23 @@ export function injectMutation<Mutation extends MutationReference>(
     hasCompleted.set(false);
   };
 
+  destroyRef.onDestroy(() => {
+    isDestroyed = true;
+    reset();
+  });
+
   /**
    * Execute the mutation with the given arguments.
    */
   const mutate = async (
     args: FunctionArgs<Mutation>,
   ): Promise<FunctionReturnType<Mutation>> => {
+    if (isDestroyed) {
+      return convex.mutation(mutation, args, {
+        optimisticUpdate: options?.optimisticUpdate,
+      });
+    }
+
     const callVersion = currentVersion() + 1;
     currentVersion.set(callVersion);
 

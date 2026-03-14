@@ -16,7 +16,7 @@ The Angular client for Convex.
 - ⚡ Optimistic pagination helpers: `insertAtTop`, `insertAtBottomIfLoaded`, `insertAtPosition`
 - ⏭️ Conditional Queries: Use `skipToken` to conditionally skip queries
 - 📡 Signal Integration: [Angular Signals](https://angular.dev/guide/signals) for reactive state
-- 🧹 Auto Cleanup: Automatic lifecycle management
+- 🧹 Auto Cleanup: Automatic lifecycle management for subscriptions and helper-owned reactive state
 
 ## 🚀 Getting Started
 
@@ -194,6 +194,10 @@ export class AppComponent {
 `data()` is typed as `T | undefined` and stays undefined until the first
 successful mutation result or after `reset()`.
 
+If the owning Angular scope is destroyed while a mutation is in flight, the
+returned promise still settles, but the helper stops updating its reactive
+state and stops firing `onSuccess` / `onError`.
+
 ### Running actions
 
 Use `injectAction` to run actions.
@@ -226,6 +230,10 @@ export class AppComponent {
 
 `data()` is typed as `T | undefined` and stays undefined until the first
 successful action result or after `reset()`.
+
+If the owning Angular scope is destroyed while an action is in flight, the
+returned promise still settles, but the helper stops updating its reactive
+state and stops firing `onSuccess` / `onError`.
 
 ### Paginated queries
 
