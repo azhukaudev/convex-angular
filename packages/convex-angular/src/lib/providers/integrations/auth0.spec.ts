@@ -5,7 +5,7 @@ import { ConvexClient } from 'convex/browser';
 import { CONVEX_AUTH } from '../../tokens/auth';
 import { CONVEX } from '../../tokens/convex';
 import { injectAuth, provideConvexAuth } from '../inject-auth';
-import { AUTH0_AUTH, Auth0AuthProvider, provideAuth0Auth } from './auth0';
+import { AUTH0_AUTH, Auth0AuthProvider, Auth0TokenResponse, provideAuth0Auth } from './auth0';
 
 describe('provideAuth0Auth', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
@@ -18,7 +18,10 @@ describe('provideAuth0Auth', () => {
   let isLoading: ReturnType<typeof signal<boolean>>;
   let isAuthenticated: ReturnType<typeof signal<boolean>>;
   let error: ReturnType<typeof signal<Error | undefined>>;
-  let getAccessTokenSilently: jest.Mock<Promise<string>, [{ cacheMode?: 'on' | 'off' }?]>;
+  let getAccessTokenSilently: jest.Mock<
+    Promise<Auth0TokenResponse>,
+    [{ detailedResponse: true; cacheMode?: 'on' | 'off' }]
+  >;
 
   function createAuth0Provider(): Auth0AuthProvider {
     return {
@@ -43,7 +46,7 @@ describe('provideAuth0Auth', () => {
     isLoading = signal(false);
     isAuthenticated = signal(false);
     error = signal<Error | undefined>(undefined);
-    getAccessTokenSilently = jest.fn().mockResolvedValue('token');
+    getAccessTokenSilently = jest.fn().mockResolvedValue({ id_token: 'token' });
     setAuthFetcher = undefined;
     setAuthOnChange = undefined;
 
@@ -102,7 +105,10 @@ describe('provideAuth0Auth', () => {
     const token = await provider.fetchAccessToken({ forceRefreshToken: false });
 
     expect(token).toBe('token');
-    expect(getAccessTokenSilently).toHaveBeenCalledWith({ cacheMode: 'on' });
+    expect(getAccessTokenSilently).toHaveBeenCalledWith({
+      detailedResponse: true,
+      cacheMode: 'on',
+    });
   });
 
   it('requests fresh Auth0 tokens when forceRefreshToken is true', async () => {
@@ -112,7 +118,10 @@ describe('provideAuth0Auth', () => {
     const token = await provider.fetchAccessToken({ forceRefreshToken: true });
 
     expect(token).toBe('token');
-    expect(getAccessTokenSilently).toHaveBeenCalledWith({ cacheMode: 'off' });
+    expect(getAccessTokenSilently).toHaveBeenCalledWith({
+      detailedResponse: true,
+      cacheMode: 'off',
+    });
   });
 
   it('rethrows when Auth0 token fetching fails', async () => {
@@ -122,6 +131,38 @@ describe('provideAuth0Auth', () => {
     const provider = TestBed.inject(CONVEX_AUTH);
 
     await expect(provider.fetchAccessToken({ forceRefreshToken: true })).rejects.toThrow('boom');
+  });
+
+  it('throws a focused error when Auth0 returns a string token instead of a detailed response', async () => {
+    configureTestingModule({
+      isLoading,
+      isAuthenticated,
+      error,
+      getAccessTokenSilently: jest.fn().mockResolvedValue('token' as unknown as Auth0TokenResponse),
+    });
+
+    const provider = TestBed.inject(CONVEX_AUTH);
+
+    await expect(provider.fetchAccessToken({ forceRefreshToken: true })).rejects.toThrow(
+      'Auth0 provider must return the detailed response from `getAccessTokenSilently(...)` with an `id_token`.',
+    );
+  });
+
+  it('throws a focused error when Auth0 omits id_token from the detailed response', async () => {
+    configureTestingModule({
+      isLoading,
+      isAuthenticated,
+      error,
+      getAccessTokenSilently: jest
+        .fn()
+        .mockResolvedValue({ access_token: 'access-only' } as unknown as Auth0TokenResponse),
+    });
+
+    const provider = TestBed.inject(CONVEX_AUTH);
+
+    await expect(provider.fetchAccessToken({ forceRefreshToken: true })).rejects.toThrow(
+      'Auth0 provider must return the detailed response from `getAccessTokenSilently(...)` with an `id_token`.',
+    );
   });
 
   it('surfaces Auth0 token fetch failures through injectAuth().error()', fakeAsync(() => {
@@ -153,6 +194,40 @@ describe('provideAuth0Auth', () => {
     expect(fixture.componentInstance.auth.error()).toEqual(
       expect.objectContaining({
         message: '[convex-angular auth] Token fetch failed: boom',
+      }),
+    );
+  }));
+
+  it('surfaces invalid Auth0 detailed responses through injectAuth().error() and resolves null to Convex', fakeAsync(() => {
+    isAuthenticated.set(true);
+    getAccessTokenSilently.mockResolvedValue({ access_token: 'access-only' } as unknown as Auth0TokenResponse);
+    configureTestingModule();
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    let token: string | null | undefined;
+    setAuthFetcher?.({ forceRefreshToken: true }).then((value) => {
+      token = value;
+    });
+    tick();
+    fixture.detectChanges();
+
+    expect(token).toBeNull();
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+    expect(fixture.componentInstance.auth.error()).toEqual(
+      expect.objectContaining({
+        message:
+          '[convex-angular auth] Token fetch failed: Auth0 provider must return the detailed response from `getAccessTokenSilently(...)` with an `id_token`. String-only token providers are no longer supported.',
       }),
     );
   }));

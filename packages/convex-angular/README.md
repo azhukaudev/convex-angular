@@ -557,8 +557,16 @@ export class Auth0AuthService implements Auth0AuthProvider {
     initialValue: false,
   });
 
-  async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
-    return firstValueFrom(this.auth0.getAccessTokenSilently({ cacheMode: options?.cacheMode }));
+  async getAccessTokenSilently(options: {
+    detailedResponse: true;
+    cacheMode?: 'on' | 'off';
+  }) {
+    return firstValueFrom(
+      this.auth0.getAccessTokenSilently({
+        detailedResponse: options.detailedResponse,
+        cacheMode: options.cacheMode,
+      }),
+    );
   }
 }
 
@@ -574,6 +582,9 @@ export const appConfig: ApplicationConfig = {
 `provideAuth0Auth()` already includes `provideConvexAuth()`, so do not add both.
 If your Auth0 service can expose upstream auth failures, forward them via the
 optional `error` signal so `injectAuth().error()` can surface them.
+`provideAuth0Auth()` now requires the detailed Auth0 token response so it can
+forward `id_token` to Convex. Legacy string-only implementations of
+`getAccessTokenSilently()` are no longer supported.
 
 ### Custom Auth Providers
 

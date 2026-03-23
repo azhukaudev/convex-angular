@@ -11,6 +11,36 @@ import { CONVEX_AUTH, ConvexAuthProvider } from '../../tokens/auth';
 import { provideConvexAuth } from '../inject-auth';
 
 /**
+ * Minimal Auth0 detailed token response required by Convex.
+ *
+ * Auth0's Angular SDK can return a richer object, but Convex only needs the
+ * `id_token` from that response.
+ *
+ * @public
+ */
+export interface Auth0TokenResponse {
+  id_token: string;
+  [key: string]: unknown;
+}
+
+function extractAuth0IdToken(response: unknown): string {
+  if (
+    typeof response === 'object' &&
+    response !== null &&
+    'id_token' in response &&
+    typeof response.id_token === 'string' &&
+    response.id_token.length > 0
+  ) {
+    return response.id_token;
+  }
+
+  throw new Error(
+    'Auth0 provider must return the detailed response from `getAccessTokenSilently(...)` with an `id_token`. ' +
+      'String-only token providers are no longer supported.',
+  );
+}
+
+/**
  * Interface that your Auth0 auth service must implement.
  *
  * This is a low-level integration where you provide your own service
@@ -25,10 +55,14 @@ import { provideConvexAuth } from '../inject-auth';
  *   readonly isLoading = toSignal(this.auth0.isLoading$, { initialValue: true });
  *   readonly isAuthenticated = toSignal(this.auth0.isAuthenticated$, { initialValue: false });
  *
- *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
- *     return this.auth0.getAccessTokenSilently({
+ *   async getAccessTokenSilently(options: {
+ *     detailedResponse: true;
+ *     cacheMode?: 'on' | 'off';
+ *   }) {
+ *     return firstValueFrom(this.auth0.getAccessTokenSilently({
+ *       detailedResponse: options.detailedResponse,
  *       cacheMode: options?.cacheMode,
- *     });
+ *     }));
  *   }
  * }
  * ```
@@ -50,12 +84,12 @@ export interface Auth0AuthProvider {
   /**
    * Function to get an access token from Auth0.
    *
+   * @param options.detailedResponse - Must be `true` so the provider returns
+   * the Auth0 detailed token response including `id_token`
    * @param options.cacheMode - 'on' to use cache, 'off' to bypass cache
-   * @returns Promise resolving to the access token
+   * @returns Promise resolving to the detailed token response
    */
-  getAccessTokenSilently(options?: {
-    cacheMode?: 'on' | 'off';
-  }): Promise<string>;
+  getAccessTokenSilently(options: { detailedResponse: true; cacheMode?: 'on' | 'off' }): Promise<Auth0TokenResponse>;
 
   /**
    * Optional provider-owned error signal.
@@ -98,9 +132,13 @@ export const AUTH0_AUTH = new InjectionToken<Auth0AuthProvider>('AUTH0_AUTH');
  *   readonly isLoading = toSignal(this.auth0.isLoading$, { initialValue: true });
  *   readonly isAuthenticated = toSignal(this.auth0.isAuthenticated$, { initialValue: false });
  *
- *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
+ *   async getAccessTokenSilently(options: {
+ *     detailedResponse: true;
+ *     cacheMode?: 'on' | 'off';
+ *   }) {
  *     return firstValueFrom(
  *       this.auth0.getAccessTokenSilently({
+ *         detailedResponse: options.detailedResponse,
  *         cacheMode: options?.cacheMode,
  *       })
  *     );
@@ -137,10 +175,13 @@ export function provideAuth0Auth(): EnvironmentProviders {
           isLoading: computed(() => auth0.isLoading()),
           isAuthenticated: computed(() => auth0.isAuthenticated()),
           error: auth0.error,
-          fetchAccessToken: (args) =>
-            auth0.getAccessTokenSilently({
-              cacheMode: args.forceRefreshToken ? 'off' : 'on',
-            }),
+          fetchAccessToken: async (args) =>
+            extractAuth0IdToken(
+              await auth0.getAccessTokenSilently({
+                detailedResponse: true,
+                cacheMode: args.forceRefreshToken ? 'off' : 'on',
+              }),
+            ),
         };
       },
     },
