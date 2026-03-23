@@ -240,10 +240,6 @@ state and stops firing `onSuccess` / `onError`.
 Use `injectPaginatedQuery` for infinite scroll or "load more" patterns.
 Your Convex query must accept a `paginationOpts` argument.
 
-Note: `injectPaginatedQuery` currently relies on Convex's experimental
-paginated subscription client APIs. Check `convex-angular` release notes before
-upgrading `convex` to make sure your client version is still supported.
-
 ```typescript
 import { Component } from '@angular/core';
 import { injectPaginatedQuery } from 'convex-angular';
@@ -285,7 +281,12 @@ The paginated query returns:
 - `status()` - `'pending' | 'success' | 'error' | 'skipped'`
 - `error()` - Error if the query failed
 - `loadMore(n)` - Load `n` more items
-- `reset()` - Reset pagination and reload from the beginning; also use this to retry first-page failures
+- `reset()` - Start a fresh pagination session from the beginning; also use this to retry first-page failures
+
+Each helper instance owns an isolated pagination session, even when two
+components use the same paginated query with the same arguments.
+`injectPaginatedQuery()` also restarts from page one when pagination cursors
+become invalid, so transient `InvalidCursor` errors recover automatically.
 
 ### Optimistic paginated updates
 

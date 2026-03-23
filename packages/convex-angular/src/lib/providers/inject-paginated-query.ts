@@ -1,5 +1,4 @@
 import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, isSignal, signal } from '@angular/core';
-import { ConvexClient } from 'convex/browser';
 import {
   FunctionArgs,
   FunctionReference,
@@ -7,7 +6,7 @@ import {
   PaginationOptions,
   PaginationResult,
 } from 'convex/server';
-import { Value } from 'convex/values';
+import { ConvexError, Value, compareValues } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { PaginatedQueryStatus } from '../types';
@@ -15,58 +14,78 @@ import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 import { createSubscriptionController, serializeArgs } from './query-subscription-lifecycle';
 
-/**
- * Pagination status returned by the Convex client.
- * @internal
- */
-type ClientPaginationStatus = 'LoadingFirstPage' | 'CanLoadMore' | 'LoadingMore' | 'Exhausted';
+type QueryPageKey = number;
+type ClientPaginationOptions = PaginationOptions & { id: number };
 
-/**
- * The result from a paginated query subscription callback.
- * This matches the actual runtime type from ConvexClient.onPaginatedUpdate_experimental.
- * @internal
- */
-interface ClientPaginatedResult<T> {
-  results: T[];
-  status: ClientPaginationStatus;
-  loadMore: (numItems: number) => boolean;
+interface PaginatedSessionTarget<Query extends PaginatedQueryReference> {
+  args: PaginatedQueryArgs<Query>;
+  initialNumItems: number;
+  sessionId: number;
 }
 
-type ExperimentalPaginatedSubscriptionClient = {
-  onPaginatedUpdate_experimental: ConvexClient['onPaginatedUpdate_experimental'];
-};
-
-function getPaginatedSubscriptionClient(convex: ConvexClient): ExperimentalPaginatedSubscriptionClient {
-  const paginatedClient = convex as ConvexClient & Partial<ExperimentalPaginatedSubscriptionClient>;
-
-  if (typeof paginatedClient.onPaginatedUpdate_experimental !== 'function') {
-    throw new Error(
-      '[convex-angular] `injectPaginatedQuery()` requires a Convex client with experimental paginated query support.',
-    );
-  }
-
-  return paginatedClient as ExperimentalPaginatedSubscriptionClient;
+interface PageSubscriptionState<Query extends PaginatedQueryReference> {
+  args: FunctionArgs<Query>;
+  error?: Error;
+  result?: FunctionReturnType<Query>;
+  unsubscribe?: () => void;
 }
 
-function subscribeToPaginatedQuery<Query extends PaginatedQueryReference>(
-  convex: ConvexClient,
-  query: Query,
-  args: PaginatedQueryArgs<Query>,
-  initialNumItems: number,
-  onUpdate: (result: ClientPaginatedResult<PaginatedQueryItem<Query>>) => void,
-  onError: (err: Error) => void,
-): () => void {
-  const paginatedClient = getPaginatedSubscriptionClient(convex);
+interface SessionSummary<Query extends PaginatedQueryReference> {
+  results: PaginatedQueryItem<Query>[];
+  error?: Error;
+  isLoadingFirstPage: boolean;
+  isLoadingMore: boolean;
+  canLoadMore: boolean;
+  isExhausted: boolean;
+  loadMoreCursor?: string;
+}
 
-  return paginatedClient.onPaginatedUpdate_experimental(
-    query,
-    args as FunctionArgs<Query>,
-    { initialNumItems },
-    (rawResult) => {
-      onUpdate(rawResult as unknown as ClientPaginatedResult<PaginatedQueryItem<Query>>);
-    },
-    onError,
+function isInvalidCursorPaginationError(error: Error): boolean {
+  return (
+    error.message.includes('InvalidCursor') ||
+    (error instanceof ConvexError &&
+      typeof error.data === 'object' &&
+      error.data?.isConvexSystemError === true &&
+      error.data?.paginationError === 'InvalidCursor')
   );
+}
+
+function shouldSplitResult<Result extends PaginationResult<any>>(result: Result, initialNumItems: number): boolean {
+  return (
+    !!result.splitCursor &&
+    (result.pageStatus === 'SplitRecommended' ||
+      result.pageStatus === 'SplitRequired' ||
+      result.page.length > initialNumItems * 2)
+  );
+}
+
+function buildPaginationOptions(
+  numItems: number,
+  cursor: string | null,
+  id: number,
+  endCursor?: string,
+): ClientPaginationOptions {
+  return endCursor === undefined ? { numItems, cursor, id } : { numItems, cursor, endCursor, id };
+}
+
+function buildPageArgs<Query extends PaginatedQueryReference>(
+  args: PaginatedQueryArgs<Query>,
+  paginationOpts: ClientPaginationOptions,
+): FunctionArgs<Query> {
+  return { ...args, paginationOpts } as FunctionArgs<Query>;
+}
+
+function readPaginationOptions<Query extends PaginatedQueryReference>(
+  page: PageSubscriptionState<Query>,
+): ClientPaginationOptions {
+  return (page.args as FunctionArgs<Query> & { paginationOpts: ClientPaginationOptions }).paginationOpts;
+}
+
+let paginationSessionId = 0;
+
+function nextPaginationSessionId(): number {
+  paginationSessionId += 1;
+  return paginationSessionId;
 }
 
 /**
@@ -196,8 +215,10 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
  * Load data reactively from a paginated query to create a growing list.
  *
  * This can be used to power "infinite scroll" UIs.
- * This helper currently relies on Convex's experimental paginated
- * subscription client APIs.
+ *
+ * Each active helper instance owns an isolated pagination session. When the
+ * arguments, `initialNumItems`, or `reset()` change, the helper starts a fresh
+ * session from the first page.
  *
  * @example
  * ```typescript
@@ -262,7 +283,6 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
 
-    // Internal signals
     const results = signal<PaginatedQueryItem<Query>[]>([]);
     const error = signal<Error | undefined>(undefined);
     const isLoadingFirstPage = signal(true);
@@ -271,7 +291,6 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     const isExhausted = signal(false);
     const isSkipped = signal(false);
 
-    // Computed signals
     const isSuccess = computed(() => !isLoadingFirstPage() && !isSkipped() && !error());
     const status = computed<PaginatedQueryStatus>(() => {
       if (isSkipped()) return 'skipped';
@@ -280,16 +299,33 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       return 'success';
     });
 
-    // Track the loadMore function from the current subscription
     let currentLoadMore: ((numItems: number) => boolean) | undefined;
-
-    // Version counter to trigger reset
     const resetVersion = signal(0);
+    let lastEmittedSuccessResults: PaginatedQueryItem<Query>[] | undefined;
 
-    const subscription = createSubscriptionController<{
-      args: PaginatedQueryArgs<Query>;
-      initialNumItems: number;
-    }>(destroyRef, {
+    const applySummary = (summary: SessionSummary<Query>, emitSuccess: boolean) => {
+      results.set(summary.results);
+      error.set(summary.error);
+      isSkipped.set(false);
+      isLoadingFirstPage.set(summary.isLoadingFirstPage);
+      isLoadingMore.set(summary.isLoadingMore);
+      canLoadMore.set(summary.canLoadMore);
+      isExhausted.set(summary.isExhausted);
+      currentLoadMore = summary.canLoadMore ? currentLoadMore : undefined;
+
+      if (emitSuccess && !summary.error && !summary.isLoadingFirstPage && !summary.isLoadingMore) {
+        const logicalResultsChanged =
+          lastEmittedSuccessResults === undefined ||
+          compareValues(summary.results as Value, lastEmittedSuccessResults as Value) !== 0;
+
+        if (logicalResultsChanged) {
+          lastEmittedSuccessResults = summary.results;
+          options.onSuccess?.(summary.results);
+        }
+      }
+    };
+
+    const subscription = createSubscriptionController<PaginatedSessionTarget<Query>>(destroyRef, {
       onSkip: () => {
         results.set([]);
         error.set(undefined);
@@ -299,6 +335,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         isExhausted.set(false);
         isSkipped.set(true);
         currentLoadMore = undefined;
+        lastEmittedSuccessResults = undefined;
       },
       onPending: () => {
         results.set([]);
@@ -309,73 +346,225 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         isExhausted.set(false);
         isSkipped.set(false);
         currentLoadMore = undefined;
+        lastEmittedSuccessResults = undefined;
       },
-      subscribe: ({ args, initialNumItems }, controls) =>
-        subscribeToPaginatedQuery(
-          convex,
-          query,
-          args,
-          initialNumItems,
-          (rawResult) => {
-            if (!controls.isCurrent()) {
-              return;
+      subscribe: ({ args, initialNumItems, sessionId }, controls) => {
+        let disposed = false;
+        let nextPageKey = 1;
+        let pageKeys: QueryPageKey[] = [0];
+        const pages = new Map<QueryPageKey, PageSubscriptionState<Query>>();
+        const ongoingSplits = new Map<QueryPageKey, [QueryPageKey, QueryPageKey]>();
+        let restartScheduled = false;
+
+        const removePage = (key: QueryPageKey) => {
+          const page = pages.get(key);
+          page?.unsubscribe?.();
+          pages.delete(key);
+        };
+
+        const startPageSubscription = (key: QueryPageKey, paginationOpts: ClientPaginationOptions) => {
+          const page: PageSubscriptionState<Query> = {
+            args: buildPageArgs(args, paginationOpts),
+          };
+          pages.set(key, page);
+
+          page.unsubscribe = convex.onUpdate(
+            query,
+            page.args,
+            (result: FunctionReturnType<Query>) => {
+              if (!controls.isCurrent() || disposed) {
+                return;
+              }
+
+              page.result = result;
+              page.error = undefined;
+
+              if (!ongoingSplits.has(key) && shouldSplitResult(result, initialNumItems)) {
+                const splitCursor = result.splitCursor;
+                if (splitCursor) {
+                  const currentPaginationOpts = readPaginationOptions(page);
+                  const leftKey = nextPageKey;
+                  const rightKey = nextPageKey + 1;
+                  nextPageKey += 2;
+                  ongoingSplits.set(key, [leftKey, rightKey]);
+                  startPageSubscription(leftKey, {
+                    ...currentPaginationOpts,
+                    endCursor: splitCursor,
+                  });
+                  startPageSubscription(rightKey, {
+                    ...currentPaginationOpts,
+                    cursor: splitCursor,
+                    endCursor: result.continueCursor,
+                  });
+                }
+              }
+
+              recompute(true);
+            },
+            (err: Error) => {
+              if (!controls.isCurrent() || disposed) {
+                return;
+              }
+
+              if (isInvalidCursorPaginationError(err)) {
+                if (!restartScheduled) {
+                  restartScheduled = true;
+                  resetVersion.update((version) => version + 1);
+                }
+                return;
+              }
+
+              page.error = err;
+              options.onError?.(err);
+              recompute(false);
+            },
+          ) as unknown as () => void;
+        };
+
+        const completeSplit = (key: QueryPageKey, splitKeys: [QueryPageKey, QueryPageKey]) => {
+          const pageIndex = pageKeys.indexOf(key);
+          if (pageIndex >= 0) {
+            pageKeys = [...pageKeys.slice(0, pageIndex), ...splitKeys, ...pageKeys.slice(pageIndex + 1)];
+          }
+          ongoingSplits.delete(key);
+          removePage(key);
+        };
+
+        const summarize = (): SessionSummary<Query> => {
+          let aggregatedResults: PaginatedQueryItem<Query>[] = [];
+          let blockingError: Error | undefined;
+          let blockingErrorKey: QueryPageKey | undefined;
+          let splitError: Error | undefined;
+          let lastSuccessfulResult: FunctionReturnType<Query> | undefined;
+          let encounteredPendingPage = false;
+          let splitRequiredPending = false;
+
+          for (const key of pageKeys) {
+            const ongoingSplit = ongoingSplits.get(key);
+            if (ongoingSplit) {
+              const [leftKey, rightKey] = ongoingSplit;
+              const leftPage = pages.get(leftKey);
+              const rightPage = pages.get(rightKey);
+
+              if (leftPage?.result !== undefined && rightPage?.result !== undefined) {
+                completeSplit(key, ongoingSplit);
+                return summarize();
+              }
+
+              splitError ??= leftPage?.error ?? rightPage?.error;
             }
 
-            const result = rawResult;
-
-            currentLoadMore = result.loadMore;
-            results.set(result.results);
-            error.set(undefined);
-
-            switch (result.status) {
-              case 'LoadingFirstPage':
-                isLoadingFirstPage.set(true);
-                isLoadingMore.set(false);
-                canLoadMore.set(false);
-                isExhausted.set(false);
-                break;
-              case 'LoadingMore':
-                isLoadingFirstPage.set(false);
-                isLoadingMore.set(true);
-                canLoadMore.set(false);
-                isExhausted.set(false);
-                break;
-              case 'CanLoadMore':
-                isLoadingFirstPage.set(false);
-                isLoadingMore.set(false);
-                canLoadMore.set(true);
-                isExhausted.set(false);
-                break;
-              case 'Exhausted':
-                isLoadingFirstPage.set(false);
-                isLoadingMore.set(false);
-                canLoadMore.set(false);
-                isExhausted.set(true);
-                break;
+            const page = pages.get(key);
+            if (!page) {
+              encounteredPendingPage = true;
+              break;
             }
 
-            if (result.status !== 'LoadingFirstPage') {
-              options.onSuccess?.(result.results);
-            }
-          },
-          (err: Error) => {
-            if (!controls.isCurrent()) {
-              return;
+            if (page.error) {
+              blockingError = page.error;
+              blockingErrorKey = key;
+              break;
             }
 
-            error.set(err);
-            isLoadingFirstPage.set(false);
-            isLoadingMore.set(false);
-            canLoadMore.set(currentLoadMore !== undefined);
-            isExhausted.set(false);
-            options.onError?.(err);
-          },
-        ),
+            if (page.result === undefined) {
+              encounteredPendingPage = true;
+              break;
+            }
+
+            if (page.result.pageStatus === 'SplitRequired') {
+              splitRequiredPending = true;
+              break;
+            }
+
+            aggregatedResults = [...aggregatedResults, ...page.result.page];
+            lastSuccessfulResult = page.result;
+          }
+
+          const activeError = blockingError ?? splitError;
+          if (activeError) {
+            return {
+              results: aggregatedResults,
+              error: activeError,
+              isLoadingFirstPage: false,
+              isLoadingMore: false,
+              canLoadMore: false,
+              isExhausted: false,
+            };
+          }
+
+          if (encounteredPendingPage || splitRequiredPending || lastSuccessfulResult === undefined) {
+            const hasUsableFirstPage = lastSuccessfulResult !== undefined;
+            return {
+              results: aggregatedResults,
+              isLoadingFirstPage: !hasUsableFirstPage,
+              isLoadingMore: hasUsableFirstPage,
+              canLoadMore: false,
+              isExhausted: false,
+            };
+          }
+
+          if (lastSuccessfulResult.isDone) {
+            return {
+              results: aggregatedResults,
+              isLoadingFirstPage: false,
+              isLoadingMore: false,
+              canLoadMore: false,
+              isExhausted: true,
+            };
+          }
+
+          return {
+            results: aggregatedResults,
+            isLoadingFirstPage: false,
+            isLoadingMore: false,
+            canLoadMore: true,
+            isExhausted: false,
+            loadMoreCursor: lastSuccessfulResult.continueCursor,
+          };
+        };
+
+        const recompute = (emitSuccess: boolean) => {
+          if (!controls.isCurrent() || disposed) {
+            return;
+          }
+
+          const summary = summarize();
+          currentLoadMore = summary.canLoadMore
+            ? (numItems: number) => {
+                if (!controls.isCurrent() || disposed) {
+                  return false;
+                }
+
+                if (summary.isLoadingFirstPage || summary.isLoadingMore || !summary.loadMoreCursor) {
+                  return false;
+                }
+
+                const key = nextPageKey;
+                nextPageKey += 1;
+                pageKeys = [...pageKeys, key];
+                startPageSubscription(key, buildPaginationOptions(numItems, summary.loadMoreCursor, sessionId));
+                recompute(false);
+                return true;
+              }
+            : undefined;
+
+          applySummary(summary, emitSuccess);
+        };
+
+        startPageSubscription(0, buildPaginationOptions(initialNumItems, null, sessionId));
+        recompute(false);
+
+        return () => {
+          disposed = true;
+          currentLoadMore = undefined;
+          for (const key of pages.keys()) {
+            removePage(key);
+          }
+        };
+      },
     });
 
-    // Effect to reactively subscribe when args, reset version, or page size change
     effect(() => {
-      // Track dependencies
       const args = argsFn();
       const initialNumItems = isSignal(options.initialNumItems) ? options.initialNumItems() : options.initialNumItems;
       const version = resetVersion();
@@ -391,6 +580,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         value: {
           args,
           initialNumItems,
+          sessionId: nextPaginationSessionId(),
         },
       });
     });
@@ -403,7 +593,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     };
 
     const reset = () => {
-      resetVersion.update((v) => v + 1);
+      resetVersion.update((version) => version + 1);
     };
 
     return {

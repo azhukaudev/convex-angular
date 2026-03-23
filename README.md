@@ -251,7 +251,12 @@ The paginated query returns:
 - `status()` - `'pending' | 'success' | 'error' | 'skipped'`
 - `error()` - Error if the query failed
 - `loadMore(n)` - Load `n` more items
-- `reset()` - Reset pagination and reload from the beginning
+- `reset()` - Start a fresh pagination session from the beginning
+
+Each helper instance owns an isolated pagination session, even when two
+components use the same paginated query with the same arguments.
+`injectPaginatedQuery()` also restarts from page one when pagination cursors
+become invalid, so transient `InvalidCursor` errors recover automatically.
 
 ### Optimistic paginated updates
 
