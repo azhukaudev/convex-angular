@@ -1,4 +1,4 @@
-import { DestroyRef, EnvironmentInjector, Signal, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { OptimisticUpdate } from 'convex/browser';
 import {
   FunctionArgs,
@@ -15,6 +15,46 @@ import { runInResolvedInjectionContext } from './injection-context';
  */
 export type MutationReference = FunctionReference<'mutation'>;
 
+type EmptyArgs = Record<string, never>;
+
+type OptionalArgsTuple<FuncRef extends FunctionReference<any>> =
+  FunctionArgs<FuncRef> extends EmptyArgs
+    ? [args?: EmptyArgs]
+    : [args: FunctionArgs<FuncRef>];
+
+function assertNotAccidentalArgument(value: unknown): void {
+  if (typeof Event !== 'undefined' && value instanceof Event) {
+    throw new Error(
+      'Convex function called with an Event object. Did you pass the helper directly as an event handler? Wrap it like `() => myMutation()` instead.',
+    );
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'bubbles' in value &&
+    'persist' in value &&
+    'isDefaultPrevented' in value
+  ) {
+    throw new Error(
+      'Convex function called with a SyntheticEvent object. Wrap the helper like `() => myMutation()` instead of using it directly as an event handler.',
+    );
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'preventDefault' in value &&
+    'stopPropagation' in value &&
+    'target' in value &&
+    'type' in value
+  ) {
+    throw new Error(
+      'Convex function called with an event-like object. Wrap the helper like `() => myMutation()` instead of using it directly as an event handler.',
+    );
+  }
+}
+
 /**
  * Options for injectMutation.
  */
@@ -23,7 +63,7 @@ export interface MutationOptions<Mutation extends MutationReference> {
    * Environment injector used to resolve dependencies when creating the
    * mutation outside the current injection context.
    */
-  injectRef?: EnvironmentInjector;
+  injectRef?: import('@angular/core').EnvironmentInjector;
 
   /**
    * Callback invoked when the mutation completes successfully.
@@ -36,26 +76,37 @@ export interface MutationOptions<Mutation extends MutationReference> {
    * @param err - The error that occurred
    */
   onError?: (err: Error) => void;
-
-  /**
-   * Optimistic update to apply immediately before the mutation completes.
-   * This allows the UI to update instantly while the mutation is in flight.
-   */
-  optimisticUpdate?: OptimisticUpdate<FunctionArgs<Mutation>>;
 }
 
 /**
- * The result of calling injectMutation.
+ * A callable mutation helper returned by injectMutation.
+ *
+ * Call it directly to execute the mutation:
+ * ```typescript
+ * await addTodo({ title: 'Buy groceries' });
+ * ```
+ *
+ * Use `.withOptimisticUpdate(...)` to configure optimistic updates:
+ * ```typescript
+ * const optimisticAddTodo = addTodo.withOptimisticUpdate((localStore, args) => {
+ *   // Optimistically update local query results
+ * });
+ * await optimisticAddTodo({ title: 'Buy groceries' });
+ * ```
  */
-export interface MutationResult<Mutation extends MutationReference> {
-  /**
-   * Execute the mutation with the given arguments.
-   * @param args - The arguments to pass to the mutation
-   * @returns A promise that resolves with the mutation's return value or rejects with the mutation error
-   */
-  mutate: (
-    args: FunctionArgs<Mutation>,
-  ) => Promise<FunctionReturnType<Mutation>>;
+export interface AngularMutation<Mutation extends MutationReference> {
+  (
+    ...args: OptionalArgsTuple<Mutation>
+  ): Promise<FunctionReturnType<Mutation>>;
+
+  withOptimisticUpdate<
+    T extends OptimisticUpdate<FunctionArgs<Mutation>>,
+  >(
+    optimisticUpdate: T &
+      (ReturnType<T> extends Promise<any>
+        ? 'Optimistic update handlers must be synchronous'
+        : {}),
+  ): AngularMutation<Mutation>;
 
   /**
    * The data returned by the last successful mutation call.
@@ -96,6 +147,142 @@ export interface MutationResult<Mutation extends MutationReference> {
   reset: () => void;
 }
 
+interface MutationState<Mutation extends MutationReference> {
+  data: WritableSignal<FunctionReturnType<Mutation> | undefined>;
+  error: WritableSignal<Error | undefined>;
+  isLoading: WritableSignal<boolean>;
+  hasCompleted: WritableSignal<boolean>;
+  currentVersion: WritableSignal<number>;
+  isDestroyed: boolean;
+  onSuccess?: (data: FunctionReturnType<Mutation>) => void;
+  onError?: (err: Error) => void;
+}
+
+function createMutationState<Mutation extends MutationReference>(
+  options?: MutationOptions<Mutation>,
+): MutationState<Mutation> {
+  return {
+    data: signal<FunctionReturnType<Mutation> | undefined>(undefined),
+    error: signal<Error | undefined>(undefined),
+    isLoading: signal(false),
+    hasCompleted: signal(false),
+    currentVersion: signal(0),
+    isDestroyed: false,
+    onSuccess: options?.onSuccess,
+    onError: options?.onError,
+  };
+}
+
+function createMutationHelper<Mutation extends MutationReference>(
+  mutation: Mutation,
+  convex: ReturnType<typeof injectConvex>,
+  destroyRef: DestroyRef,
+  options: MutationOptions<Mutation> | undefined,
+  optimisticUpdate: OptimisticUpdate<FunctionArgs<Mutation>> | undefined,
+): AngularMutation<Mutation> {
+  const state = createMutationState<Mutation>(options);
+
+  const isSuccess = computed(() => state.hasCompleted() && !state.isLoading() && !state.error());
+  const status = computed<MutationStatus>(() => {
+    if (state.isLoading()) return 'pending';
+    if (state.error()) return 'error';
+    if (state.hasCompleted()) return 'success';
+    return 'idle';
+  });
+
+  const reset = () => {
+    state.currentVersion.update((v) => v + 1);
+    state.data.set(undefined);
+    state.error.set(undefined);
+    state.isLoading.set(false);
+    state.hasCompleted.set(false);
+  };
+
+  destroyRef.onDestroy(() => {
+    state.isDestroyed = true;
+    reset();
+  });
+
+  const call = async (
+    ...args: OptionalArgsTuple<Mutation>
+  ): Promise<FunctionReturnType<Mutation>> => {
+    const parsedArgs = (args[0] ?? {}) as FunctionArgs<Mutation>;
+    assertNotAccidentalArgument(parsedArgs);
+
+    if (state.isDestroyed) {
+      return convex.mutation(mutation, parsedArgs, {
+        optimisticUpdate,
+      });
+    }
+
+    const callVersion = state.currentVersion() + 1;
+    state.currentVersion.set(callVersion);
+
+    try {
+      state.data.set(undefined);
+      state.error.set(undefined);
+      state.hasCompleted.set(false);
+      state.isLoading.set(true);
+
+      const result = await convex.mutation(mutation, parsedArgs, {
+        optimisticUpdate,
+      });
+      if (state.currentVersion() === callVersion) {
+        state.data.set(result);
+        state.hasCompleted.set(true);
+        options?.onSuccess?.(result);
+      }
+      return result;
+    } catch (err) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      if (state.currentVersion() === callVersion) {
+        state.error.set(errorObj);
+        state.hasCompleted.set(true);
+        options?.onError?.(errorObj);
+      }
+      throw errorObj;
+    } finally {
+      if (state.currentVersion() === callVersion) {
+        state.isLoading.set(false);
+      }
+    }
+  };
+
+  const withOptimisticUpdate = <
+    T extends OptimisticUpdate<FunctionArgs<Mutation>>,
+  >(
+    nextOptimisticUpdate: T &
+      (ReturnType<T> extends Promise<any>
+        ? 'Optimistic update handlers must be synchronous'
+        : {}),
+  ): AngularMutation<Mutation> => {
+    if (optimisticUpdate !== undefined) {
+      throw new Error(
+        `Already specified optimistic update for mutation ${
+          (mutation as any)._name ?? 'unknown mutation'
+        }`,
+      );
+    }
+    return createMutationHelper(
+      mutation,
+      convex,
+      destroyRef,
+      options,
+      nextOptimisticUpdate,
+    );
+  };
+
+  return Object.assign(call, {
+    withOptimisticUpdate,
+    data: state.data.asReadonly(),
+    error: state.error.asReadonly(),
+    isLoading: state.isLoading.asReadonly(),
+    isSuccess,
+    status,
+    reset,
+  }) as AngularMutation<Mutation>;
+}
+
 /**
  * Create a reactive mutation caller.
  *
@@ -107,24 +294,21 @@ export interface MutationResult<Mutation extends MutationReference> {
  * const createTodo = injectMutation(api.todos.create, {
  *   onSuccess: (result) => console.log('Created todo:', result),
  *   onError: (err) => console.error('Failed to create todo', err),
- *   optimisticUpdate: (localStore, args) => {
- *     // Instantly add the new todo to the UI
- *     const todos = localStore.getQuery(api.todos.list, {});
- *     if (todos) {
- *       localStore.setQuery(api.todos.list, {}, [...todos, { ...args, _id: 'temp' }]);
- *     }
- *   },
  * });
  *
- * // In component code:
- * // async addTodo() {
- * //   try {
- * //     await createTodo.mutate({ title: 'Buy groceries' });
- * //   } catch (err) {
- * //     console.error(err);
- * //   }
- * // }
- * //
+ * // Call directly:
+ * await createTodo({ title: 'Buy groceries' });
+ *
+ * // With optimistic update:
+ * const optimisticCreateTodo = createTodo.withOptimisticUpdate((localStore, args) => {
+ *   const todos = localStore.getQuery(api.todos.list, {});
+ *   if (todos) {
+ *     localStore.setQuery(api.todos.list, {}, [...todos, { ...args, _id: 'temp' }]);
+ *   }
+ * });
+ * await optimisticCreateTodo({ title: 'Buy groceries' });
+ *
+ * // In template:
  * // @switch (createTodo.status()) {
  * //   @case ('pending') { <span>Saving...</span> }
  * //   @case ('success') { <span>Saved!</span> }
@@ -133,14 +317,13 @@ export interface MutationResult<Mutation extends MutationReference> {
  * ```
  *
  * @param mutation - A FunctionReference to the mutation function
- * @param options - Optional callbacks and optimistic update configuration
- * @returns A MutationResult with mutate method and reactive state signals.
- * `mutate()` rejects on failure after updating the reactive error state.
+ * @param options - Optional callbacks for success and error handling
+ * @returns An AngularMutation callable helper with reactive state signals.
  */
 export function injectMutation<Mutation extends MutationReference>(
   mutation: Mutation,
   options?: MutationOptions<Mutation>,
-): MutationResult<Mutation> {
+): AngularMutation<Mutation> {
   const { convex, destroyRef } = runInResolvedInjectionContext(
     injectMutation,
     options?.injectRef,
@@ -150,94 +333,5 @@ export function injectMutation<Mutation extends MutationReference>(
     }),
   );
 
-  // Internal signals for tracking state
-  const data = signal<FunctionReturnType<Mutation> | undefined>(undefined);
-  const error = signal<Error | undefined>(undefined);
-  const isLoading = signal(false);
-  const currentVersion = signal(0);
-  let isDestroyed = false;
-
-  // Track if mutation has been called (to distinguish idle from success)
-  const hasCompleted = signal(false);
-
-  // Computed signals
-  const isSuccess = computed(() => hasCompleted() && !isLoading() && !error());
-  const status = computed<MutationStatus>(() => {
-    if (isLoading()) return 'pending';
-    if (error()) return 'error';
-    if (hasCompleted()) return 'success';
-    return 'idle';
-  });
-
-  /**
-   * Reset all state.
-   */
-  const reset = () => {
-    currentVersion.update((version) => version + 1);
-    data.set(undefined);
-    error.set(undefined);
-    isLoading.set(false);
-    hasCompleted.set(false);
-  };
-
-  destroyRef.onDestroy(() => {
-    isDestroyed = true;
-    reset();
-  });
-
-  /**
-   * Execute the mutation with the given arguments.
-   */
-  const mutate = async (
-    args: FunctionArgs<Mutation>,
-  ): Promise<FunctionReturnType<Mutation>> => {
-    if (isDestroyed) {
-      return convex.mutation(mutation, args, {
-        optimisticUpdate: options?.optimisticUpdate,
-      });
-    }
-
-    const callVersion = currentVersion() + 1;
-    currentVersion.set(callVersion);
-
-    try {
-      // Reset state for the latest mutation invocation.
-      data.set(undefined);
-      error.set(undefined);
-      hasCompleted.set(false);
-      isLoading.set(true);
-
-      const result = await convex.mutation(mutation, args, {
-        optimisticUpdate: options?.optimisticUpdate,
-      });
-      if (currentVersion() === callVersion) {
-        data.set(result);
-        hasCompleted.set(true);
-        options?.onSuccess?.(result);
-      }
-      return result;
-    } catch (err) {
-      const errorObj = err instanceof Error ? err : new Error(String(err));
-      if (currentVersion() === callVersion) {
-        error.set(errorObj);
-        hasCompleted.set(true);
-        options?.onError?.(errorObj);
-      }
-      throw errorObj;
-    } finally {
-      if (currentVersion() === callVersion) {
-        isLoading.set(false);
-      }
-    }
-  };
-
-  return {
-    mutate,
-    data: data.asReadonly(),
-    error: error.asReadonly(),
-    isLoading: isLoading.asReadonly(),
-    isSuccess,
-    status,
-    reset,
-  };
+  return createMutationHelper(mutation, convex, destroyRef, options, undefined);
 }

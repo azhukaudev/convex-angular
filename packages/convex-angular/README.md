@@ -180,7 +180,7 @@ export class AppComponent {
 
   async addTodoItem() {
     try {
-      await this.addTodo.mutate({ title: 'Buy groceries' });
+      await this.addTodo({ title: 'Buy groceries' });
     } catch (error) {
       console.error(error);
     }
@@ -188,7 +188,9 @@ export class AppComponent {
 }
 ```
 
-`mutate()` rejects on failure. `error()` and `status()` are still updated, and
+The mutation helper is callable directly. Call `await addTodo({ title: '...' })` to execute.
+
+The helper rejects on failure. `error()` and `status()` are still updated, and
 `onError` still runs before the promise rejects.
 
 `data()` is typed as `T | undefined` and stays undefined until the first
@@ -197,6 +199,23 @@ successful mutation result or after `reset()`.
 If the owning Angular scope is destroyed while a mutation is in flight, the
 returned promise still settles, but the helper stops updating its reactive
 state and stops firing `onSuccess` / `onError`.
+
+#### Optimistic updates
+
+Use `.withOptimisticUpdate(...)` to configure optimistic updates for instant UI feedback:
+
+```typescript
+const optimisticAddTodo = addTodo.withOptimisticUpdate((localStore, args) => {
+  const todos = localStore.getQuery(api.todos.list, {});
+  if (todos) {
+    localStore.setQuery(api.todos.list, {}, [...todos, { ...args, _id: 'temp' }]);
+  }
+});
+
+await optimisticAddTodo({ title: 'Buy groceries' });
+```
+
+Each call to `.withOptimisticUpdate(...)` creates a new helper with independent state.
 
 ### Running actions
 
@@ -217,7 +236,7 @@ export class AppComponent {
 
   async completeAll() {
     try {
-      await this.completeAllTodos.run({});
+      await this.completeAllTodos({});
     } catch (error) {
       console.error(error);
     }
@@ -225,7 +244,9 @@ export class AppComponent {
 }
 ```
 
-`run()` rejects on failure. `error()` and `status()` are still updated, and
+The action helper is callable directly. Call `await completeAllTodos({})` to execute.
+
+The helper rejects on failure. `error()` and `status()` are still updated, and
 `onError` still runs before the promise rejects.
 
 `data()` is typed as `T | undefined` and stays undefined until the first
@@ -291,8 +312,7 @@ become invalid, so transient `InvalidCursor` errors recover automatically.
 
 ### Optimistic paginated updates
 
-Use the paginated optimistic helpers inside `injectMutation(..., { optimisticUpdate })`
-to keep infinite lists feeling instant.
+Use the paginated optimistic helpers with `.withOptimisticUpdate(...)` to keep infinite lists feeling instant.
 
 ```typescript
 import { Component } from '@angular/core';
@@ -305,23 +325,21 @@ import { api } from '../convex/_generated/api';
   template: `<button (click)="createTodo()">Add Todo</button>`,
 })
 export class AppComponent {
-  readonly addTodo = injectMutation(api.todos.addTodo, {
-    optimisticUpdate: (localStore, args) => {
-      insertAtTop({
-        paginatedQuery: api.todos.listTodosPaginated,
-        argsToMatch: {},
-        localQueryStore: localStore,
-        item: {
-          _id: 'optimistic-id',
-          _creationTime: Date.now(),
-          title: args.title,
-        },
-      });
-    },
+  readonly addTodo = injectMutation(api.todos.addTodo).withOptimisticUpdate((localStore, args) => {
+    insertAtTop({
+      paginatedQuery: api.todos.listTodosPaginated,
+      argsToMatch: {},
+      localQueryStore: localStore,
+      item: {
+        _id: 'optimistic-id',
+        _creationTime: Date.now(),
+        title: args.title,
+      },
+    });
   });
 
   async createTodo() {
-    await this.addTodo.mutate({ title: 'Buy groceries' });
+    await this.addTodo({ title: 'Buy groceries' });
   }
 }
 ```
@@ -440,7 +458,7 @@ export class AppComponent {
     });
 
     try {
-      await mutation.mutate({ title: 'Created outside the initial scope' });
+      await mutation({ title: 'Created outside the initial scope' });
     } catch (error) {
       console.error(error);
     }

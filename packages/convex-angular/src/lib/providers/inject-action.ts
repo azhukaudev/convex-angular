@@ -1,5 +1,9 @@
-import { DestroyRef, EnvironmentInjector, Signal, computed, inject, signal } from '@angular/core';
-import { FunctionReference, FunctionReturnType } from 'convex/server';
+import { DestroyRef, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import {
+  FunctionArgs,
+  FunctionReference,
+  FunctionReturnType,
+} from 'convex/server';
 
 import { ActionStatus } from '../types';
 import { injectConvex } from './inject-convex';
@@ -10,6 +14,46 @@ import { runInResolvedInjectionContext } from './injection-context';
  */
 export type ActionReference = FunctionReference<'action'>;
 
+type EmptyArgs = Record<string, never>;
+
+type OptionalArgsTuple<FuncRef extends FunctionReference<any>> =
+  FunctionArgs<FuncRef> extends EmptyArgs
+    ? [args?: EmptyArgs]
+    : [args: FunctionArgs<FuncRef>];
+
+function assertNotAccidentalArgument(value: unknown): void {
+  if (typeof Event !== 'undefined' && value instanceof Event) {
+    throw new Error(
+      'Convex function called with an Event object. Did you pass the helper directly as an event handler? Wrap it like `() => myAction()` instead.',
+    );
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'bubbles' in value &&
+    'persist' in value &&
+    'isDefaultPrevented' in value
+  ) {
+    throw new Error(
+      'Convex function called with a SyntheticEvent object. Wrap the helper like `() => myAction()` instead of using it directly as an event handler.',
+    );
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'preventDefault' in value &&
+    'stopPropagation' in value &&
+    'target' in value &&
+    'type' in value
+  ) {
+    throw new Error(
+      'Convex function called with an event-like object. Wrap the helper like `() => myAction()` instead of using it directly as an event handler.',
+    );
+  }
+}
+
 /**
  * Options for injectAction.
  */
@@ -18,7 +62,7 @@ export interface ActionOptions<Action extends ActionReference> {
    * Environment injector used to resolve dependencies when creating the action
    * outside the current injection context.
    */
-  injectRef?: EnvironmentInjector;
+  injectRef?: import('@angular/core').EnvironmentInjector;
 
   /**
    * Callback invoked when the action completes successfully.
@@ -34,15 +78,15 @@ export interface ActionOptions<Action extends ActionReference> {
 }
 
 /**
- * The result of calling injectAction.
+ * A callable action helper returned by injectAction.
+ *
+ * Call it directly to execute the action:
+ * ```typescript
+ * await sendEmail({ to: 'user@example.com', subject: 'Hello' });
+ * ```
  */
-export interface ActionResult<Action extends ActionReference> {
-  /**
-   * Execute the action with the given arguments.
-   * @param args - The arguments to pass to the action
-   * @returns A promise that resolves with the action's return value or rejects with the action error
-   */
-  run: (args: Action['_args']) => Promise<FunctionReturnType<Action>>;
+export interface AngularAction<Action extends ActionReference> {
+  (...args: OptionalArgsTuple<Action>): Promise<FunctionReturnType<Action>>;
 
   /**
    * The data returned by the last successful action call.
@@ -83,6 +127,112 @@ export interface ActionResult<Action extends ActionReference> {
   reset: () => void;
 }
 
+interface ActionState<Action extends ActionReference> {
+  data: WritableSignal<FunctionReturnType<Action> | undefined>;
+  error: WritableSignal<Error | undefined>;
+  isLoading: WritableSignal<boolean>;
+  hasCompleted: WritableSignal<boolean>;
+  currentVersion: WritableSignal<number>;
+  isDestroyed: boolean;
+  onSuccess?: (data: FunctionReturnType<Action>) => void;
+  onError?: (err: Error) => void;
+}
+
+function createActionState<Action extends ActionReference>(
+  options?: ActionOptions<Action>,
+): ActionState<Action> {
+  return {
+    data: signal<FunctionReturnType<Action> | undefined>(undefined),
+    error: signal<Error | undefined>(undefined),
+    isLoading: signal(false),
+    hasCompleted: signal(false),
+    currentVersion: signal(0),
+    isDestroyed: false,
+    onSuccess: options?.onSuccess,
+    onError: options?.onError,
+  };
+}
+
+function createActionHelper<Action extends ActionReference>(
+  action: Action,
+  convex: ReturnType<typeof injectConvex>,
+  destroyRef: DestroyRef,
+  options: ActionOptions<Action> | undefined,
+): AngularAction<Action> {
+  const state = createActionState<Action>(options);
+
+  const isSuccess = computed(() => state.hasCompleted() && !state.isLoading() && !state.error());
+  const status = computed<ActionStatus>(() => {
+    if (state.isLoading()) return 'pending';
+    if (state.error()) return 'error';
+    if (state.hasCompleted()) return 'success';
+    return 'idle';
+  });
+
+  const reset = () => {
+    state.currentVersion.update((v) => v + 1);
+    state.data.set(undefined);
+    state.error.set(undefined);
+    state.isLoading.set(false);
+    state.hasCompleted.set(false);
+  };
+
+  destroyRef.onDestroy(() => {
+    state.isDestroyed = true;
+    reset();
+  });
+
+  const call = async (
+    ...args: OptionalArgsTuple<Action>
+  ): Promise<FunctionReturnType<Action>> => {
+    const parsedArgs = (args[0] ?? {}) as FunctionArgs<Action>;
+    assertNotAccidentalArgument(parsedArgs);
+
+    if (state.isDestroyed) {
+      return convex.action(action, parsedArgs);
+    }
+
+    const callVersion = state.currentVersion() + 1;
+    state.currentVersion.set(callVersion);
+
+    try {
+      state.data.set(undefined);
+      state.error.set(undefined);
+      state.hasCompleted.set(false);
+      state.isLoading.set(true);
+
+      const result = await convex.action(action, parsedArgs);
+      if (state.currentVersion() === callVersion) {
+        state.data.set(result);
+        state.hasCompleted.set(true);
+        options?.onSuccess?.(result);
+      }
+      return result;
+    } catch (err) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      if (state.currentVersion() === callVersion) {
+        state.error.set(errorObj);
+        state.hasCompleted.set(true);
+        options?.onError?.(errorObj);
+      }
+      throw errorObj;
+    } finally {
+      if (state.currentVersion() === callVersion) {
+        state.isLoading.set(false);
+      }
+    }
+  };
+
+  return Object.assign(call, {
+    data: state.data.asReadonly(),
+    error: state.error.asReadonly(),
+    isLoading: state.isLoading.asReadonly(),
+    isSuccess,
+    status,
+    reset,
+  }) as AngularAction<Action>;
+}
+
 /**
  * Create a reactive action caller.
  *
@@ -96,15 +246,10 @@ export interface ActionResult<Action extends ActionReference> {
  *   onError: (err) => console.error('Failed to send email', err),
  * });
  *
- * // In component code:
- * // async handleSend() {
- * //   try {
- * //     await sendEmail.run({ to: 'user@example.com', subject: 'Hello' });
- * //   } catch (err) {
- * //     console.error(err);
- * //   }
- * // }
- * //
+ * // Call directly:
+ * await sendEmail({ to: 'user@example.com', subject: 'Hello' });
+ *
+ * // In template:
  * // @switch (sendEmail.status()) {
  * //   @case ('pending') { <span>Sending...</span> }
  * //   @case ('success') { <span>Sent!</span> }
@@ -114,13 +259,12 @@ export interface ActionResult<Action extends ActionReference> {
  *
  * @param action - A FunctionReference to the action function
  * @param options - Optional callbacks for success and error handling
- * @returns An ActionResult with run method and reactive state signals.
- * `run()` rejects on failure after updating the reactive error state.
+ * @returns An AngularAction callable helper with reactive state signals.
  */
 export function injectAction<Action extends ActionReference>(
   action: Action,
   options?: ActionOptions<Action>,
-): ActionResult<Action> {
+): AngularAction<Action> {
   const { convex, destroyRef } = runInResolvedInjectionContext(
     injectAction,
     options?.injectRef,
@@ -130,90 +274,5 @@ export function injectAction<Action extends ActionReference>(
     }),
   );
 
-  // Internal signals for tracking state
-  const data = signal<FunctionReturnType<Action> | undefined>(undefined);
-  const error = signal<Error | undefined>(undefined);
-  const isLoading = signal(false);
-  const currentVersion = signal(0);
-  let isDestroyed = false;
-
-  // Track if action has been called (to distinguish idle from success)
-  const hasCompleted = signal(false);
-
-  // Computed signals
-  const isSuccess = computed(() => hasCompleted() && !isLoading() && !error());
-  const status = computed<ActionStatus>(() => {
-    if (isLoading()) return 'pending';
-    if (error()) return 'error';
-    if (hasCompleted()) return 'success';
-    return 'idle';
-  });
-
-  /**
-   * Reset all state.
-   */
-  const reset = () => {
-    currentVersion.update((version) => version + 1);
-    data.set(undefined);
-    error.set(undefined);
-    isLoading.set(false);
-    hasCompleted.set(false);
-  };
-
-  destroyRef.onDestroy(() => {
-    isDestroyed = true;
-    reset();
-  });
-
-  /**
-   * Execute the action with the given arguments.
-   */
-  const run = async (
-    args: Action['_args'],
-  ): Promise<FunctionReturnType<Action>> => {
-    if (isDestroyed) {
-      return convex.action(action, args);
-    }
-
-    const callVersion = currentVersion() + 1;
-    currentVersion.set(callVersion);
-
-    try {
-      // Reset state for the latest action invocation.
-      data.set(undefined);
-      error.set(undefined);
-      hasCompleted.set(false);
-      isLoading.set(true);
-
-      const result = await convex.action(action, args);
-      if (currentVersion() === callVersion) {
-        data.set(result);
-        hasCompleted.set(true);
-        options?.onSuccess?.(result);
-      }
-      return result;
-    } catch (err) {
-      const errorObj = err instanceof Error ? err : new Error(String(err));
-      if (currentVersion() === callVersion) {
-        error.set(errorObj);
-        hasCompleted.set(true);
-        options?.onError?.(errorObj);
-      }
-      throw errorObj;
-    } finally {
-      if (currentVersion() === callVersion) {
-        isLoading.set(false);
-      }
-    }
-  };
-
-  return {
-    run,
-    data: data.asReadonly(),
-    error: error.asReadonly(),
-    isLoading: isLoading.asReadonly(),
-    isSuccess,
-    status,
-    reset,
-  };
+  return createActionHelper(action, convex, destroyRef, options);
 }
