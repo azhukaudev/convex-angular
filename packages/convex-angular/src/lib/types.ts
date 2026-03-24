@@ -9,12 +9,25 @@ export type QueryStatus = 'pending' | 'success' | 'error' | 'skipped';
 
 /**
  * Status of a paginated query subscription.
- * - 'pending': Loading the first page
- * - 'success': First page loaded successfully
+ * Matches React/Convex pagination semantics, plus Angular-only error/skipped states.
+ *
+ * React-parity states (lowercased per Angular conventions):
+ * - 'loadingFirstPage': Loading the first page of results
+ * - 'loadingMore': Loading additional pages after the first
+ * - 'canLoadMore': First page loaded; more items can be fetched
+ * - 'exhausted': All items have been loaded
+ *
+ * Angular-only extensions:
  * - 'error': Query failed with an error
  * - 'skipped': Query is skipped via skipToken
  */
-export type PaginatedQueryStatus = 'pending' | 'success' | 'error' | 'skipped';
+export type PaginatedQueryStatus =
+  | 'loadingFirstPage'
+  | 'loadingMore'
+  | 'canLoadMore'
+  | 'exhausted'
+  | 'error'
+  | 'skipped';
 
 /**
  * Status of a mutation.

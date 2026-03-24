@@ -111,7 +111,7 @@ describe('injectPaginatedQuery', () => {
         numItems: 10,
       }),
     );
-    expect(fixture.componentInstance.todos.status()).toBe('pending');
+    expect(fixture.componentInstance.todos.status()).toBe('loadingFirstPage');
     expect(fixture.componentInstance.todos.results()).toEqual([]);
     expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
   }));
@@ -223,7 +223,7 @@ describe('injectPaginatedQuery', () => {
     tick();
 
     const resetSession = latestSubscription();
-    expect(resetSession.args.paginationOpts.id).not.toBe(firstSession.args.paginationOpts.id);
+expect(resetSession.args.paginationOpts.id).not.toBe(firstSession.args.paginationOpts.id);
     expect(firstSession.unsubscribe).toHaveBeenCalled();
     expect(firstSessionPageTwo.unsubscribe).toHaveBeenCalled();
 
@@ -237,7 +237,7 @@ describe('injectPaginatedQuery', () => {
 
     expect(fixture.componentInstance.todos.results()).toEqual([]);
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
-    expect(fixture.componentInstance.todos.status()).toBe('pending');
+    expect(fixture.componentInstance.todos.status()).toBe('loadingFirstPage');
 
     resetSession.onUpdate(
       pageResult([{ _id: 'fresh', name: 'Fresh page' }], {
@@ -247,7 +247,7 @@ describe('injectPaginatedQuery', () => {
     );
 
     expect(fixture.componentInstance.todos.results()).toEqual([{ _id: 'fresh', name: 'Fresh page' }]);
-    expect(fixture.componentInstance.todos.status()).toBe('success');
+    expect(fixture.componentInstance.todos.status()).toBe('exhausted');
   }));
 
   it('resubscribes when args change and ignores stale updates', fakeAsync(() => {
@@ -279,7 +279,7 @@ describe('injectPaginatedQuery', () => {
     firstSubscription.onUpdate(pageResult([{ _id: '1', name: 'Stale todo' }], { isDone: true }));
 
     expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '2', name: 'Latest todo' }]);
-    expect(fixture.componentInstance.todos.status()).toBe('success');
+    expect(fixture.componentInstance.todos.status()).toBe('exhausted');
   }));
 
   it('resubscribes when initialNumItems changes and preserves stable arg equality', fakeAsync(() => {
@@ -358,7 +358,7 @@ describe('injectPaginatedQuery', () => {
     const restartedPage = latestSubscription();
     expect(restartedPage.args.paginationOpts.cursor).toBeNull();
     expect(restartedPage.args.paginationOpts.id).not.toBe(firstPage.args.paginationOpts.id);
-    expect(fixture.componentInstance.todos.status()).toBe('pending');
+    expect(fixture.componentInstance.todos.status()).toBe('loadingFirstPage');
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
     expect(onError).not.toHaveBeenCalled();
   }));
@@ -403,7 +403,7 @@ describe('injectPaginatedQuery', () => {
     expect(fixture.componentInstance.todos.results()).toEqual([]);
     expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
     expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
-    expect(fixture.componentInstance.todos.status()).toBe('pending');
+    expect(fixture.componentInstance.todos.status()).toBe('loadingFirstPage');
     expect(fixture.componentInstance.todos.isSuccess()).toBe(false);
     expect(onSuccess).not.toHaveBeenCalled();
 
@@ -426,7 +426,7 @@ describe('injectPaginatedQuery', () => {
     ]);
     expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(false);
     expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
-    expect(fixture.componentInstance.todos.status()).toBe('success');
+    expect(fixture.componentInstance.todos.status()).toBe('canLoadMore');
     expect(fixture.componentInstance.todos.isSuccess()).toBe(true);
     expect(fixture.componentInstance.todos.canLoadMore()).toBe(true);
     expect(firstPage.unsubscribe).toHaveBeenCalled();
@@ -577,7 +577,7 @@ describe('injectPaginatedQuery', () => {
     expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'One' }]);
     expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(false);
     expect(fixture.componentInstance.todos.isLoadingMore()).toBe(true);
-    expect(fixture.componentInstance.todos.status()).toBe('success');
+    expect(fixture.componentInstance.todos.status()).toBe('loadingMore');
     expect(fixture.componentInstance.todos.isSuccess()).toBe(true);
   }));
 
@@ -621,7 +621,7 @@ describe('injectPaginatedQuery', () => {
     const restartedPage = latestSubscription();
     expect(restartedPage.args.paginationOpts.cursor).toBeNull();
     expect(restartedPage.args.paginationOpts.id).not.toBe(firstPage.args.paginationOpts.id);
-    expect(fixture.componentInstance.todos.status()).toBe('pending');
+    expect(fixture.componentInstance.todos.status()).toBe('loadingFirstPage');
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
   }));
 

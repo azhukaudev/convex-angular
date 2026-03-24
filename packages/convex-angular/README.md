@@ -278,7 +278,8 @@ The paginated query returns:
 - `isExhausted()` - True when all items have been loaded
 - `isSkipped()` - True when the query is skipped via `skipToken`
 - `isSuccess()` - True when the first page has loaded successfully
-- `status()` - `'pending' | 'success' | 'error' | 'skipped'`
+- `isLoading()` - True when actively loading (first page or additional pages)
+- `status()` - `'loadingFirstPage' | 'loadingMore' | 'canLoadMore' | 'exhausted' | 'error' | 'skipped'`
 - `error()` - Error if the query failed
 - `loadMore(n)` - Load `n` more items
 - `reset()` - Start a fresh pagination session from the beginning; also use this to retry first-page failures

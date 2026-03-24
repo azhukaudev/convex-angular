@@ -8,8 +8,8 @@ import {
 } from 'convex/server';
 import { ConvexError, Value, compareValues } from 'convex/values';
 
-import { SkipToken, skipToken } from '../skip-token';
 import { PaginatedQueryStatus } from '../types';
+import { SkipToken, skipToken } from '../skip-token';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 import { createSubscriptionController, serializeArgs } from './query-subscription-lifecycle';
@@ -190,9 +190,21 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
   isSuccess: Signal<boolean>;
 
   /**
+   * True when actively loading (first page or additional pages).
+   * Equivalent to isLoadingFirstPage() || isLoadingMore().
+   */
+  isLoading: Signal<boolean>;
+
+  /**
    * The current status of the paginated query.
-   * - 'pending': Loading the first page
-   * - 'success': First page loaded successfully (may still load more)
+   *
+   * React-parity states (lowercased per Angular conventions):
+   * - 'loadingFirstPage': Loading the first page of results
+   * - 'loadingMore': Loading additional pages after the first
+   * - 'canLoadMore': First page loaded; more items can be fetched
+   * - 'exhausted': All items have been loaded
+   *
+   * Angular-only extensions:
    * - 'error': Query failed with an error
    * - 'skipped': Query is skipped via skipToken
    */
@@ -257,15 +269,17 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
  *
  * // In template:
  * // @switch (todos.status()) {
- * //   @case ('pending') { <span>Loading...</span> }
- * //   @case ('skipped') { <span>Select a category</span> }
- * //   @case ('error') { <span>Error: {{ todos.error()?.message }}</span> }
- * //   @case ('success') {
+ * //   @case ('loadingFirstPage') { <span>Loading first page...</span> }
+ * //   @case ('loadingMore') { <span>Loading more...</span> }
+ * //   @case ('exhausted') { <span>All items loaded</span> }
+ * //   @case ('canLoadMore') {
  * //     @for (todo of todos.results(); track todo._id) { ... }
  * //     <button (click)="todos.loadMore(10)" [disabled]="!todos.canLoadMore()">
  * //       Load More
  * //     </button>
  * //   }
+ * //   @case ('error') { <span>Error: {{ todos.error()?.message }}</span> }
+ * //   @case ('skipped') { <span>Select a category</span> }
  * // }
  * ```
  *
@@ -292,11 +306,14 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     const isSkipped = signal(false);
 
     const isSuccess = computed(() => !isLoadingFirstPage() && !isSkipped() && !error());
+    const isLoading = computed(() => isLoadingFirstPage() || isLoadingMore());
     const status = computed<PaginatedQueryStatus>(() => {
       if (isSkipped()) return 'skipped';
-      if (isLoadingFirstPage()) return 'pending';
       if (error()) return 'error';
-      return 'success';
+      if (isLoadingFirstPage()) return 'loadingFirstPage';
+      if (isLoadingMore()) return 'loadingMore';
+      if (isExhausted()) return 'exhausted';
+      return 'canLoadMore';
     });
 
     let currentLoadMore: ((numItems: number) => boolean) | undefined;
@@ -605,6 +622,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       isExhausted: isExhausted.asReadonly(),
       isSkipped: isSkipped.asReadonly(),
       isSuccess,
+      isLoading,
       status,
       loadMore,
       reset,
