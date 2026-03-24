@@ -24,8 +24,9 @@ import { provideConvexAuth } from '../inject-auth';
  *
  *   readonly isLoaded = computed(() => this.clerk.loaded());
  *   readonly isSignedIn = computed(() => !!this.clerk.user());
+ *   readonly sessionClaims = computed(() => this.clerk.session?.claims ?? null);
  *
- *   async getToken(options?: { template?: string; skipCache?: boolean }) {
+ *   async getToken(options?: { skipCache?: boolean }) {
  *     return this.clerk.session?.getToken(options) ?? null;
  *   }
  * }
@@ -49,14 +50,16 @@ export interface ClerkAuthProvider {
   /**
    * Function to get an access token from Clerk.
    *
-   * @param options.template - The JWT template to use (should be 'convex' for Convex)
    * @param options.skipCache - If true, bypass the token cache and get a fresh token
    * @returns Promise resolving to the JWT token, or null if not available
    */
-  getToken(options?: {
-    template?: string;
-    skipCache?: boolean;
-  }): Promise<string | null>;
+  getToken(options?: { skipCache?: boolean }): Promise<string | null>;
+
+  /**
+   * Current Clerk session claims.
+   * Must be exposed for native Convex Clerk integration validation.
+   */
+  sessionClaims: Signal<Record<string, unknown> | null | undefined>;
 
   /**
    * Optional: Current organization ID.
@@ -112,8 +115,9 @@ export const CLERK_AUTH = new InjectionToken<ClerkAuthProvider>('CLERK_AUTH');
  *   readonly isSignedIn = computed(() => !!this.clerk.user());
  *   readonly orgId = computed(() => this.clerk.organization()?.id);
  *   readonly orgRole = computed(() => this.clerk.organization()?.membership?.role);
+ *   readonly sessionClaims = computed(() => this.clerk.session?.claims ?? null);
  *
- *   async getToken(options?: { template?: string; skipCache?: boolean }) {
+ *   async getToken(options?: { skipCache?: boolean }) {
  *     return (await this.clerk.session?.getToken(options)) ?? null;
  *   }
  * }
@@ -144,18 +148,24 @@ export function provideClerkAuth(): EnvironmentProviders {
       useFactory: (): ConvexAuthProvider => {
         const clerk = inject(CLERK_AUTH);
 
-        const fetchAccessToken = async (args: {
-          forceRefreshToken: boolean;
-        }) =>
-          clerk.getToken({
-            template: 'convex',
+        const fetchAccessToken = async (args: { forceRefreshToken: boolean }) => {
+          const claims = clerk.sessionClaims();
+          if (!claims || claims['aud'] !== 'convex') {
+            throw new Error(
+              "provideClerkAuth() requires Clerk's native Convex integration. " +
+                'Expose sessionClaims and ensure aud === \"convex\".',
+            );
+          }
+
+          return clerk.getToken({
             skipCache: args.forceRefreshToken,
           });
+        };
 
         return {
           isLoading: computed(() => !clerk.isLoaded()),
           isAuthenticated: computed(() => clerk.isSignedIn() ?? false),
-          reauthVersion: computed(() => [clerk.orgId?.(), clerk.orgRole?.()]),
+          reauthVersion: computed(() => [clerk.orgId?.(), clerk.orgRole?.(), clerk.sessionClaims()]),
           error: clerk.error,
           fetchAccessToken,
         };

@@ -514,7 +514,12 @@ unauthenticated outcome. It does not populate `error()`.
 
 ### Clerk Integration
 
-To integrate with Clerk, create a service that implements `ClerkAuthProvider` and register it with `provideClerkAuth()`.
+`provideClerkAuth()` supports Clerk's native Convex integration only. Your
+`ClerkAuthProvider` must expose `sessionClaims`, and the active session must
+have `aud === 'convex'`.
+
+To integrate with Clerk, create a service that implements `ClerkAuthProvider`
+and register it with `provideClerkAuth()`.
 
 ```typescript
 // clerk-auth.service.ts
@@ -532,8 +537,9 @@ export class ClerkAuthService implements ClerkAuthProvider {
   readonly isSignedIn = computed(() => !!this.clerk.user());
   readonly orgId = computed(() => this.clerk.organization()?.id);
   readonly orgRole = computed(() => this.clerk.organization()?.membership?.role);
+  readonly sessionClaims = computed(() => this.clerk.session?.claims ?? null);
 
-  async getToken(options?: { template?: string; skipCache?: boolean }) {
+  async getToken(options?: { skipCache?: boolean }) {
     return (await this.clerk.session?.getToken(options)) ?? null;
   }
 }
@@ -551,9 +557,13 @@ export const appConfig: ApplicationConfig = {
 If your Clerk service exposes upstream failures, forward them via the optional
 `error` signal so `injectAuth().error()` can surface them. Clerk integrations
 can also expose reactive auth context like `orgId`/`orgRole`; `provideClerkAuth()`
-uses that state to refresh the token when organization context changes.
-Return `null` only when the user is signed out or no token is available. Let
-real token-fetch failures throw so `injectAuth().error()` can surface them.
+uses that state, plus `sessionClaims`, to refresh the token when auth context
+changes. Return `null` only when the user is signed out or no token is
+available. Let real token-fetch failures throw so `injectAuth().error()` can
+surface them.
+
+If your Clerk session is configured for a JWT template instead of Clerk's native
+Convex integration, `provideClerkAuth()` will throw a configuration error.
 
 ### Auth0 Integration
 
@@ -577,10 +587,7 @@ export class Auth0AuthService implements Auth0AuthProvider {
     initialValue: false,
   });
 
-  async getAccessTokenSilently(options: {
-    detailedResponse: true;
-    cacheMode?: 'on' | 'off';
-  }) {
+  async getAccessTokenSilently(options: { detailedResponse: true; cacheMode?: 'on' | 'off' }) {
     return firstValueFrom(
       this.auth0.getAccessTokenSilently({
         detailedResponse: options.detailedResponse,

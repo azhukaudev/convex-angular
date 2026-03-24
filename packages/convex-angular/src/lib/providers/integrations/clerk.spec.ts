@@ -19,6 +19,7 @@ describe('provideClerkAuth', () => {
   let isSignedIn: ReturnType<typeof signal<boolean | undefined>>;
   let orgId: ReturnType<typeof signal<string | null | undefined>>;
   let orgRole: ReturnType<typeof signal<string | null | undefined>>;
+  let sessionClaims: ReturnType<typeof signal<Record<string, unknown> | null | undefined>>;
   let error: ReturnType<typeof signal<Error | undefined>>;
   let getToken: jest.Mock<Promise<string | null>, [{ template?: string; skipCache?: boolean }?]>;
 
@@ -28,6 +29,7 @@ describe('provideClerkAuth', () => {
       isSignedIn,
       orgId,
       orgRole,
+      sessionClaims,
       error,
       getToken,
     };
@@ -48,6 +50,9 @@ describe('provideClerkAuth', () => {
     isSignedIn = signal<boolean | undefined>(false);
     orgId = signal<string | null | undefined>(null);
     orgRole = signal<string | null | undefined>(null);
+    sessionClaims = signal<Record<string, unknown> | null | undefined>({
+      aud: 'convex',
+    });
     error = signal<Error | undefined>(undefined);
     getToken = jest.fn().mockResolvedValue('token');
     setAuthFetcher = undefined;
@@ -99,25 +104,36 @@ describe('provideClerkAuth', () => {
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    expect(provider.reauthVersion?.()).toEqual([null, null]);
+    expect(provider.reauthVersion?.()).toEqual([null, null, { aud: 'convex' }]);
 
     orgId.set('org_123');
     orgRole.set('admin');
 
-    expect(provider.reauthVersion?.()).toEqual(['org_123', 'admin']);
+    expect(provider.reauthVersion?.()).toEqual(['org_123', 'admin', { aud: 'convex' }]);
+  });
+
+  it('includes session claims in reauthVersion', () => {
+    configureTestingModule();
+
+    const provider = TestBed.inject(CONVEX_AUTH);
+
+    sessionClaims.set({ aud: 'convex', sub: 'user_123' });
+
+    expect(provider.reauthVersion?.()).toEqual([null, null, { aud: 'convex', sub: 'user_123' }]);
   });
 
   it('falls back to undefined reauth values when org signals are missing', () => {
     configureTestingModule({
       isLoaded,
       isSignedIn,
+      sessionClaims,
       error,
       getToken,
     });
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    expect(provider.reauthVersion?.()).toEqual([undefined, undefined]);
+    expect(provider.reauthVersion?.()).toEqual([undefined, undefined, { aud: 'convex' }]);
   });
 
   it('passes through the upstream error signal', () => {
@@ -140,10 +156,7 @@ describe('provideClerkAuth', () => {
     const token = await provider.fetchAccessToken({ forceRefreshToken: false });
 
     expect(token).toBe('token');
-    expect(getToken).toHaveBeenCalledWith({
-      template: 'convex',
-      skipCache: false,
-    });
+    expect(getToken).toHaveBeenCalledWith({ skipCache: false });
   });
 
   it('requests fresh Clerk tokens when forceRefreshToken is true', async () => {
@@ -153,10 +166,31 @@ describe('provideClerkAuth', () => {
     const token = await provider.fetchAccessToken({ forceRefreshToken: true });
 
     expect(token).toBe('token');
-    expect(getToken).toHaveBeenCalledWith({
-      template: 'convex',
-      skipCache: true,
-    });
+    expect(getToken).toHaveBeenCalledWith({ skipCache: true });
+  });
+
+  it('throws when session claims are missing', async () => {
+    sessionClaims.set(undefined);
+    configureTestingModule();
+
+    const provider = TestBed.inject(CONVEX_AUTH);
+
+    await expect(provider.fetchAccessToken({ forceRefreshToken: false })).rejects.toThrow(
+      /requires Clerk's native Convex integration/i,
+    );
+    expect(getToken).not.toHaveBeenCalled();
+  });
+
+  it('throws when session claims do not target convex', async () => {
+    sessionClaims.set({ aud: 'other-audience' });
+    configureTestingModule();
+
+    const provider = TestBed.inject(CONVEX_AUTH);
+
+    await expect(provider.fetchAccessToken({ forceRefreshToken: false })).rejects.toThrow(
+      /requires Clerk's native Convex integration/i,
+    );
+    expect(getToken).not.toHaveBeenCalled();
   });
 
   it('rethrows when Clerk token fetching fails', async () => {
