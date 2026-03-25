@@ -46,3 +46,4 @@ Thumbs.db
 .angular
 
 .env.local
+.worktrees
