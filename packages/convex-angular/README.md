@@ -8,7 +8,8 @@ The Angular client for Convex.
 
 ## ✨ Features
 
-- 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectPrewarmQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
+- 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectPrewarmQuery`, `injectPreloadedQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
+- 🧊 SSR helpers: `preloadQuery`, `fetchQuery`, `fetchMutation`, `fetchAction`, `transferPreloadedQuery`, and `readTransferredPreloadedQuery`
 - 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`
 - 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`
@@ -255,6 +256,82 @@ successful action result or after `reset()`.
 If the owning Angular scope is destroyed while an action is in flight, the
 returned promise still settles, but the helper stops updating its reactive
 state and stops firing `onSuccess` / `onError`.
+
+### SSR and hydration
+
+Use `preloadQuery()` on the server to fetch and serialize a query result, then
+transfer it through Angular `TransferState` and hydrate it on the client with
+`injectPreloadedQuery()`.
+
+```typescript
+import { Component, TransferState, inject } from '@angular/core';
+import {
+  fetchQuery,
+  fetchAction,
+  fetchMutation,
+  injectQuery,
+  injectPreloadedQuery,
+  preloadQuery,
+  preloadedQueryResult,
+  readTransferredPreloadedQuery,
+  transferPreloadedQuery,
+} from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
+
+export async function preloadTodo(transferState: TransferState) {
+  const preloaded = await preloadQuery(api.todos.getTodo, { id: 'todo-1' });
+  transferPreloadedQuery(preloaded, transferState);
+}
+
+@Component({
+  selector: 'app-root',
+  template: `
+    @if (todo.data(); as todoData) {
+      <p>{{ todoData.title }}</p>
+    } @else {
+      <p>Loading...</p>
+    }
+  `,
+})
+export class AppComponent {
+  private readonly transferState = inject(TransferState);
+  private readonly preloaded = readTransferredPreloadedQuery(
+    api.todos.getTodo,
+    this.transferState,
+    { id: 'todo-1' },
+  );
+
+  readonly todo = this.preloaded
+    ? injectPreloadedQuery(api.todos.getTodo, this.preloaded)
+    : injectQuery(api.todos.getTodo, () => ({ id: 'todo-1' }));
+}
+```
+
+`injectPreloadedQuery()` returns the server data immediately through `data()`.
+Its `liveQuery` field exposes the underlying reactive `injectQuery()` result,
+and `isHydratedFromServer()` stays true until the first live client result
+arrives. `data()` being defined only means the server preload is available; use
+`liveQuery.status()` and `liveQuery.error()` to inspect the live subscription.
+
+`preloadedQueryResult()` lets you inspect a preloaded payload on the server
+before sending it across `TransferState`:
+
+```typescript
+const preloaded = await preloadQuery(api.todos.getTodo, { id: 'todo-1' });
+const todo = preloadedQueryResult(preloaded);
+```
+
+You can also use the standalone server helpers without preloading:
+
+```typescript
+const todo = await fetchQuery(api.todos.getTodo, { id: 'todo-1' });
+// The helpers default to NEXT_PUBLIC_CONVEX_URL, or accept an explicit { url }.
+// const todo = await fetchQuery(api.todos.getTodo, { id: 'todo-1' }, { url: 'https://<deployment>.convex.cloud' });
+
+await fetchMutation(api.todos.renameTodo, { id: 'todo-1', title: 'Renamed' });
+await fetchAction(api.todoFunctions.notifyTodoUpdated, { id: 'todo-1' });
+```
 
 ### Paginated queries
 
