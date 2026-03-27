@@ -128,6 +128,16 @@ function createConvexAuthState(): ConvexAuthState {
     }
   };
 
+  const runForCurrentGeneration = (generation: number, work: () => void) => {
+    void Promise.resolve().then(() => {
+      if (generation !== currentGeneration) {
+        return;
+      }
+
+      work();
+    });
+  };
+
   const isLoading = computed(() => {
     return provider.isLoading() || (provider.isAuthenticated() && backendAuthenticated() === null);
   });
@@ -186,67 +196,77 @@ function createConvexAuthState(): ConvexAuthState {
     if (upstreamLoading) {
       clearInternalError();
       backendAuthenticated.set(null);
-      clearAuthIfNeeded();
+      runForCurrentGeneration(generation, () => {
+        clearAuthIfNeeded();
+      });
       return;
     }
 
     if (!upstreamAuthenticated) {
       clearInternalError();
       backendAuthenticated.set(false);
-      clearAuthIfNeeded();
+      runForCurrentGeneration(generation, () => {
+        clearAuthIfNeeded();
+      });
       return;
     }
 
     clearInternalError();
     backendAuthenticated.set(null);
+    runForCurrentGeneration(generation, () => {
+      clearAuthIfNeeded();
 
-    try {
-      convex.setAuth(
-        async (args) => {
-          try {
-            const token = await provider.fetchAccessToken(args);
+      try {
+        convex.setAuth(
+          async (args) => {
+            try {
+              const token = await provider.fetchAccessToken(args);
 
+              if (generation !== currentGeneration) {
+                return null;
+              }
+
+              if (token == null) {
+                backendAuthenticated.set(false);
+                return null;
+              }
+
+              return token;
+            } catch (fetchError) {
+              if (generation === currentGeneration) {
+                setInternalError(fetchError, '[convex-angular auth] Token fetch failed');
+                backendAuthenticated.set(false);
+              }
+
+              return null;
+            }
+          },
+          (isConvexAuthenticated) => {
             if (generation !== currentGeneration) {
-              return null;
+              return;
             }
 
-            if (token == null) {
-              backendAuthenticated.set(false);
-              return null;
+            backendAuthenticated.set(isConvexAuthenticated);
+            if (isConvexAuthenticated) {
+              clearInternalError();
             }
-
-            return token;
-          } catch (fetchError) {
-            if (generation === currentGeneration) {
-              setInternalError(fetchError, '[convex-angular auth] Token fetch failed');
-              backendAuthenticated.set(false);
-            }
-
-            return null;
-          }
-        },
-        (isConvexAuthenticated) => {
-          if (generation !== currentGeneration) {
-            return;
-          }
-
-          backendAuthenticated.set(isConvexAuthenticated);
-          if (isConvexAuthenticated) {
-            clearInternalError();
-          }
-        },
-      );
-    } catch (syncError) {
-      if (generation === currentGeneration) {
-        setInternalError(syncError, '[convex-angular auth] Convex auth sync failed');
-        backendAuthenticated.set(false);
+          },
+        );
+      } catch (syncError) {
+        if (generation === currentGeneration) {
+          setInternalError(syncError, '[convex-angular auth] Convex auth sync failed');
+          backendAuthenticated.set(false);
+        }
       }
-    }
+    });
   });
 
   destroyRef.onDestroy(() => {
     currentGeneration += 1;
-    clearAuthIfNeeded();
+    const generation = currentGeneration;
+    runForCurrentGeneration(generation, () => {
+      clearAuthIfNeeded();
+    });
   });
 
   return {

@@ -57,7 +57,8 @@ export interface ClerkAuthProvider {
 
   /**
    * Current Clerk session claims.
-   * When exposed, changes participate in Convex reauthentication.
+   * Optional app-facing claims state. This does not by itself trigger Convex
+   * reauthentication.
    */
   sessionClaims?: Signal<Record<string, unknown> | null | undefined>;
 
@@ -157,7 +158,7 @@ export function provideClerkAuth(): EnvironmentProviders {
         return {
           isLoading: computed(() => !clerk.isLoaded()),
           isAuthenticated: computed(() => clerk.isSignedIn() ?? false),
-          reauthVersion: computed(() => [clerk.orgId?.(), clerk.orgRole?.(), clerk.sessionClaims?.()]),
+          reauthVersion: computed(() => [clerk.orgId?.(), clerk.orgRole?.()]),
           error: clerk.error,
           fetchAccessToken,
         };

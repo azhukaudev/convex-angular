@@ -45,6 +45,8 @@ Do not register it again in nested or route-level providers.
 The underlying browser `ConvexClient` is created lazily, so simply configuring
 or injecting it does not open a connection until a query, mutation, action,
 auth sync, or connection-state subscription actually uses it.
+Unlike `convex/react`, `convex-angular` does not expose subtree-scoped provider
+components; the client and auth bridges are configured at the application root.
 
 3. 🎉 That's it! You can now use the injection providers in your app.
 
@@ -319,6 +321,11 @@ Its `liveQuery` field exposes the underlying reactive `injectQuery()` result,
 and `isHydratedFromServer()` stays true until the first live client result
 arrives. `data()` being defined only means the server preload is available; use
 `liveQuery.status()` and `liveQuery.error()` to inspect the live subscription.
+If the live query fails after hydration, `data()` continues returning the
+preloaded server value until live data replaces it. This differs from
+`convex/react`, where query errors are thrown; in Angular, check
+`liveQuery.error()` and `liveQuery.status()` to distinguish stale SSR data from
+healthy live data.
 
 `preloadedQueryResult()` lets you inspect a preloaded payload on the server
 before sending it across `TransferState`:
@@ -327,6 +334,13 @@ before sending it across `TransferState`:
 const preloaded = await preloadQuery(api.todos.getTodo, { id: 'todo-1' });
 const todo = preloadedQueryResult(preloaded);
 ```
+
+The serialized preload payloads are Angular-specific. Argument payloads are
+canonicalized for Angular's own matching and are not guaranteed to be
+byte-compatible with React/Next.js preload payloads.
+`readTransferredPreloadedQuery(...)` also consumes the `TransferState` entry on
+first read. If multiple Angular consumers need the same preloaded payload
+during bootstrap, read it once and fan it out yourself.
 
 You can also use the standalone server helpers without preloading:
 
@@ -503,6 +517,11 @@ export class AppComponent {
 }
 ```
 
+Angular intentionally exposes the higher-level `inject*` helpers plus the
+browser `ConvexClient` through `injectConvex()`. It does not currently expose
+React-specific low-level watch/journal APIs or a
+`usePaginatedQuery_experimental` equivalent.
+
 ### Monitoring connection state
 
 Use `injectConvexConnectionState` to react to online/offline and reconnecting changes.
@@ -607,8 +626,9 @@ unauthenticated outcome. It does not populate `error()`.
 ### Clerk Integration
 
 `provideClerkAuth()` accepts any Clerk token source that can satisfy the
-`ClerkAuthProvider` contract. `sessionClaims` is optional but recommended; when
-provided, it participates in reactive reauthentication tracking.
+`ClerkAuthProvider` contract. `sessionClaims` is optional and can still be
+useful to expose for app-level claims access, but Convex reauthentication is
+currently keyed from reactive auth context like `orgId` / `orgRole`.
 
 To integrate with Clerk, create a service that implements `ClerkAuthProvider`
 and register it with `provideClerkAuth()`.
@@ -646,17 +666,18 @@ export const appConfig: ApplicationConfig = {
 ```
 
 `sessionClaims` is optional in the interface. Include it when your Clerk setup
-can expose reactive claims changes.
+or UI needs claims data, but it does not trigger Convex reauthentication by
+itself.
 
 `provideClerkAuth()` already includes `provideConvexAuth()`, so do not add both.
 If your Clerk service exposes upstream failures, forward them via the optional
 `error` signal so `injectAuth().error()` can surface them. Clerk integrations
 can also expose reactive auth context like `orgId`/`orgRole`; `provideClerkAuth()`
-uses that state, plus optional `sessionClaims`, to refresh the token when auth
-context changes. Return `null` only when the user is signed out or no token is
-available. Let real token-fetch failures throw so `injectAuth().error()` can
-surface them. If `getToken()` returns a token Convex cannot validate, the auth
-attempt will fail during Convex auth sync rather than at provider setup time.
+uses that state to refresh the token when auth context changes. Return `null`
+only when the user is signed out or no token is available. Let real
+token-fetch failures throw so `injectAuth().error()` can surface them. If
+`getToken()` returns a token Convex cannot validate, the auth attempt will fail
+during Convex auth sync rather than at provider setup time.
 
 ### Auth0 Integration
 
@@ -704,7 +725,9 @@ If your Auth0 service can expose upstream auth failures, forward them via the
 optional `error` signal so `injectAuth().error()` can surface them.
 `provideAuth0Auth()` now requires the detailed Auth0 token response so it can
 forward `id_token` to Convex. Legacy string-only implementations of
-`getAccessTokenSilently()` are no longer supported.
+`getAccessTokenSilently()` are no longer supported. This is intentionally
+stricter than `convex/react`: Angular surfaces missing `id_token` responses as
+an explicit auth error instead of silently degrading to unauthenticated.
 
 ### Custom Auth Providers
 

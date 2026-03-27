@@ -352,6 +352,24 @@ describe('injectAuth', () => {
     expect(mockSetAuth).toHaveBeenCalledTimes(2);
   }));
 
+  it('clears existing Convex auth before reauthenticating an authenticated context change', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    createAuthFixture();
+    setAuthOnChange?.(true);
+    tick();
+
+    mockHasAuth.mockReturnValue(true);
+
+    reauthVersion.update((value) => value + 1);
+    tick();
+
+    expect(mockClearAuth).toHaveBeenCalledTimes(1);
+    expect(mockSetAuth).toHaveBeenCalledTimes(2);
+    expect(mockClearAuth.mock.invocationCallOrder[0]).toBeLessThan(mockSetAuth.mock.invocationCallOrder[1]);
+  }));
+
   it('returns the same auth state object for repeated calls in the same injector', fakeAsync(() => {
     providerAuthenticated.set(true);
     configureTestingModule();

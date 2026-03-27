@@ -104,22 +104,22 @@ describe('provideClerkAuth', () => {
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    expect(provider.reauthVersion?.()).toEqual([null, null, { aud: 'convex' }]);
+    expect(provider.reauthVersion?.()).toEqual([null, null]);
 
     orgId.set('org_123');
     orgRole.set('admin');
 
-    expect(provider.reauthVersion?.()).toEqual(['org_123', 'admin', { aud: 'convex' }]);
+    expect(provider.reauthVersion?.()).toEqual(['org_123', 'admin']);
   });
 
-  it('includes session claims in reauthVersion', () => {
+  it('does not include session claims in reauthVersion', () => {
     configureTestingModule();
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
     sessionClaims.set({ aud: 'convex', sub: 'user_123' });
 
-    expect(provider.reauthVersion?.()).toEqual([null, null, { aud: 'convex', sub: 'user_123' }]);
+    expect(provider.reauthVersion?.()).toEqual([null, null]);
   });
 
   it('falls back to undefined reauth values when org signals are missing', () => {
@@ -133,7 +133,7 @@ describe('provideClerkAuth', () => {
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    expect(provider.reauthVersion?.()).toEqual([undefined, undefined, { aud: 'convex' }]);
+    expect(provider.reauthVersion?.()).toEqual([undefined, undefined]);
   });
 
   it('passes through the upstream error signal', () => {
@@ -256,6 +256,31 @@ describe('provideClerkAuth', () => {
 
     expect(fixture.componentInstance.auth.status()).toBe('authenticated');
     expect(setAuthFetcher).toBeDefined();
+  }));
+
+  it('does not reauthenticate when only sessionClaims changes', fakeAsync(() => {
+    isSignedIn.set(true);
+    configureTestingModule();
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly auth = injectAuth();
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+
+    sessionClaims.set({ aud: 'convex', sub: 'user_123' });
+    fixture.detectChanges();
+    tick();
+
+    expect(mockSetAuth).toHaveBeenCalledTimes(1);
   }));
 
   it('throws when combined with provideConvexAuth in the same injector', () => {
