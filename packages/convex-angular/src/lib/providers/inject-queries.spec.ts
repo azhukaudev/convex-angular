@@ -147,6 +147,35 @@ describe('injectQueries', () => {
     expect(fixture.componentInstance.queries.isLoading()).toBe(false);
   }));
 
+  it('exposes requested keys as pending before the first render cycle', () => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly queries = injectQueries(() => ({
+        user: { query: mockUserQuery, args: { userId: 'user-1' } },
+        todos: { query: mockTodosQuery, args: { count: 10 } },
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+
+    expect(fixture.componentInstance.queries.results()).toEqual({
+      user: undefined,
+      todos: undefined,
+    });
+    expect(fixture.componentInstance.queries.errors()).toEqual({
+      user: undefined,
+      todos: undefined,
+    });
+    expect(fixture.componentInstance.queries.statuses()).toEqual({
+      user: 'pending',
+      todos: 'pending',
+    });
+    expect(fixture.componentInstance.queries.isLoading()).toBe(true);
+  });
+
   it('seeds cached results per key before the first update', fakeAsync(() => {
     localResultsByKey.set(keyFor('users:get', { userId: 'user-1' }), {
       name: 'Cached user',
@@ -351,11 +380,11 @@ describe('injectQueries', () => {
       user: { name: 'Bea (cached)' },
     });
     expect(fixture.componentInstance.queries.statuses()).toEqual({
-      user: 'pending',
+      user: 'success',
     });
   }));
 
-  it('preserves the previous value when a changed key has no warm cache entry', fakeAsync(() => {
+  it('clears the previous value when a changed key has no warm cache entry', fakeAsync(() => {
     @Component({
       template: '',
       standalone: true,
@@ -380,7 +409,7 @@ describe('injectQueries', () => {
     tick();
 
     expect(fixture.componentInstance.queries.results()).toEqual({
-      user: { name: 'Ali' },
+      user: undefined,
     });
     expect(fixture.componentInstance.queries.statuses()).toEqual({
       user: 'pending',
@@ -417,8 +446,9 @@ describe('injectQueries', () => {
     tick();
 
     expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
-    expect(unsubscribeByKey.get(keyFor('users:search', { filters: { channel: 'general', listId: 'list-1' } })))
-      .not.toHaveBeenCalled();
+    expect(
+      unsubscribeByKey.get(keyFor('users:search', { filters: { channel: 'general', listId: 'list-1' } })),
+    ).not.toHaveBeenCalled();
     expect(fixture.componentInstance.queries.results()).toEqual({
       user: initialResult,
     });

@@ -1,4 +1,4 @@
-import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
+import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal } from '@angular/core';
 import { FunctionReference, FunctionReturnType, getFunctionName } from 'convex/server';
 import { Value } from 'convex/values';
 
@@ -45,7 +45,8 @@ export interface QueryResult<Query extends QueryReference> {
    * The current data from the query subscription.
    * Undefined until cached data or the first successful result is available.
    * Data is also undefined when the query is skipped.
-   * The last successful value is preserved during refetch for better UX.
+   * Changing to a new uncached query identity clears the previous value.
+   * Refetching the same identity preserves the current value while reloading.
    */
   data: Signal<FunctionReturnType<Query> | undefined>;
 
@@ -84,7 +85,7 @@ export interface QueryResult<Query extends QueryReference> {
 
   /**
    * Force the query to refetch by resubscribing.
-   * Existing data is preserved during refetch for better UX.
+   * Existing data is preserved while the same query identity refetches.
    */
   refetch: () => void;
 }
@@ -150,18 +151,26 @@ export function injectQuery<Query extends QueryReference>(
   return runInResolvedInjectionContext(injectQuery, options?.injectRef, () => {
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
+    const queryName = getFunctionName(query);
+
+    const initialArgs = argsFn();
+    const initialCachedData =
+      initialArgs === skipToken ? undefined : convex.client.localQueryResult(queryName, initialArgs);
 
     // Initialize signals
-    const data = signal<FunctionReturnType<Query> | undefined>(undefined);
+    const data = signal<FunctionReturnType<Query> | undefined>(initialCachedData);
     const error = signal<Error | undefined>(undefined);
-    const isLoading = signal(false);
-    const isSkipped = signal(false);
+    const isLoading = signal(initialArgs !== skipToken && initialCachedData === undefined);
+    const isSkipped = signal(initialArgs === skipToken);
 
     // Version counter for manual refetch
     const refetchVersion = signal(0);
 
+    let previousArgsKey: string | undefined =
+      initialArgs === skipToken ? undefined : serializeArgs(initialArgs as Record<string, Value>);
+
     // Computed signals
-    const isSuccess = computed(() => !isLoading() && !isSkipped() && !error());
+    const isSuccess = computed(() => !isLoading() && !isSkipped() && !error() && data() !== undefined);
     const status = computed<QueryStatus>(() => {
       if (isSkipped()) return 'skipped';
       if (isLoading()) return 'pending';
@@ -169,27 +178,33 @@ export function injectQuery<Query extends QueryReference>(
       return 'success';
     });
 
-    const subscription = createSubscriptionController<Query['_args']>(destroyRef, {
+    const subscription = createSubscriptionController<{
+      args: Query['_args'];
+      argsKey: string;
+      isRefetch: boolean;
+    }>(destroyRef, {
       onSkip: () => {
         data.set(undefined);
         error.set(undefined);
         isLoading.set(false);
         isSkipped.set(true);
       },
-      onPending: (args, { hadPreviousSubscription }) => {
+      onPending: ({ args, isRefetch }) => {
         isSkipped.set(false);
-        isLoading.set(true);
+        error.set(undefined);
 
-        // Prefer the warm cache for the current args. When the new args are not
-        // cached yet, preserve the previous value during the pending resubscribe.
-        const cachedData = convex.client.localQueryResult(getFunctionName(query), args);
+        const cachedData = convex.client.localQueryResult(queryName, args);
         if (cachedData !== undefined) {
           data.set(cachedData);
-        } else if (!hadPreviousSubscription && untracked(data) !== undefined) {
+          isLoading.set(isRefetch);
+        } else if (isRefetch) {
+          isLoading.set(true);
+        } else {
           data.set(undefined);
+          isLoading.set(true);
         }
       },
-      subscribe: (args, controls) =>
+      subscribe: ({ args }, controls) =>
         convex.onUpdate(
           query,
           args,
@@ -222,14 +237,21 @@ export function injectQuery<Query extends QueryReference>(
       const version = refetchVersion();
 
       if (args === skipToken) {
+        previousArgsKey = undefined;
         subscription.sync(skipToken);
         return;
       }
 
       const argsKey = serializeArgs(args as Record<string, Value>);
+      const isRefetch = previousArgsKey === argsKey && version > 0;
+      previousArgsKey = argsKey;
       subscription.sync({
         identity: `${argsKey}:${version}`,
-        value: args,
+        value: {
+          args,
+          argsKey,
+          isRefetch,
+        },
       });
     });
 

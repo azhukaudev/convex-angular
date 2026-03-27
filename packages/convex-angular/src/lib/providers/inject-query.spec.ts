@@ -87,6 +87,24 @@ describe('injectQuery', () => {
       expect(fixture.componentInstance.todos.data()).toEqual(cachedData);
     }));
 
+    it('should start pending before the first render cycle for an uncached query', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+      expect(fixture.componentInstance.todos.isSuccess()).toBe(false);
+      expect(fixture.componentInstance.todos.status()).toBe('pending');
+    });
+
     it('should initialize with undefined if no local result', fakeAsync(() => {
       mockLocalQueryResult.mockReturnValue(undefined);
 
@@ -714,11 +732,11 @@ describe('injectQuery', () => {
       tick();
 
       expect(fixture.componentInstance.todos.data()).toEqual(cachedData);
-      expect(fixture.componentInstance.todos.isLoading()).toBe(true);
-      expect(fixture.componentInstance.todos.status()).toBe('pending');
+      expect(fixture.componentInstance.todos.isLoading()).toBe(false);
+      expect(fixture.componentInstance.todos.status()).toBe('success');
     }));
 
-    it('should preserve previous data when args change and the new query is not cached', fakeAsync(() => {
+    it('should clear previous data when args change and the new query is not cached', fakeAsync(() => {
       @Component({
         template: '',
         standalone: true,
@@ -741,9 +759,10 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(fixture.componentInstance.todos.data()).toEqual(initialData);
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
       expect(fixture.componentInstance.todos.isLoading()).toBe(true);
       expect(fixture.componentInstance.todos.status()).toBe('pending');
+      expect(fixture.componentInstance.todos.isSuccess()).toBe(false);
     }));
 
     it('should not resubscribe when args are logically equal but object key order changes', fakeAsync(() => {

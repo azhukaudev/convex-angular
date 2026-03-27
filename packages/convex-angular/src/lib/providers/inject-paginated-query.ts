@@ -8,8 +8,8 @@ import {
 } from 'convex/server';
 import { ConvexError, Value, compareValues } from 'convex/values';
 
-import { PaginatedQueryStatus } from '../types';
 import { SkipToken, skipToken } from '../skip-token';
+import { PaginatedQueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 import { createSubscriptionController, serializeArgs } from './query-subscription-lifecycle';
@@ -425,6 +425,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
               if (isInvalidCursorPaginationError(err)) {
                 if (!restartScheduled) {
+                  console.warn(`injectPaginatedQuery hit error, resetting pagination state: ${err.message}`);
                   restartScheduled = true;
                   resetVersion.update((version) => version + 1);
                 }

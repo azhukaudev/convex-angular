@@ -57,9 +57,9 @@ export interface ClerkAuthProvider {
 
   /**
    * Current Clerk session claims.
-   * Must be exposed for native Convex Clerk integration validation.
+   * When exposed, changes participate in Convex reauthentication.
    */
-  sessionClaims: Signal<Record<string, unknown> | null | undefined>;
+  sessionClaims?: Signal<Record<string, unknown> | null | undefined>;
 
   /**
    * Optional: Current organization ID.
@@ -149,14 +149,6 @@ export function provideClerkAuth(): EnvironmentProviders {
         const clerk = inject(CLERK_AUTH);
 
         const fetchAccessToken = async (args: { forceRefreshToken: boolean }) => {
-          const claims = clerk.sessionClaims();
-          if (!claims || claims['aud'] !== 'convex') {
-            throw new Error(
-              "provideClerkAuth() requires Clerk's native Convex integration. " +
-                'Expose sessionClaims and ensure aud === \"convex\".',
-            );
-          }
-
           return clerk.getToken({
             skipCache: args.forceRefreshToken,
           });
@@ -165,7 +157,7 @@ export function provideClerkAuth(): EnvironmentProviders {
         return {
           isLoading: computed(() => !clerk.isLoaded()),
           isAuthenticated: computed(() => clerk.isSignedIn() ?? false),
-          reauthVersion: computed(() => [clerk.orgId?.(), clerk.orgRole?.(), clerk.sessionClaims()]),
+          reauthVersion: computed(() => [clerk.orgId?.(), clerk.orgRole?.(), clerk.sessionClaims?.()]),
           error: clerk.error,
           fetchAccessToken,
         };

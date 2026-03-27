@@ -42,6 +42,9 @@ export const appConfig: ApplicationConfig = {
 
 `provideConvex(...)` must be configured only once at the root application level.
 Do not register it again in nested or route-level providers.
+The underlying browser `ConvexClient` is created lazily, so simply configuring
+or injecting it does not open a connection until a query, mutation, action,
+auth sync, or connection-state subscription actually uses it.
 
 3. 🎉 That's it! You can now use the injection providers in your app.
 
@@ -85,6 +88,12 @@ export class AppComponent {
 
 `data()` is typed as `T | undefined`. Handle the initial/skipped state with
 `?.` or `??` until the first successful result arrives.
+Warm cache hits for the current identity can resolve immediately into a
+successful state.
+When the query arguments change, `data()` follows the next query identity: if
+the new arguments are not warm-cached yet it becomes `undefined` until that new
+subscription produces data. This matches `convex/react` query identity
+behavior.
 
 ### Fetching multiple queries
 
@@ -131,6 +140,10 @@ The multi-query result provides:
 - `errors()` - Keyed query errors
 - `statuses()` - Keyed query statuses
 - `isLoading()` - True while any active query is pending
+
+When a keyed query changes to a new uncached identity, that key resets to
+`undefined` + `'pending'` immediately instead of retaining the previous key's
+value. This matches `convex/react` keyed query semantics.
 
 ### Prewarming queries
 
@@ -266,11 +279,8 @@ transfer it through Angular `TransferState` and hydrate it on the client with
 ```typescript
 import { Component, TransferState, inject } from '@angular/core';
 import {
-  fetchQuery,
-  fetchAction,
-  fetchMutation,
-  injectQuery,
   injectPreloadedQuery,
+  injectQuery,
   preloadQuery,
   preloadedQueryResult,
   readTransferredPreloadedQuery,
@@ -296,11 +306,7 @@ export async function preloadTodo(transferState: TransferState) {
 })
 export class AppComponent {
   private readonly transferState = inject(TransferState);
-  private readonly preloaded = readTransferredPreloadedQuery(
-    api.todos.getTodo,
-    this.transferState,
-    { id: 'todo-1' },
-  );
+  private readonly preloaded = readTransferredPreloadedQuery(api.todos.getTodo, this.transferState, { id: 'todo-1' });
 
   readonly todo = this.preloaded
     ? injectPreloadedQuery(api.todos.getTodo, this.preloaded)
@@ -385,7 +391,10 @@ The paginated query returns:
 Each helper instance owns an isolated pagination session, even when two
 components use the same paginated query with the same arguments.
 `injectPaginatedQuery()` also restarts from page one when pagination cursors
-become invalid, so transient `InvalidCursor` errors recover automatically.
+become invalid, warns in the console before resetting, and recovers
+automatically.
+Unlike React's separate experimental pagination hook export,
+`convex-angular` currently exposes the stable `injectPaginatedQuery()` API only.
 
 ### Optimistic paginated updates
 
@@ -484,8 +493,12 @@ import { api } from '../convex/_generated/api';
 export class AppComponent {
   readonly convex = injectConvex();
 
-  completeAllTodos() {
-    this.convex.action(api.todoFunctions.completeAllTodos, {});
+  async completeAllTodos() {
+    try {
+      await this.convex.action(api.todoFunctions.completeAllTodos, {});
+    } catch (error) {
+      console.error(error);
+    }
   }
 }
 ```
@@ -547,6 +560,8 @@ This works for all public `inject*` helpers, including `injectQuery`,
 `injectQueries`, `injectPrewarmQuery`, `injectPaginatedQuery`,
 `injectMutation`, `injectAction`, `injectConvex`,
 `injectConvexConnectionState`, and `injectAuth`.
+`injectConvex({ injectRef })` is also lazy, so capturing the helper does not
+create the underlying browser client until first use.
 
 ## 🔐 Authentication
 
@@ -591,9 +606,9 @@ unauthenticated outcome. It does not populate `error()`.
 
 ### Clerk Integration
 
-`provideClerkAuth()` supports Clerk's native Convex integration only. Your
-`ClerkAuthProvider` must expose `sessionClaims`, and the active session must
-have `aud === 'convex'`.
+`provideClerkAuth()` accepts any Clerk token source that can satisfy the
+`ClerkAuthProvider` contract. `sessionClaims` is optional but recommended; when
+provided, it participates in reactive reauthentication tracking.
 
 To integrate with Clerk, create a service that implements `ClerkAuthProvider`
 and register it with `provideClerkAuth()`.
@@ -630,17 +645,18 @@ export const appConfig: ApplicationConfig = {
 };
 ```
 
+`sessionClaims` is optional in the interface. Include it when your Clerk setup
+can expose reactive claims changes.
+
 `provideClerkAuth()` already includes `provideConvexAuth()`, so do not add both.
 If your Clerk service exposes upstream failures, forward them via the optional
 `error` signal so `injectAuth().error()` can surface them. Clerk integrations
 can also expose reactive auth context like `orgId`/`orgRole`; `provideClerkAuth()`
-uses that state, plus `sessionClaims`, to refresh the token when auth context
-changes. Return `null` only when the user is signed out or no token is
+uses that state, plus optional `sessionClaims`, to refresh the token when auth
+context changes. Return `null` only when the user is signed out or no token is
 available. Let real token-fetch failures throw so `injectAuth().error()` can
-surface them.
-
-If your Clerk session is configured for a JWT template instead of Clerk's native
-Convex integration, `provideClerkAuth()` will throw a configuration error.
+surface them. If `getToken()` returns a token Convex cannot validate, the auth
+attempt will fail during Convex auth sync rather than at provider setup time.
 
 ### Auth0 Integration
 

@@ -223,7 +223,7 @@ describe('injectPaginatedQuery', () => {
     tick();
 
     const resetSession = latestSubscription();
-expect(resetSession.args.paginationOpts.id).not.toBe(firstSession.args.paginationOpts.id);
+    expect(resetSession.args.paginationOpts.id).not.toBe(firstSession.args.paginationOpts.id);
     expect(firstSession.unsubscribe).toHaveBeenCalled();
     expect(firstSessionPageTwo.unsubscribe).toHaveBeenCalled();
 
@@ -325,6 +325,7 @@ expect(resetSession.args.paginationOpts.id).not.toBe(firstSession.args.paginatio
 
   it('restarts from the first page on InvalidCursor without surfacing an error', fakeAsync(() => {
     const onError = jest.fn();
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     @Component({
       template: '',
@@ -361,6 +362,11 @@ expect(resetSession.args.paginationOpts.id).not.toBe(firstSession.args.paginatio
     expect(fixture.componentInstance.todos.status()).toBe('loadingFirstPage');
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
     expect(onError).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('injectPaginatedQuery hit error, resetting pagination state:'),
+    );
+
+    warnSpy.mockRestore();
   }));
 
   it('keeps the initial split-required state pending until the first logical page becomes usable', fakeAsync(() => {

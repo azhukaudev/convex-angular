@@ -24,9 +24,7 @@ export const CONVEX = new InjectionToken<ConvexClient>('CONVEX');
 // Internal multi-token used as a per-injector registration marker for
 // provideConvex(...). The number of values in the current injector tells us
 // how many times provideConvex(...) was registered in that scope.
-const CONVEX_PROVIDER_REGISTRATION = new InjectionToken<boolean[]>(
-  'CONVEX_PROVIDER_REGISTRATION',
-);
+const CONVEX_PROVIDER_REGISTRATION = new InjectionToken<boolean[]>('CONVEX_PROVIDER_REGISTRATION');
 
 // Internal token whose factory performs provider placement validation.
 const CONVEX_PROVIDER_GUARD = new InjectionToken<true>('CONVEX_PROVIDER_GUARD');
@@ -62,9 +60,84 @@ function convexProviderGuardFactory(): true {
   return true;
 }
 
+function createLazyConvexClientProxy(convexUrl: string, options?: ConvexClientOptions): ConvexClient {
+  let clientInstance: ConvexClient | undefined;
+  let isClosed = false;
+
+  const getClient = (): ConvexClient => {
+    if (isClosed) {
+      throw new Error('ConvexClient has already been closed.');
+    }
+
+    if (!clientInstance) {
+      clientInstance = new ConvexClient(convexUrl, options);
+    }
+
+    return clientInstance;
+  };
+
+  const target = Object.create(ConvexClient.prototype) as ConvexClient;
+
+  for (const [property, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(ConvexClient.prototype))) {
+    if (property === 'constructor' || property === 'close') {
+      continue;
+    }
+
+    if ('value' in descriptor && typeof descriptor.value === 'function') {
+      Object.defineProperty(target, property, {
+        configurable: true,
+        enumerable: descriptor.enumerable,
+        writable: false,
+        value: (...args: unknown[]) => {
+          const client = getClient() as unknown as Record<string, (...innerArgs: unknown[]) => unknown>;
+          return client[property](...args);
+        },
+      });
+      continue;
+    }
+
+    Object.defineProperty(target, property, {
+      configurable: true,
+      enumerable: descriptor.enumerable,
+      get: () => {
+        if (property === 'closed') {
+          return isClosed || clientInstance?.closed === true;
+        }
+
+        if (property === 'disabled') {
+          return clientInstance?.disabled ?? options?.disabled ?? false;
+        }
+
+        return (getClient() as unknown as Record<string, unknown>)[property];
+      },
+      set: descriptor.set
+        ? (value: unknown) => {
+            (getClient() as unknown as Record<string, unknown>)[property] = value;
+          }
+        : undefined,
+    });
+  }
+
+  Object.defineProperty(target, 'close', {
+    configurable: true,
+    enumerable: false,
+    writable: false,
+    value: () => {
+      if (isClosed) {
+        return;
+      }
+
+      isClosed = true;
+      clientInstance?.close();
+    },
+  });
+
+  return target;
+}
+
 /**
- * Factory function that creates and configures a ConvexClient instance.
- * Automatically registers cleanup on destroy.
+ * Factory function that creates a lazily-instantiated ConvexClient proxy and
+ * registers cleanup on destroy.
  *
  * @param convexUrl - The URL of the Convex deployment
  * @param options - Optional ConvexClient configuration options
@@ -72,12 +145,9 @@ function convexProviderGuardFactory(): true {
  *
  * @internal
  */
-function convexClientFactory(
-  convexUrl: string,
-  options?: ConvexClientOptions,
-): ConvexClient {
+function convexClientFactory(convexUrl: string, options?: ConvexClientOptions): ConvexClient {
   const destroyRef = inject(DestroyRef);
-  const client = new ConvexClient(convexUrl, options);
+  const client = createLazyConvexClientProxy(convexUrl, options);
   destroyRef.onDestroy(() => client.close());
   return client;
 }
@@ -107,10 +177,7 @@ function convexClientFactory(
  *
  * @public
  */
-export function provideConvex(
-  convexUrl: string,
-  options?: ConvexClientOptions,
-): EnvironmentProviders {
+export function provideConvex(convexUrl: string, options?: ConvexClientOptions): EnvironmentProviders {
   return makeEnvironmentProviders([
     // Registration marker for the current injector scope (multi so we can
     // detect accidental duplicates in the same providers array).

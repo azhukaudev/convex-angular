@@ -169,28 +169,24 @@ describe('provideClerkAuth', () => {
     expect(getToken).toHaveBeenCalledWith({ skipCache: true });
   });
 
-  it('throws when session claims are missing', async () => {
+  it('fetches Clerk tokens even when session claims are missing', async () => {
     sessionClaims.set(undefined);
     configureTestingModule();
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    await expect(provider.fetchAccessToken({ forceRefreshToken: false })).rejects.toThrow(
-      /requires Clerk's native Convex integration/i,
-    );
-    expect(getToken).not.toHaveBeenCalled();
+    await expect(provider.fetchAccessToken({ forceRefreshToken: false })).resolves.toBe('token');
+    expect(getToken).toHaveBeenCalledWith({ skipCache: false });
   });
 
-  it('throws when session claims do not target convex', async () => {
+  it('fetches Clerk tokens even when session claims do not target convex', async () => {
     sessionClaims.set({ aud: 'other-audience' });
     configureTestingModule();
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    await expect(provider.fetchAccessToken({ forceRefreshToken: false })).rejects.toThrow(
-      /requires Clerk's native Convex integration/i,
-    );
-    expect(getToken).not.toHaveBeenCalled();
+    await expect(provider.fetchAccessToken({ forceRefreshToken: false })).resolves.toBe('token');
+    expect(getToken).toHaveBeenCalledWith({ skipCache: false });
   });
 
   it('rethrows when Clerk token fetching fails', async () => {

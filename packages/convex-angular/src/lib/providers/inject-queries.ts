@@ -1,4 +1,4 @@
-import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
+import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal } from '@angular/core';
 import { FunctionReturnType, getFunctionName } from 'convex/server';
 import { Value } from 'convex/values';
 
@@ -55,6 +55,7 @@ export interface QueriesResult<Definitions extends QueriesDefinition> {
    * The latest result for each active key.
    * Keys using skipToken are present with undefined values.
    * Keys removed from the definition are removed from this record.
+   * Keys that change to a new uncached query identity reset to undefined.
    */
   results: Signal<QueryResultsRecord<Definitions>>;
 
@@ -129,9 +130,34 @@ export function injectQueries<Definitions extends QueriesDefinition>(
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
 
-    const results = signal<Record<string, unknown>>({});
-    const errors = signal<Record<string, Error | undefined>>({});
-    const statuses = signal<Record<string, QueryStatus>>({});
+    const initialDefinitions = definitionsFn();
+    const initialResults: Record<string, unknown> = {};
+    const initialErrors: Record<string, Error | undefined> = {};
+    const initialStatuses: Record<string, QueryStatus> = {};
+
+    for (const key of Object.keys(initialDefinitions)) {
+      const definition = initialDefinitions[key];
+
+      if (definition === skipToken) {
+        initialResults[key] = undefined;
+        initialErrors[key] = undefined;
+        initialStatuses[key] = 'skipped';
+        continue;
+      }
+
+      const queryName = getFunctionName(definition.query);
+      const cachedResult = convex.client.localQueryResult(queryName, definition.args as Record<string, Value>) as
+        | FunctionReturnType<typeof definition.query>
+        | undefined;
+
+      initialResults[key] = cachedResult;
+      initialErrors[key] = undefined;
+      initialStatuses[key] = cachedResult === undefined ? 'pending' : 'success';
+    }
+
+    const results = signal<Record<string, unknown>>(initialResults);
+    const errors = signal<Record<string, Error | undefined>>(initialErrors);
+    const statuses = signal<Record<string, QueryStatus>>(initialStatuses);
     const controllers = new Map<
       string,
       SubscriptionController<{
@@ -155,11 +181,6 @@ export function injectQueries<Definitions extends QueriesDefinition>(
         },
         onPending: (definition) => {
           errors.update((current) => setKey(current, key, undefined));
-          statuses.update((current) => setKey(current, key, 'pending'));
-
-          if (!(key in untracked(results))) {
-            results.update((current) => setKey(current, key, undefined));
-          }
 
           const cachedResult = convex.client.localQueryResult(definition.queryName, definition.args) as
             | FunctionReturnType<typeof definition.query>
@@ -167,6 +188,10 @@ export function injectQueries<Definitions extends QueriesDefinition>(
 
           if (cachedResult !== undefined) {
             results.update((current) => setKey(current, key, cachedResult));
+            statuses.update((current) => setKey(current, key, 'success'));
+          } else {
+            results.update((current) => setKey(current, key, undefined));
+            statuses.update((current) => setKey(current, key, 'pending'));
           }
         },
         subscribe: (definition, controls) =>
