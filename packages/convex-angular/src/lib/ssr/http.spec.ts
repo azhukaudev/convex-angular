@@ -18,6 +18,7 @@ jest.mock('convex/browser', () => {
 });
 
 const MockedConvexHttpClient = jest.mocked(ConvexHttpClient);
+const legacyNextStyleConvexUrlEnv = ['NEXT', 'PUBLIC', 'CONVEX', 'URL'].join('_');
 
 const mockQueryRef = (() => {}) as unknown as FunctionReference<
   'query',
@@ -42,11 +43,11 @@ const mockActionRef = (() => {}) as unknown as FunctionReference<
 
 describe('ssr/http', () => {
   const originalAngularUrl = process.env.NG_APP_CONVEX_URL;
-  const originalUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
+  const originalNextUrl = process.env[legacyNextStyleConvexUrlEnv];
 
   beforeEach(() => {
-    delete process.env.NG_APP_CONVEX_URL;
-    process.env.NEXT_PUBLIC_CONVEX_URL = 'https://happy-animal-123.convex.cloud';
+    process.env.NG_APP_CONVEX_URL = 'https://happy-animal-123.convex.cloud';
+    delete process.env[legacyNextStyleConvexUrlEnv];
     MockedConvexHttpClient.mockClear();
   });
 
@@ -57,11 +58,27 @@ describe('ssr/http', () => {
       process.env.NG_APP_CONVEX_URL = originalAngularUrl;
     }
 
-    if (originalUrl === undefined) {
-      delete process.env.NEXT_PUBLIC_CONVEX_URL;
+    if (originalNextUrl === undefined) {
+      delete process.env[legacyNextStyleConvexUrlEnv];
     } else {
-      process.env.NEXT_PUBLIC_CONVEX_URL = originalUrl;
+      process.env[legacyNextStyleConvexUrlEnv] = originalNextUrl;
     }
+  });
+
+  it('prefers an explicit url over NG_APP_CONVEX_URL', async () => {
+    const client = {
+      query: jest.fn().mockResolvedValue({ id: '1', name: 'Ada' }),
+      mutation: jest.fn(),
+      action: jest.fn(),
+    };
+    MockedConvexHttpClient.mockImplementationOnce(() => client as any);
+
+    await fetchQuery(mockQueryRef, { id: '1' }, { url: 'https://explicit.convex.cloud' });
+
+    expect(MockedConvexHttpClient).toHaveBeenCalledWith(
+      'https://explicit.convex.cloud',
+      expect.any(Object),
+    );
   });
 
   it('prefers NG_APP_CONVEX_URL when url is omitted', async () => {
@@ -131,9 +148,17 @@ describe('ssr/http', () => {
     expect(client.action).toHaveBeenCalledWith(mockActionRef, {});
   });
 
+  it('ignores a Next-style convex url env var when NG_APP_CONVEX_URL is unset', async () => {
+    delete process.env.NG_APP_CONVEX_URL;
+    process.env[legacyNextStyleConvexUrlEnv] = 'https://next-only.convex.cloud';
+
+    await expect(fetchQuery(mockQueryRef, { id: '1' })).rejects.toThrow(/NG_APP_CONVEX_URL/i);
+    expect(MockedConvexHttpClient).not.toHaveBeenCalled();
+  });
+
   it('throws a focused error when no deployment URL is available', async () => {
     delete process.env.NG_APP_CONVEX_URL;
-    delete process.env.NEXT_PUBLIC_CONVEX_URL;
+    delete process.env[legacyNextStyleConvexUrlEnv];
 
     await expect(fetchQuery(mockQueryRef, { id: '1' })).rejects.toThrow(
       /Convex deployment URL is missing/i,

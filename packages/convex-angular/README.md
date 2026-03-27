@@ -346,7 +346,7 @@ You can also use the standalone server helpers without preloading:
 
 ```typescript
 const todo = await fetchQuery(api.todos.getTodo, { id: 'todo-1' });
-// The helpers default to NEXT_PUBLIC_CONVEX_URL, or accept an explicit { url }.
+// The helpers default to NG_APP_CONVEX_URL, or accept an explicit { url }.
 // const todo = await fetchQuery(api.todos.getTodo, { id: 'todo-1' }, { url: 'https://<deployment>.convex.cloud' });
 
 await fetchMutation(api.todos.renameTodo, { id: 'todo-1', title: 'Renamed' });
