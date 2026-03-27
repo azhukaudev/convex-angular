@@ -68,6 +68,14 @@ function buildPaginationOptions(
   return endCursor === undefined ? { numItems, cursor, id } : { numItems, cursor, endCursor, id };
 }
 
+function validateInitialNumItems(initialNumItems: number): void {
+  if (typeof initialNumItems !== 'number' || Number.isNaN(initialNumItems) || initialNumItems < 0) {
+    throw new Error(
+      `\`options.initialNumItems\` must be a positive number. Received \`${initialNumItems}\`.`,
+    );
+  }
+}
+
 function buildPageArgs<Query extends PaginatedQueryReference>(
   args: PaginatedQueryArgs<Query>,
   paginationOpts: ClientPaginationOptions,
@@ -184,8 +192,9 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
   isSkipped: Signal<boolean>;
 
   /**
-   * True when first page has been successfully loaded.
-   * False during loading, when skipped, or when there's an error.
+   * True once the first logical page has loaded successfully.
+   * Remains true while loading additional pages, and becomes false when
+   * skipped or when an error is present.
    */
   isSuccess: Signal<boolean>;
 
@@ -586,6 +595,8 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       const args = argsFn();
       const initialNumItems = isSignal(options.initialNumItems) ? options.initialNumItems() : options.initialNumItems;
       const version = resetVersion();
+
+      validateInitialNumItems(initialNumItems);
 
       if (args === skipToken) {
         subscription.sync(skipToken);

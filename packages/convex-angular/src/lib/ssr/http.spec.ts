@@ -41,15 +41,45 @@ const mockActionRef = (() => {}) as unknown as FunctionReference<
 >;
 
 describe('ssr/http', () => {
+  const originalAngularUrl = process.env.NG_APP_CONVEX_URL;
   const originalUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
 
   beforeEach(() => {
+    delete process.env.NG_APP_CONVEX_URL;
     process.env.NEXT_PUBLIC_CONVEX_URL = 'https://happy-animal-123.convex.cloud';
     MockedConvexHttpClient.mockClear();
   });
 
   afterEach(() => {
-    process.env.NEXT_PUBLIC_CONVEX_URL = originalUrl;
+    if (originalAngularUrl === undefined) {
+      delete process.env.NG_APP_CONVEX_URL;
+    } else {
+      process.env.NG_APP_CONVEX_URL = originalAngularUrl;
+    }
+
+    if (originalUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_CONVEX_URL;
+    } else {
+      process.env.NEXT_PUBLIC_CONVEX_URL = originalUrl;
+    }
+  });
+
+  it('prefers NG_APP_CONVEX_URL when url is omitted', async () => {
+    process.env.NG_APP_CONVEX_URL = 'https://angular-app.convex.cloud';
+
+    const client = {
+      query: jest.fn().mockResolvedValue({ id: '1', name: 'Ada' }),
+      mutation: jest.fn(),
+      action: jest.fn(),
+    };
+    MockedConvexHttpClient.mockImplementationOnce(() => client as any);
+
+    await fetchQuery(mockQueryRef, { id: '1' });
+
+    expect(MockedConvexHttpClient).toHaveBeenCalledWith(
+      'https://angular-app.convex.cloud',
+      expect.any(Object),
+    );
   });
 
   it('fetchQuery forwards args and token through ConvexHttpClient', async () => {
@@ -102,6 +132,7 @@ describe('ssr/http', () => {
   });
 
   it('throws a focused error when no deployment URL is available', async () => {
+    delete process.env.NG_APP_CONVEX_URL;
     delete process.env.NEXT_PUBLIC_CONVEX_URL;
 
     await expect(fetchQuery(mockQueryRef, { id: '1' })).rejects.toThrow(

@@ -323,6 +323,63 @@ describe('injectPaginatedQuery', () => {
     expect(resizedSubscription.args.paginationOpts.id).not.toBe(initialSubscription.args.paginationOpts.id);
   }));
 
+  it('throws when initialNumItems is negative', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: -1,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+
+    expect(() => {
+      fixture.detectChanges();
+      tick();
+    }).toThrow(/`options\.initialNumItems` must be a positive number/i);
+  }));
+
+  it('throws when initialNumItems is NaN', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: Number.NaN,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+
+    expect(() => {
+      fixture.detectChanges();
+      tick();
+    }).toThrow(/`options\.initialNumItems` must be a positive number/i);
+  }));
+
+  it('throws when initialNumItems is not a number at runtime', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: '3' as unknown as number,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+
+    expect(() => {
+      fixture.detectChanges();
+      tick();
+    }).toThrow(/`options\.initialNumItems` must be a positive number/i);
+  }));
+
   it('restarts from the first page on InvalidCursor without surfacing an error', fakeAsync(() => {
     const onError = jest.fn();
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});

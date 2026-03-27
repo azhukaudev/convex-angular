@@ -9,12 +9,16 @@ function readEnv(name: string): string | undefined {
   }).process?.env?.[name];
 }
 
+function readConfiguredConvexUrl(): string | undefined {
+  return readEnv('NG_APP_CONVEX_URL') ?? readEnv('NEXT_PUBLIC_CONVEX_URL');
+}
+
 function getConvexUrl(deploymentUrl: string | undefined): string {
-  const url = deploymentUrl ?? readEnv('NEXT_PUBLIC_CONVEX_URL');
+  const url = deploymentUrl ?? readConfiguredConvexUrl();
 
   if (typeof url !== 'string' || url.length === 0) {
     throw new Error(
-      'Convex deployment URL is missing. Pass { url } or set NEXT_PUBLIC_CONVEX_URL.',
+      'Convex deployment URL is missing. Pass { url } or set NG_APP_CONVEX_URL (or NEXT_PUBLIC_CONVEX_URL for compatibility).',
     );
   }
 

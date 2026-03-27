@@ -32,7 +32,8 @@ export interface ConvexServerOptions {
 
   /**
    * Explicit Convex deployment URL.
-   * Falls back to NEXT_PUBLIC_CONVEX_URL when omitted.
+   * Falls back to NG_APP_CONVEX_URL, then NEXT_PUBLIC_CONVEX_URL for
+   * compatibility, when omitted.
    */
   url?: string;
 
