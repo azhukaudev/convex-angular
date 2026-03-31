@@ -80,6 +80,15 @@
 - Equivalent format write command: `pnpm prettier --write .`
 - Markdown files are formatted with Prettier too; use it after large edits to docs.
 
+## Typecheck Commands
+
+- Preferred broader verification before claiming completion: `pnpm typecheck`
+- This command typechecks the Angular app, Angular library, and Convex functions together
+- Underlying checks:
+  - `pnpm nx build frontend --configuration=development` (Angular app with template checking)
+  - `pnpm nx build convex-angular --configuration=development` (Angular library with template checking)
+  - `pnpm tsc -p apps/frontend/src/convex/tsconfig.json` (Convex functions)
+
 ## Generated And Derived Files
 
 - Do not hand-edit files under `apps/frontend/src/convex/_generated/`.
