@@ -11,7 +11,7 @@ export interface SubscriptionTarget<T> {
   value: T;
 }
 
-export interface SubscriptionActivationControls {
+interface SubscriptionActivationControls {
   generation: number;
   isCurrent: () => boolean;
 }

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "apps/frontend/src/main.ts",
+    "apps/frontend/src/app/app.routes.ts",
+    "apps/frontend/src/app/routes/auth.routes.ts",
+    "apps/frontend/src/app/routes/examples.routes.ts",
+    "packages/convex-angular/src/index.ts",
+    "apps/frontend/src/convex/**/*.ts",
+    "!apps/frontend/src/convex/_generated/**"
+  ],
+  "project": [
+    "apps/frontend/src/**/*.ts",
+    "!apps/frontend/src/**/*.spec.ts",
+    "!apps/frontend/src/test-setup.ts",
+    "!apps/frontend/src/**/*.d.ts",
+    "packages/convex-angular/src/**/*.ts",
+    "!packages/convex-angular/src/**/*.spec.ts",
+    "!packages/convex-angular/src/test-setup.ts",
+    "apps/frontend/src/convex/**/*.ts",
+    "!apps/frontend/src/convex/_generated/**"
+  ],
+  "ignoreFiles": ["apps/frontend/src/environments/environment.prod.ts"],
+  "ignoreDependencies": [
+    "@angular/cli",
+    "@angular/language-service",
+    "@eslint/js",
+    "@nx/workspace",
+    "@swc/helpers",
+    "@typescript-eslint/utils",
+    "angular-eslint",
+    "autoprefixer",
+    "jest-environment-jsdom",
+    "jest-preset-angular",
+    "jest-util",
+    "jsonc-eslint-parser",
+    "primeicons",
+    "postcss-url",
+    "tailwindcss-primeui",
+    "ts-jest",
+    "ts-node",
+    "typescript-eslint"
+  ],
+  "ignoreUnresolved": ["./dashboard/dashboard.component", "./profile/profile.component"]
+}

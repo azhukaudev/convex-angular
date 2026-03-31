@@ -96,6 +96,13 @@
 - Scope and excludes are defined in `.jscpd.json`
 - Generated and output paths are intentionally excluded to keep findings actionable
 
+## Knip Commands
+
+- Preferred broader verification before claiming completion: `pnpm knip`
+- This is a hard local verification command for unused files and exports in actionable source files
+- Scope and excludes are defined in `.knip.json`
+- Tests, generated files, and output/tooling-only paths are intentionally excluded or ignored to keep findings actionable
+
 ## Generated And Derived Files
 
 - Do not hand-edit files under `apps/frontend/src/convex/_generated/`.
