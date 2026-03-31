@@ -7,6 +7,10 @@
     "dev:backend": "convex dev",
     "build:frontend": "nx build frontend",
     "build:library": "nx build convex-angular",
+    "lint": "nx run-many -t lint --projects frontend,convex-angular",
+    "lint:affected": "nx affected -t lint --base=main",
+    "lint:library": "nx lint convex-angular",
+    "lint:frontend": "nx lint frontend",
     "test:library": "nx test convex-angular",
     "update": "nx migrate latest"
   },

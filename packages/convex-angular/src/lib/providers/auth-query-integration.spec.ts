@@ -69,7 +69,7 @@ describe('auth/query integration', () => {
         hasAuth: mockHasAuth,
         localQueryResult: jest.fn().mockReturnValue(undefined),
       },
-      onUpdate: jest.fn((_query, _args, _onUpdate, _onError) => {
+      onUpdate: jest.fn(() => {
         callLog.push('query:subscribe');
         return () => {
           callLog.push('query:unsubscribe');

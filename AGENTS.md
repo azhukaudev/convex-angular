@@ -47,10 +47,17 @@
 
 ## Lint Commands
 
+- Preferred local loop while iterating in one area: `pnpm lint:library` or `pnpm lint:frontend`
+- Preferred local loop for branch-wide work: `pnpm lint:affected`
+- Preferred broader verification before claiming completion: `pnpm lint`
+- Root lint script for both main projects: `pnpm lint`
+- Root affected lint script: `pnpm lint:affected`
+- Root library lint script: `pnpm lint:library`
+- Root app lint script: `pnpm lint:frontend`
 - Lint the demo app: `pnpm nx lint frontend`
 - Lint the library: `pnpm nx lint convex-angular`
 - Lint both main projects: `pnpm nx run-many -t lint --projects frontend,convex-angular`
-- Lint a single file: `pnpm nx lint convex-angular --lintFilePatterns=packages/convex-angular/src/index.ts`
+- Lint a single file when a project-level run would be excessive: `pnpm nx lint convex-angular --lintFilePatterns=packages/convex-angular/src/index.ts`
 - Apply ESLint autofixes when appropriate: `pnpm nx lint convex-angular --fix`
 
 ## Test Commands

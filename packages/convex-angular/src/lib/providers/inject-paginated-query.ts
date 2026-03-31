@@ -70,9 +70,7 @@ function buildPaginationOptions(
 
 function validateInitialNumItems(initialNumItems: number): void {
   if (typeof initialNumItems !== 'number' || Number.isNaN(initialNumItems) || initialNumItems < 0) {
-    throw new Error(
-      `\`options.initialNumItems\` must be a positive number. Received \`${initialNumItems}\`.`,
-    );
+    throw new Error(`\`options.initialNumItems\` must be a positive number. Received \`${initialNumItems}\`.`);
   }
 }
 
@@ -460,7 +458,6 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         const summarize = (): SessionSummary<Query> => {
           let aggregatedResults: PaginatedQueryItem<Query>[] = [];
           let blockingError: Error | undefined;
-          let blockingErrorKey: QueryPageKey | undefined;
           let splitError: Error | undefined;
           let lastSuccessfulResult: FunctionReturnType<Query> | undefined;
           let encounteredPendingPage = false;
@@ -489,7 +486,6 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
             if (page.error) {
               blockingError = page.error;
-              blockingErrorKey = key;
               break;
             }
 

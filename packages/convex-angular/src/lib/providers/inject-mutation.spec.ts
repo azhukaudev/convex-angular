@@ -7,11 +7,7 @@ import { CONVEX } from '../tokens/convex';
 import { MutationReference, injectMutation } from './inject-mutation';
 
 type Assert<T extends true> = T;
-type IsExact<T, Expected> = [T] extends [Expected]
-  ? [Expected] extends [T]
-    ? true
-    : false
-  : false;
+type IsExact<T, Expected> = [T] extends [Expected] ? ([Expected] extends [T] ? true : false) : false;
 
 const mockMutation = (() => {}) as unknown as FunctionReference<
   'mutation',
@@ -92,9 +88,7 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       type MutationData = ReturnType<TestComponent['addTodo']['data']>;
-      const assertMutationDataType: Assert<
-        IsExact<MutationData, { id: string } | undefined>
-      > = true;
+      const assertMutationDataType: Assert<IsExact<MutationData, { id: string } | undefined>> = true;
 
       const typedData: MutationData = fixture.componentInstance.addTodo.data();
 
@@ -270,11 +264,7 @@ describe('injectMutation', () => {
       tick();
 
       expect(result).toEqual({ id: '123' });
-      expect(mockConvexClient.mutation).toHaveBeenCalledWith(
-        mockMutationNoArgs,
-        {},
-        { optimisticUpdate: undefined },
-      );
+      expect(mockConvexClient.mutation).toHaveBeenCalledWith(mockMutationNoArgs, {}, { optimisticUpdate: undefined });
     }));
 
     it('should throw on accidental event argument', fakeAsync(() => {
@@ -1079,11 +1069,7 @@ describe('injectMutation', () => {
       ignoreRejection(fixture.componentInstance.optimisticAddTodo({ title: 'test' }));
       tick();
 
-      expect(mockConvexClient.mutation).toHaveBeenCalledWith(
-        mockMutation,
-        { title: 'test' },
-        { optimisticUpdate },
-      );
+      expect(mockConvexClient.mutation).toHaveBeenCalledWith(mockMutation, { title: 'test' }, { optimisticUpdate });
     }));
 
     it('should have independent state from base helper', fakeAsync(() => {
@@ -1129,7 +1115,7 @@ describe('injectMutation', () => {
       expect(() => {
         TestBed.createComponent(TestComponent);
       }).toThrow(/Already specified optimistic update/i);
-    }));
+    });
 
     it('should allow multiple independent optimistic helpers from same base', fakeAsync(() => {
       mockConvexClient.mutation.mockResolvedValue({ id: '123' });

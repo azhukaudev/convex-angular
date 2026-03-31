@@ -247,10 +247,13 @@ describe('injectQueries', () => {
     })
     class TestComponent {
       readonly userId = signal<string | null>(null);
-      readonly queries = injectQueries(() => ({
-        user: this.userId() ? { query: mockUserQuery, args: { userId: this.userId()! } } : skipToken,
-        todos: { query: mockTodosQuery, args: { count: 10 } },
-      }));
+      readonly queries = injectQueries(() => {
+        const userId = this.userId();
+        return {
+          user: userId ? { query: mockUserQuery, args: { userId } } : skipToken,
+          todos: { query: mockTodosQuery, args: { count: 10 } },
+        };
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);

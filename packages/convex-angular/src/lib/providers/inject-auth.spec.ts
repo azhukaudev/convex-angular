@@ -11,7 +11,7 @@ class ExistingAuthProvider implements ConvexAuthProvider {
   readonly isLoading = signal(false);
   readonly isAuthenticated = signal(false);
   readonly error = signal<Error | undefined>(undefined);
-  readonly fetchAccessToken = jest.fn(async (_args: { forceRefreshToken: boolean }) => 'token');
+  readonly fetchAccessToken = jest.fn(async () => 'token');
 }
 
 describe('injectAuth', () => {

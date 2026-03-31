@@ -1,10 +1,6 @@
 import { DestroyRef, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
 import { OptimisticUpdate } from 'convex/browser';
-import {
-  FunctionArgs,
-  FunctionReference,
-  FunctionReturnType,
-} from 'convex/server';
+import { FunctionArgs, FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { MutationStatus } from '../types';
 import { injectConvex } from './inject-convex';
@@ -18,9 +14,7 @@ export type MutationReference = FunctionReference<'mutation'>;
 type EmptyArgs = Record<string, never>;
 
 type OptionalArgsTuple<FuncRef extends FunctionReference<any>> =
-  FunctionArgs<FuncRef> extends EmptyArgs
-    ? [args?: EmptyArgs]
-    : [args: FunctionArgs<FuncRef>];
+  FunctionArgs<FuncRef> extends EmptyArgs ? [args?: EmptyArgs] : [args: FunctionArgs<FuncRef>];
 
 function assertNotAccidentalArgument(value: unknown): void {
   if (typeof Event !== 'undefined' && value instanceof Event) {
@@ -95,17 +89,11 @@ export interface MutationOptions<Mutation extends MutationReference> {
  * ```
  */
 export interface AngularMutation<Mutation extends MutationReference> {
-  (
-    ...args: OptionalArgsTuple<Mutation>
-  ): Promise<FunctionReturnType<Mutation>>;
+  (...args: OptionalArgsTuple<Mutation>): Promise<FunctionReturnType<Mutation>>;
 
-  withOptimisticUpdate<
-    T extends OptimisticUpdate<FunctionArgs<Mutation>>,
-  >(
+  withOptimisticUpdate<T extends OptimisticUpdate<FunctionArgs<Mutation>>>(
     optimisticUpdate: T &
-      (ReturnType<T> extends Promise<any>
-        ? 'Optimistic update handlers must be synchronous'
-        : {}),
+      (ReturnType<T> extends Promise<any> ? 'Optimistic update handlers must be synchronous' : unknown),
   ): AngularMutation<Mutation>;
 
   /**
@@ -203,9 +191,7 @@ function createMutationHelper<Mutation extends MutationReference>(
     reset();
   });
 
-  const call = async (
-    ...args: OptionalArgsTuple<Mutation>
-  ): Promise<FunctionReturnType<Mutation>> => {
+  const call = async (...args: OptionalArgsTuple<Mutation>): Promise<FunctionReturnType<Mutation>> => {
     const parsedArgs = (args[0] ?? {}) as FunctionArgs<Mutation>;
     assertNotAccidentalArgument(parsedArgs);
 
@@ -248,28 +234,16 @@ function createMutationHelper<Mutation extends MutationReference>(
     }
   };
 
-  const withOptimisticUpdate = <
-    T extends OptimisticUpdate<FunctionArgs<Mutation>>,
-  >(
+  const withOptimisticUpdate = <T extends OptimisticUpdate<FunctionArgs<Mutation>>>(
     nextOptimisticUpdate: T &
-      (ReturnType<T> extends Promise<any>
-        ? 'Optimistic update handlers must be synchronous'
-        : {}),
+      (ReturnType<T> extends Promise<any> ? 'Optimistic update handlers must be synchronous' : unknown),
   ): AngularMutation<Mutation> => {
     if (optimisticUpdate !== undefined) {
       throw new Error(
-        `Already specified optimistic update for mutation ${
-          (mutation as any)._name ?? 'unknown mutation'
-        }`,
+        `Already specified optimistic update for mutation ${(mutation as any)._name ?? 'unknown mutation'}`,
       );
     }
-    return createMutationHelper(
-      mutation,
-      convex,
-      destroyRef,
-      options,
-      nextOptimisticUpdate,
-    );
+    return createMutationHelper(mutation, convex, destroyRef, options, nextOptimisticUpdate);
   };
 
   return Object.assign(call, {
@@ -324,14 +298,10 @@ export function injectMutation<Mutation extends MutationReference>(
   mutation: Mutation,
   options?: MutationOptions<Mutation>,
 ): AngularMutation<Mutation> {
-  const { convex, destroyRef } = runInResolvedInjectionContext(
-    injectMutation,
-    options?.injectRef,
-    () => ({
-      convex: injectConvex(),
-      destroyRef: inject(DestroyRef),
-    }),
-  );
+  const { convex, destroyRef } = runInResolvedInjectionContext(injectMutation, options?.injectRef, () => ({
+    convex: injectConvex(),
+    destroyRef: inject(DestroyRef),
+  }));
 
   return createMutationHelper(mutation, convex, destroyRef, options, undefined);
 }
