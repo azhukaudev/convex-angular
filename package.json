@@ -11,6 +11,8 @@
     "lint:affected": "nx affected -t lint --base=main",
     "lint:library": "nx lint convex-angular",
     "lint:frontend": "nx lint frontend",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
     "test:library": "nx test convex-angular",
     "update": "nx migrate latest"
   },

@@ -5,8 +5,7 @@ import { parseSerializedConvexSsrValue } from '../ssr/serialization';
 import { Preloaded, TransferredPreloadedQuery } from '../ssr/types';
 import { QueryReference, QueryResult, injectQuery } from './inject-query';
 
-export interface PreloadedQueryResult<Query extends QueryReference>
-  extends Omit<QueryResult<Query>, 'data'> {
+export interface PreloadedQueryResult<Query extends QueryReference> extends Omit<QueryResult<Query>, 'data'> {
   data: Signal<FunctionReturnType<Query>>;
   preloadedData: Signal<FunctionReturnType<Query>>;
   isHydratedFromServer: Signal<boolean>;

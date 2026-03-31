@@ -12,9 +12,7 @@ import { InjectionToken, Signal } from '@angular/core';
  *
  * @public
  */
-export type AuthTokenFetcher = (args: {
-  forceRefreshToken: boolean;
-}) => Promise<string | null | undefined>;
+export type AuthTokenFetcher = (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>;
 
 /**
  * Status of the Convex authentication state.
@@ -150,6 +148,4 @@ export interface ConvexAuthProvider {
  *
  * @public
  */
-export const CONVEX_AUTH = new InjectionToken<ConvexAuthProvider>(
-  'CONVEX_AUTH',
-);
+export const CONVEX_AUTH = new InjectionToken<ConvexAuthProvider>('CONVEX_AUTH');

@@ -4,27 +4,13 @@
       <h1 class="text-4xl font-extrabold opacity-80">Basic Example</h1>
       <a href="/" class="text-primary hover:underline">← Home</a>
     </div>
-    <p class="text-sm text-gray-500">
-      Using injectQuery, injectMutation, and injectAction
-    </p>
-    <a href="/examples/paginated" class="text-primary text-sm hover:underline">
-      See Paginated Example →
-    </a>
+    <p class="text-sm text-gray-500">Using injectQuery, injectMutation, and injectAction</p>
+    <a href="/examples/paginated" class="text-primary text-sm hover:underline">See Paginated Example →</a>
   </div>
 
   <div class="flex items-center gap-2">
-    <p-button
-      icon="pi pi-check"
-      label="Complete All"
-      severity="secondary"
-      (onClick)="handleCompleteAll()"
-    />
-    <p-button
-      icon="pi pi-undo"
-      label="Reopen All"
-      severity="secondary"
-      (onClick)="handleReopenAll()"
-    />
+    <p-button icon="pi pi-check" label="Complete All" severity="secondary" (onClick)="handleCompleteAll()" />
+    <p-button icon="pi pi-undo" label="Reopen All" severity="secondary" (onClick)="handleReopenAll()" />
   </div>
 
   <form (ngSubmit)="handleAddTodo()" class="flex items-center gap-2">
@@ -41,12 +27,7 @@
       />
     </div>
     <div>
-      <p-button
-        type="submit"
-        icon="pi pi-plus"
-        label="New Task"
-        [disabled]="!newTaskInput.value"
-      />
+      <p-button type="submit" icon="pi pi-plus" label="New Task" [disabled]="!newTaskInput.value" />
     </div>
   </form>
 
@@ -55,9 +36,7 @@
   } @else {
     <ul class="flex flex-col gap-4">
       @for (task of todos.data(); track task._id) {
-        <li
-          class="border-surface-200 flex items-center justify-between gap-2 rounded-md border px-2 py-1 shadow-xs"
-        >
+        <li class="border-surface-200 flex items-center justify-between gap-2 rounded-md border px-2 py-1 shadow-xs">
           <div class="flex items-center gap-2">
             <p-checkbox
               [ngModel]="task.completed"

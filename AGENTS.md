@@ -74,8 +74,10 @@
 
 ## Formatting Commands
 
-- Check formatting: `pnpm prettier --check .`
-- Rewrite formatting: `pnpm prettier --write .`
+- Preferred broader verification before claiming completion: `pnpm format:check`
+- Preferred command for rewriting formatting: `pnpm format`
+- Equivalent format check command: `pnpm prettier --check .`
+- Equivalent format write command: `pnpm prettier --write .`
 - Markdown files are formatted with Prettier too; use it after large edits to docs.
 
 ## Generated And Derived Files

@@ -4,9 +4,11 @@ import { ArgsAndOptions, FunctionReference, FunctionReturnType } from 'convex/se
 import { ConvexServerOptions } from './types';
 
 function readEnv(name: string): string | undefined {
-  return (globalThis as typeof globalThis & {
-    process?: { env?: Record<string, string | undefined> };
-  }).process?.env?.[name];
+  return (
+    globalThis as typeof globalThis & {
+      process?: { env?: Record<string, string | undefined> };
+    }
+  ).process?.env?.[name];
 }
 
 function readConfiguredConvexUrl(): string | undefined {

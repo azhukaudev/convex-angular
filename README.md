@@ -526,10 +526,7 @@ export class Auth0AuthService implements Auth0AuthProvider {
     initialValue: false,
   });
 
-  async getAccessTokenSilently(options: {
-    detailedResponse: true;
-    cacheMode?: 'on' | 'off';
-  }) {
+  async getAccessTokenSilently(options: { detailedResponse: true; cacheMode?: 'on' | 'off' }) {
     return firstValueFrom(
       this.auth0.getAccessTokenSilently({
         detailedResponse: options.detailedResponse,

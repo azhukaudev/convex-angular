@@ -36,8 +36,7 @@ export interface ConvexAuthGuardConfig {
  *
  * @public
  */
-export const CONVEX_AUTH_GUARD_CONFIG =
-  new InjectionToken<ConvexAuthGuardConfig>('CONVEX_AUTH_GUARD_CONFIG');
+export const CONVEX_AUTH_GUARD_CONFIG = new InjectionToken<ConvexAuthGuardConfig>('CONVEX_AUTH_GUARD_CONFIG');
 
 function createLoginRedirectTree(router: Router, loginRoute: string, returnUrl: string): UrlTree {
   const loginUrlTree = router.parseUrl(loginRoute);
@@ -85,9 +84,7 @@ function createLoginRedirectTree(router: Router, loginRoute: string, returnUrl: 
  *
  * @public
  */
-export const convexAuthGuard: CanActivateFn = (_route, state): Observable<
-  boolean | UrlTree
-> => {
+export const convexAuthGuard: CanActivateFn = (_route, state): Observable<boolean | UrlTree> => {
   const auth = injectAuth();
   const router = inject(Router);
   const config = inject(CONVEX_AUTH_GUARD_CONFIG, { optional: true });

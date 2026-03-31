@@ -34,9 +34,7 @@ const mismatchedQueryRef = { _name: 'todos:getOther' } as unknown as FunctionRef
 >;
 
 describe('injectPreloadedQuery', () => {
-  function createLiveQueryResult(
-    overrides: Partial<QueryResult<any>> = {},
-  ): QueryResult<any> {
+  function createLiveQueryResult(overrides: Partial<QueryResult<any>> = {}): QueryResult<any> {
     const data = signal<{ id: string; title: string } | undefined>(undefined);
     const error = signal<Error | undefined>(undefined);
     const isLoading = signal(true);
@@ -51,9 +49,7 @@ describe('injectPreloadedQuery', () => {
       error: errorSignal,
       isLoading: isLoadingSignal,
       isSkipped: isSkippedSignal,
-      isSuccess:
-        overrides.isSuccess ??
-        computed(() => !isLoadingSignal() && !errorSignal() && !isSkippedSignal()),
+      isSuccess: overrides.isSuccess ?? computed(() => !isLoadingSignal() && !errorSignal() && !isSkippedSignal()),
       status:
         overrides.status ??
         computed(() => {

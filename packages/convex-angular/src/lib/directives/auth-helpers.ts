@@ -1,11 +1,4 @@
-import {
-  Directive,
-  EmbeddedViewRef,
-  TemplateRef,
-  ViewContainerRef,
-  effect,
-  inject,
-} from '@angular/core';
+import { Directive, EmbeddedViewRef, TemplateRef, ViewContainerRef, effect, inject } from '@angular/core';
 
 import { injectAuth } from '../providers/inject-auth';
 
@@ -51,9 +44,7 @@ export class CvaAuthenticatedDirective {
 
       if (isAuth && !isLoading) {
         if (!this.viewRef) {
-          this.viewRef = this.viewContainer.createEmbeddedView(
-            this.templateRef,
-          );
+          this.viewRef = this.viewContainer.createEmbeddedView(this.templateRef);
         }
       } else {
         if (this.viewRef) {
@@ -108,9 +99,7 @@ export class CvaUnauthenticatedDirective {
 
       if (!isAuth && !isLoading) {
         if (!this.viewRef) {
-          this.viewRef = this.viewContainer.createEmbeddedView(
-            this.templateRef,
-          );
+          this.viewRef = this.viewContainer.createEmbeddedView(this.templateRef);
         }
       } else {
         if (this.viewRef) {
@@ -160,9 +149,7 @@ export class CvaAuthLoadingDirective {
 
       if (isLoading) {
         if (!this.viewRef) {
-          this.viewRef = this.viewContainer.createEmbeddedView(
-            this.templateRef,
-          );
+          this.viewRef = this.viewContainer.createEmbeddedView(this.templateRef);
         }
       } else {
         if (this.viewRef) {

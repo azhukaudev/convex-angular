@@ -1,9 +1,4 @@
-import {
-  EnvironmentInjector,
-  assertInInjectionContext,
-  inject,
-  runInInjectionContext,
-} from '@angular/core';
+import { EnvironmentInjector, assertInInjectionContext, inject, runInInjectionContext } from '@angular/core';
 
 export function resolveEnvironmentInjector(
   target: (...args: any[]) => unknown,

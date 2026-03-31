@@ -4,12 +4,8 @@
       <h1 class="text-4xl font-extrabold opacity-80">Paginated Example</h1>
       <a href="/" class="text-primary hover:underline">← Home</a>
     </div>
-    <p class="text-sm text-gray-500">
-      Using injectPaginatedQuery with load more
-    </p>
-    <a href="/examples/basic" class="text-primary text-sm hover:underline">
-      See Basic Example →
-    </a>
+    <p class="text-sm text-gray-500">Using injectPaginatedQuery with load more</p>
+    <a href="/examples/basic" class="text-primary text-sm hover:underline">See Basic Example →</a>
   </div>
 
   <div class="flex items-center gap-4">
@@ -29,28 +25,12 @@
         decrementButtonIcon="pi pi-minus"
       />
     </div>
-    <p-button
-      icon="pi pi-refresh"
-      label="Reset"
-      severity="secondary"
-      size="small"
-      (onClick)="handleReset()"
-    />
+    <p-button icon="pi pi-refresh" label="Reset" severity="secondary" size="small" (onClick)="handleReset()" />
   </div>
 
   <div class="flex items-center gap-2">
-    <p-button
-      icon="pi pi-check"
-      label="Complete All"
-      severity="secondary"
-      (onClick)="handleCompleteAll()"
-    />
-    <p-button
-      icon="pi pi-undo"
-      label="Reopen All"
-      severity="secondary"
-      (onClick)="handleReopenAll()"
-    />
+    <p-button icon="pi pi-check" label="Complete All" severity="secondary" (onClick)="handleCompleteAll()" />
+    <p-button icon="pi pi-undo" label="Reopen All" severity="secondary" (onClick)="handleReopenAll()" />
   </div>
 
   <form (ngSubmit)="handleAddTodo()" class="flex items-center gap-2">
@@ -67,29 +47,18 @@
       />
     </div>
     <div>
-      <p-button
-        type="submit"
-        icon="pi pi-plus"
-        label="New Task"
-        [disabled]="!newTaskInput.value"
-      />
+      <p-button type="submit" icon="pi pi-plus" label="New Task" [disabled]="!newTaskInput.value" />
     </div>
   </form>
 
   @if (todos.isLoadingFirstPage()) {
     <div class="flex justify-center py-8">
-      <p-progress-spinner
-        aria-label="Loading first page"
-        class="size-10"
-        strokeWidth="8"
-      />
+      <p-progress-spinner aria-label="Loading first page" class="size-10" strokeWidth="8" />
     </div>
   } @else {
     <ul class="flex flex-col gap-4">
       @for (task of todos.results(); track task._id) {
-        <li
-          class="border-surface-200 flex items-center justify-between gap-2 rounded-md border px-2 py-1 shadow-xs"
-        >
+        <li class="border-surface-200 flex items-center justify-between gap-2 rounded-md border px-2 py-1 shadow-xs">
           <div class="flex items-center gap-2">
             <p-checkbox
               [ngModel]="task.completed"
@@ -107,9 +76,7 @@
           />
         </li>
       } @empty {
-        <li class="py-4 text-center text-gray-500">
-          No tasks yet. Add one above!
-        </li>
+        <li class="py-4 text-center text-gray-500">No tasks yet. Add one above!</li>
       }
     </ul>
 
@@ -117,11 +84,7 @@
     <div class="flex flex-col items-center gap-2 py-4">
       @if (todos.isLoadingMore()) {
         <div class="flex items-center gap-2">
-          <p-progress-spinner
-            aria-label="Loading more"
-            class="size-6"
-            strokeWidth="6"
-          />
+          <p-progress-spinner aria-label="Loading more" class="size-6" strokeWidth="6" />
           <span class="text-sm text-gray-500">Loading more...</span>
         </div>
       } @else if (todos.canLoadMore()) {
@@ -131,26 +94,18 @@
           severity="secondary"
           (onClick)="handleLoadMore()"
         />
-        <span class="text-xs text-gray-400">
-          {{ todos.results().length }} items loaded
-        </span>
+        <span class="text-xs text-gray-400">{{ todos.results().length }} items loaded</span>
       } @else if (todos.isExhausted()) {
         <div class="flex flex-col items-center gap-1">
-          <span class="text-sm font-medium text-green-600">
-            ✓ All items loaded
-          </span>
-          <span class="text-xs text-gray-400">
-            {{ todos.results().length }} total items
-          </span>
+          <span class="text-sm font-medium text-green-600">✓ All items loaded</span>
+          <span class="text-xs text-gray-400">{{ todos.results().length }} total items</span>
         </div>
       }
 
       @if (todos.error()) {
         <div class="text-sm text-red-500">
           Error: {{ todos.error()?.message }}
-          <button class="ml-2 underline" (click)="handleRetry()">
-            Retry
-          </button>
+          <button class="ml-2 underline" (click)="handleRetry()">Retry</button>
         </div>
       }
     </div>

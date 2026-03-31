@@ -1,11 +1,7 @@
-<div
-  class="mx-auto flex min-h-svh max-w-2xl flex-col justify-center gap-8 px-4 py-12"
->
+<div class="mx-auto flex min-h-svh max-w-2xl flex-col justify-center gap-8 px-4 py-12">
   <p-card>
     <div class="flex flex-col items-center gap-6 text-center">
-      <div
-        class="flex h-20 w-20 items-center justify-center rounded-full bg-green-100"
-      >
+      <div class="flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
         <i class="pi pi-check text-4xl text-green-600"></i>
       </div>
 
@@ -18,11 +14,7 @@
       </div>
 
       @if (currentUser.isLoading()) {
-        <p-progress-spinner
-          aria-label="loading current user"
-          class="size-10"
-          strokeWidth="8"
-        />
+        <p-progress-spinner aria-label="loading current user" class="size-10" strokeWidth="8" />
       } @else if (currentUser.error()) {
         <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-left">
           <p class="font-semibold text-red-700">Authenticated query failed</p>
@@ -31,12 +23,8 @@
           </p>
         </div>
       } @else if (currentUser.data()) {
-        <div
-          class="w-full rounded-xl bg-slate-950 p-5 text-left text-slate-100"
-        >
-          <p class="text-xs tracking-[0.28em] text-slate-400 uppercase">
-            Authenticated Convex Query
-          </p>
+        <div class="w-full rounded-xl bg-slate-950 p-5 text-left text-slate-100">
+          <p class="text-xs tracking-[0.28em] text-slate-400 uppercase">Authenticated Convex Query</p>
           <dl class="mt-4 grid gap-3 text-sm">
             <div class="grid gap-1">
               <dt class="text-slate-400">Name</dt>
@@ -65,31 +53,19 @@
           </dl>
         </div>
       } @else {
-        <div
-          class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-left"
-        >
-          <p class="font-semibold text-amber-700">
-            No authenticated user found
-          </p>
+        <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-left">
+          <p class="font-semibold text-amber-700">No authenticated user found</p>
           <p class="mt-1 text-sm text-amber-600">
-            The route guard passed, but the backend did not return a
-            session-backed user.
+            The route guard passed, but the backend did not return a session-backed user.
           </p>
         </div>
       }
 
-      <p-button
-        (onClick)="onLogout()"
-        label="Sign Out"
-        icon="pi pi-sign-out"
-        severity="secondary"
-      />
+      <p-button (onClick)="onLogout()" label="Sign Out" icon="pi pi-sign-out" severity="secondary" />
     </div>
   </p-card>
 
   <div class="text-center">
-    <a routerLink="/" class="text-primary text-sm hover:underline">
-      ← Back to Home
-    </a>
+    <a routerLink="/" class="text-primary text-sm hover:underline">← Back to Home</a>
   </div>
 </div>

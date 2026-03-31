@@ -55,14 +55,9 @@ describe('ssr/transfer-state', () => {
 
   it('throws a focused error for malformed payload JSON', () => {
     const transferState = new TransferState();
-    transferState.set(
-      makeStateKey<string>('convex-angular:ssr:todos:getOne:{"id":"1"}'),
-      '{not valid json',
-    );
+    transferState.set(makeStateKey<string>('convex-angular:ssr:todos:getOne:{"id":"1"}'), '{not valid json');
 
-    expect(() => readTransferredPreloadedQuery(mockQueryRef, transferState, { id: '1' })).toThrow(
-      /malformed JSON/i,
-    );
+    expect(() => readTransferredPreloadedQuery(mockQueryRef, transferState, { id: '1' })).toThrow(/malformed JSON/i);
   });
 
   it('throws a focused error for missing payload fields', () => {
@@ -72,9 +67,7 @@ describe('ssr/transfer-state', () => {
       JSON.stringify({ _argsJSON: '{"id":"1"}', _valueJSON: '{"id":"1"}' }),
     );
 
-    expect(() => readTransferredPreloadedQuery(mockQueryRef, transferState, { id: '1' })).toThrow(
-      /missing _name/i,
-    );
+    expect(() => readTransferredPreloadedQuery(mockQueryRef, transferState, { id: '1' })).toThrow(/missing _name/i);
   });
 
   it('matches semantically identical args with different key order', () => {

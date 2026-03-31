@@ -5,11 +5,7 @@ import { ConvexClient } from 'convex/browser';
 import { provideConvexAuth } from '../providers/inject-auth';
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import { CONVEX } from '../tokens/convex';
-import {
-  CvaAuthLoadingDirective,
-  CvaAuthenticatedDirective,
-  CvaUnauthenticatedDirective,
-} from './auth-helpers';
+import { CvaAuthLoadingDirective, CvaAuthenticatedDirective, CvaUnauthenticatedDirective } from './auth-helpers';
 
 describe('Auth Helper Directives', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
@@ -75,9 +71,7 @@ describe('Auth Helper Directives', () => {
       fixture.detectChanges();
       tick();
 
-      expect(fixture.nativeElement.textContent).not.toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).not.toContain('Authenticated content');
     }));
 
     it('should not render when not authenticated', fakeAsync(() => {
@@ -96,9 +90,7 @@ describe('Auth Helper Directives', () => {
       fixture.detectChanges();
       tick();
 
-      expect(fixture.nativeElement.textContent).not.toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).not.toContain('Authenticated content');
     }));
 
     it('should render when authenticated', fakeAsync(() => {
@@ -121,9 +113,7 @@ describe('Auth Helper Directives', () => {
       setAuthOnChange?.(true);
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.textContent).toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).toContain('Authenticated content');
     }));
 
     it('should hide when authentication is lost', fakeAsync(() => {
@@ -145,18 +135,14 @@ describe('Auth Helper Directives', () => {
       // Convex confirms authentication
       setAuthOnChange?.(true);
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).toContain('Authenticated content');
 
       // User logs out
       isAuthenticated.set(false);
       fixture.detectChanges();
       tick();
 
-      expect(fixture.nativeElement.textContent).not.toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).not.toContain('Authenticated content');
     }));
   });
 
@@ -351,11 +337,7 @@ describe('Auth Helper Directives', () => {
           <div *cvaUnauthenticated>Please sign in</div>
         `,
         standalone: true,
-        imports: [
-          CvaAuthLoadingDirective,
-          CvaAuthenticatedDirective,
-          CvaUnauthenticatedDirective,
-        ],
+        imports: [CvaAuthLoadingDirective, CvaAuthenticatedDirective, CvaUnauthenticatedDirective],
       })
       class TestComponent {}
 

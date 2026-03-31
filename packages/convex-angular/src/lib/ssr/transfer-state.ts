@@ -12,9 +12,7 @@ function getPreloadedStateKey(name: string, argsJSON: string) {
   return makeStateKey<string>(`convex-angular:ssr:${name}:${argsJSON}`);
 }
 
-function assertTransferredPreloadedQuery(
-  value: unknown,
-): asserts value is TransferredPreloadedQuery {
+function assertTransferredPreloadedQuery(value: unknown): asserts value is TransferredPreloadedQuery {
   if (typeof value !== 'object' || value === null) {
     throw new Error('Invalid transferred preloaded query payload: expected an object.');
   }

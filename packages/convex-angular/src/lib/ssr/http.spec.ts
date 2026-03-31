@@ -75,10 +75,7 @@ describe('ssr/http', () => {
 
     await fetchQuery(mockQueryRef, { id: '1' }, { url: 'https://explicit.convex.cloud' });
 
-    expect(MockedConvexHttpClient).toHaveBeenCalledWith(
-      'https://explicit.convex.cloud',
-      expect.any(Object),
-    );
+    expect(MockedConvexHttpClient).toHaveBeenCalledWith('https://explicit.convex.cloud', expect.any(Object));
   });
 
   it('prefers NG_APP_CONVEX_URL when url is omitted', async () => {
@@ -93,10 +90,7 @@ describe('ssr/http', () => {
 
     await fetchQuery(mockQueryRef, { id: '1' });
 
-    expect(MockedConvexHttpClient).toHaveBeenCalledWith(
-      'https://angular-app.convex.cloud',
-      expect.any(Object),
-    );
+    expect(MockedConvexHttpClient).toHaveBeenCalledWith('https://angular-app.convex.cloud', expect.any(Object));
   });
 
   it('fetchQuery forwards args and token through ConvexHttpClient', async () => {
@@ -160,9 +154,7 @@ describe('ssr/http', () => {
     delete process.env.NG_APP_CONVEX_URL;
     delete process.env[legacyNextStyleConvexUrlEnv];
 
-    await expect(fetchQuery(mockQueryRef, { id: '1' })).rejects.toThrow(
-      /Convex deployment URL is missing/i,
-    );
+    await expect(fetchQuery(mockQueryRef, { id: '1' })).rejects.toThrow(/Convex deployment URL is missing/i);
     expect(MockedConvexHttpClient).not.toHaveBeenCalled();
   });
 });

@@ -1,17 +1,15 @@
 import { signal } from '@angular/core';
-import { convertToParamMap } from '@angular/router';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+
+import { DemoAuthService } from '../../auth/demo-auth.service';
+import AuthLogin from './auth-login';
 
 jest.mock('../../auth/demo-auth.service', () => {
   class MockDemoAuthService {}
 
   return { DemoAuthService: MockDemoAuthService };
 });
-
-import { DemoAuthService } from '../../auth/demo-auth.service';
-
-import AuthLogin from './auth-login';
 
 class ResizeObserverStub {
   disconnect(): undefined {

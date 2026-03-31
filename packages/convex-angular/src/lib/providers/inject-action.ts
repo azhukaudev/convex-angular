@@ -1,9 +1,5 @@
 import { DestroyRef, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
-import {
-  FunctionArgs,
-  FunctionReference,
-  FunctionReturnType,
-} from 'convex/server';
+import { FunctionArgs, FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { ActionStatus } from '../types';
 import { injectConvex } from './inject-convex';
@@ -17,9 +13,7 @@ export type ActionReference = FunctionReference<'action'>;
 type EmptyArgs = Record<string, never>;
 
 type OptionalArgsTuple<FuncRef extends FunctionReference<any>> =
-  FunctionArgs<FuncRef> extends EmptyArgs
-    ? [args?: EmptyArgs]
-    : [args: FunctionArgs<FuncRef>];
+  FunctionArgs<FuncRef> extends EmptyArgs ? [args?: EmptyArgs] : [args: FunctionArgs<FuncRef>];
 
 function assertNotAccidentalArgument(value: unknown): void {
   if (typeof Event !== 'undefined' && value instanceof Event) {
@@ -138,9 +132,7 @@ interface ActionState<Action extends ActionReference> {
   onError?: (err: Error) => void;
 }
 
-function createActionState<Action extends ActionReference>(
-  options?: ActionOptions<Action>,
-): ActionState<Action> {
+function createActionState<Action extends ActionReference>(options?: ActionOptions<Action>): ActionState<Action> {
   return {
     data: signal<FunctionReturnType<Action> | undefined>(undefined),
     error: signal<Error | undefined>(undefined),
@@ -182,9 +174,7 @@ function createActionHelper<Action extends ActionReference>(
     reset();
   });
 
-  const call = async (
-    ...args: OptionalArgsTuple<Action>
-  ): Promise<FunctionReturnType<Action>> => {
+  const call = async (...args: OptionalArgsTuple<Action>): Promise<FunctionReturnType<Action>> => {
     const parsedArgs = (args[0] ?? {}) as FunctionArgs<Action>;
     assertNotAccidentalArgument(parsedArgs);
 
@@ -265,14 +255,10 @@ export function injectAction<Action extends ActionReference>(
   action: Action,
   options?: ActionOptions<Action>,
 ): AngularAction<Action> {
-  const { convex, destroyRef } = runInResolvedInjectionContext(
-    injectAction,
-    options?.injectRef,
-    () => ({
-      convex: injectConvex(),
-      destroyRef: inject(DestroyRef),
-    }),
-  );
+  const { convex, destroyRef } = runInResolvedInjectionContext(injectAction, options?.injectRef, () => ({
+    convex: injectConvex(),
+    destroyRef: inject(DestroyRef),
+  }));
 
   return createActionHelper(action, convex, destroyRef, options);
 }

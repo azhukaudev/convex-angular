@@ -7,11 +7,7 @@ import { CONVEX } from '../tokens/convex';
 import { ActionReference, injectAction } from './inject-action';
 
 type Assert<T extends true> = T;
-type IsExact<T, Expected> = [T] extends [Expected]
-  ? [Expected] extends [T]
-    ? true
-    : false
-  : false;
+type IsExact<T, Expected> = [T] extends [Expected] ? ([Expected] extends [T] ? true : false) : false;
 
 const mockAction = (() => {}) as unknown as FunctionReference<
   'action',
@@ -92,9 +88,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       type ActionData = ReturnType<TestComponent['sendEmail']['data']>;
-      const assertActionDataType: Assert<
-        IsExact<ActionData, { success: boolean } | undefined>
-      > = true;
+      const assertActionDataType: Assert<IsExact<ActionData, { success: boolean } | undefined>> = true;
 
       const typedData: ActionData = fixture.componentInstance.sendEmail.data();
 

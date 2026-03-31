@@ -1,9 +1,4 @@
-import {
-  Component,
-  EnvironmentProviders,
-  Provider,
-  signal,
-} from '@angular/core';
+import { Component, EnvironmentProviders, Provider, signal } from '@angular/core';
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { Router, Routes, provideRouter } from '@angular/router';
 import { ConvexClient } from 'convex/browser';
