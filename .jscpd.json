@@ -1,0 +1,18 @@
+{
+  "path": ["apps/frontend/src/app", "packages/convex-angular/src", "apps/frontend/src/convex"],
+  "gitignore": true,
+  "threshold": 5,
+  "reporters": ["console"],
+  "format": ["typescript", "markup"],
+  "ignore": [
+    "**/*.spec.ts",
+    "packages/convex-angular/src/test-setup.ts",
+    "apps/frontend/src/convex/_generated/**",
+    "apps/frontend/src/convex/README.md",
+    "apps/frontend/src/convex/tsconfig.json",
+    "dist/**",
+    "coverage/**",
+    "node_modules/**",
+    "tmp/**"
+  ]
+}

@@ -89,6 +89,13 @@
   - `pnpm nx build convex-angular --configuration=development` (Angular library with template checking)
   - `pnpm tsc -p apps/frontend/src/convex/tsconfig.json` (Convex functions)
 
+## Duplicate Check Commands
+
+- Preferred broader verification before claiming completion: `pnpm dupcheck`
+- This is a hard local verification command for duplicate code in actionable source files
+- Scope and excludes are defined in `.jscpd.json`
+- Generated and output paths are intentionally excluded to keep findings actionable
+
 ## Generated And Derived Files
 
 - Do not hand-edit files under `apps/frontend/src/convex/_generated/`.
