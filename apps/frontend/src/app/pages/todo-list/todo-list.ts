@@ -10,13 +10,7 @@ import { api } from '../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 
 @Component({
-  imports: [
-    FormsModule,
-    ButtonModule,
-    CheckboxModule,
-    InputTextModule,
-    ProgressSpinnerModule,
-  ],
+  imports: [FormsModule, ButtonModule, CheckboxModule, InputTextModule, ProgressSpinnerModule],
   selector: 'cva-todo-list',
   templateUrl: 'todo-list.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -44,27 +38,27 @@ export default class TodoList {
 
   handleTodoChange(id: Id<'todos'>, completed: boolean) {
     if (completed) {
-      void this.runOperation(this.reopenTodo.mutate({ id }));
+      void this.runOperation(this.reopenTodo({ id }));
       return;
     }
 
-    void this.runOperation(this.completeTodo.mutate({ id }));
+    void this.runOperation(this.completeTodo({ id }));
   }
 
   handleAddTodo() {
-    void this.runOperation(this.addTodo.mutate({ title: this.newTask() }));
+    void this.runOperation(this.addTodo({ title: this.newTask() }));
   }
 
   handleDeleteTodo(id: Id<'todos'>) {
-    void this.runOperation(this.deleteTodo.mutate({ id }));
+    void this.runOperation(this.deleteTodo({ id }));
   }
 
   handleCompleteAll() {
-    void this.runOperation(this.completeAll.run({}));
+    void this.runOperation(this.completeAll({}));
   }
 
   handleReopenAll() {
-    void this.runOperation(this.reopenAll.run({}));
+    void this.runOperation(this.reopenAll({}));
   }
 
   private async runOperation(operation: Promise<unknown>) {

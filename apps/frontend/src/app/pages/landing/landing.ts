@@ -40,7 +40,7 @@ export default class Landing {
 
 async saveTodo() {
   try {
-    await this.addTodo.mutate({ title: 'New task' });
+    await this.addTodo({ title: 'New task' });
   } catch (error) {
     console.error(error);
   }
@@ -58,7 +58,7 @@ async saveTodo() {
 
 async send() {
   try {
-    await this.sendEmail.run({ to: 'user@example.com' });
+    await this.sendEmail({ to: 'user@example.com' });
   } catch (error) {
     console.error(error);
   }
@@ -120,17 +120,15 @@ openTodo(todoId: string) {
       description: 'Keep infinite lists responsive during inserts and inline edits',
       code: `readonly insertMiddle = injectMutation(
   api.optimisticPaginationDemo.createItem,
-  {
-    optimisticUpdate: (localStore, args) =>
-      insertAtPosition({
-        paginatedQuery: api.optimisticPaginationDemo.listItemsPaginated,
-        argsToMatch: { lane: args.lane },
-        sortOrder: 'asc',
-        sortKeyFromItem: (item) => item.rank,
-        localQueryStore: localStore,
-        item: optimisticItem,
-      }),
-  }
+).withOptimisticUpdate((localStore, args) =>
+  insertAtPosition({
+    paginatedQuery: api.optimisticPaginationDemo.listItemsPaginated,
+    argsToMatch: { lane: args.lane },
+    sortOrder: 'asc',
+    sortKeyFromItem: (item) => item.rank,
+    localQueryStore: localStore,
+    item: optimisticItem,
+  })
 );`,
     },
   ];

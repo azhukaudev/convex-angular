@@ -1,12 +1,8 @@
 import { Route } from '@angular/router';
-import { provideConvex } from 'convex-angular';
-
-import { environment } from '../../environments/environment';
 
 export const EXAMPLE_ROUTES: Route[] = [
   {
     path: '',
-    providers: [provideConvex(environment.convexUrl)],
     children: [
       {
         path: 'basic',

@@ -48,8 +48,8 @@ export default class PaginatedOptimisticDemo {
   );
 
   readonly resetLane = injectMutation(api.optimisticPaginationDemo.resetLane);
-  readonly insertTopItem = injectMutation(api.optimisticPaginationDemo.createItem, {
-    optimisticUpdate: (localStore, args) => {
+  readonly insertTopItem = injectMutation(api.optimisticPaginationDemo.createItem).withOptimisticUpdate(
+    (localStore, args) => {
       insertAtTop({
         paginatedQuery: api.optimisticPaginationDemo.listItemsPaginated,
         argsToMatch: { lane: args.lane },
@@ -57,9 +57,9 @@ export default class PaginatedOptimisticDemo {
         item: this.buildOptimisticItem(args, 'top'),
       });
     },
-  });
-  readonly insertBottomItem = injectMutation(api.optimisticPaginationDemo.createItem, {
-    optimisticUpdate: (localStore, args) => {
+  );
+  readonly insertBottomItem = injectMutation(api.optimisticPaginationDemo.createItem).withOptimisticUpdate(
+    (localStore, args) => {
       insertAtBottomIfLoaded({
         paginatedQuery: api.optimisticPaginationDemo.listItemsPaginated,
         argsToMatch: { lane: args.lane },
@@ -67,9 +67,9 @@ export default class PaginatedOptimisticDemo {
         item: this.buildOptimisticItem(args, 'bottom'),
       });
     },
-  });
-  readonly insertMiddleItem = injectMutation(api.optimisticPaginationDemo.createItem, {
-    optimisticUpdate: (localStore, args) => {
+  );
+  readonly insertMiddleItem = injectMutation(api.optimisticPaginationDemo.createItem).withOptimisticUpdate(
+    (localStore, args) => {
       insertAtPosition({
         paginatedQuery: api.optimisticPaginationDemo.listItemsPaginated,
         argsToMatch: { lane: args.lane },
@@ -79,9 +79,9 @@ export default class PaginatedOptimisticDemo {
         item: this.buildOptimisticItem(args, 'position'),
       });
     },
-  });
-  readonly toggleCompleted = injectMutation(api.optimisticPaginationDemo.toggleCompleted, {
-    optimisticUpdate: (localStore, args) => {
+  );
+  readonly toggleCompleted = injectMutation(api.optimisticPaginationDemo.toggleCompleted).withOptimisticUpdate(
+    (localStore, args) => {
       optimisticallyUpdateValueInPaginatedQuery(
         localStore,
         api.optimisticPaginationDemo.listItemsPaginated,
@@ -95,7 +95,7 @@ export default class PaginatedOptimisticDemo {
             : item,
       );
     },
-  });
+  );
 
   readonly loadedCount = computed(() => this.items.results().length);
   readonly helperCards = [
@@ -149,13 +149,13 @@ export default class PaginatedOptimisticDemo {
     effect(() => {
       const lane = this.selectedLane();
 
-      if (this.items.status() !== 'success' || this.loadedCount() > 0 || this.autoSeededLanes.has(lane)) {
+      if (!this.items.isSuccess() || this.loadedCount() > 0 || this.autoSeededLanes.has(lane)) {
         return;
       }
 
       this.autoSeededLanes.add(lane);
       void this.runOperation(
-        this.resetLane.mutate({ lane }).then(() => this.items.reset()),
+        this.resetLane({ lane }).then(() => this.items.reset()),
         `Seeded the ${lane} lane with the default ranked dataset.`,
       );
     });
@@ -174,7 +174,7 @@ export default class PaginatedOptimisticDemo {
     const lane = this.selectedLane();
     this.autoSeededLanes.add(lane);
     void this.runOperation(
-      this.resetLane.mutate({ lane }).then(() => this.items.reset()),
+      this.resetLane({ lane }).then(() => this.items.reset()),
       `Reset ${lane} to the baseline ranks 10, 20, 30, 40, 50, and 60.`,
     );
   }
@@ -186,7 +186,7 @@ export default class PaginatedOptimisticDemo {
     const rank = lowestRank - 5 - sequence / 1_000;
 
     void this.runOperation(
-      this.insertTopItem.mutate({
+      this.insertTopItem({
         lane,
         title: `${this.formatLane(lane)} top ${sequence}`,
         rank,
@@ -202,7 +202,7 @@ export default class PaginatedOptimisticDemo {
     const rank = this.computeMiddleRank(sequence);
 
     void this.runOperation(
-      this.insertMiddleItem.mutate({
+      this.insertMiddleItem({
         lane,
         title: `${this.formatLane(lane)} middle ${sequence}`,
         rank,
@@ -218,7 +218,7 @@ export default class PaginatedOptimisticDemo {
     const rank = this.findHighestRank() + 10 + sequence / 1_000;
 
     void this.runOperation(
-      this.insertBottomItem.mutate({
+      this.insertBottomItem({
         lane,
         title: `${this.formatLane(lane)} bottom ${sequence}`,
         rank,
@@ -230,7 +230,7 @@ export default class PaginatedOptimisticDemo {
 
   handleToggleCompleted(item: DemoItem): void {
     void this.runOperation(
-      this.toggleCompleted.mutate({ id: item._id }),
+      this.toggleCompleted({ id: item._id }),
       `Ran optimisticallyUpdateValueInPaginatedQuery() for ${item.title}; completed toggled locally before the server response.`,
     );
   }
