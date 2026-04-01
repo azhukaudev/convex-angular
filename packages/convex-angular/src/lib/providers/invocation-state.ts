@@ -10,12 +10,12 @@ type InvocationStatus = ActionStatus | MutationStatus;
 export type OptionalArgsTuple<FuncRef extends FunctionReference<any>> =
   FunctionArgs<FuncRef> extends EmptyArgs ? [args?: EmptyArgs] : [args: FunctionArgs<FuncRef>];
 
-export interface InvocationCallbacks<Result> {
+interface InvocationCallbacks<Result> {
   onSuccess?: (data: Result) => void;
   onError?: (err: Error) => void;
 }
 
-export interface InvocationState<Result> {
+interface InvocationState<Result> {
   data: WritableSignal<Result | undefined>;
   error: WritableSignal<Error | undefined>;
   isLoading: WritableSignal<boolean>;

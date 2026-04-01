@@ -15,6 +15,7 @@
     "lint:frontend": "nx lint frontend",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
+    "prepare": "node -e \"const fs=require('node:fs');const childProcess=require('node:child_process');try{if(childProcess.execFileSync('git',['rev-parse','--is-inside-work-tree'],{stdio:'pipe'}).toString().trim()!=='true')process.exit(0);}catch{process.exit(0);}const path='lefthook.yml';if(!fs.existsSync(path))process.exit(0);const config=fs.readFileSync(path,'utf8');if(config.startsWith('# EXAMPLE USAGE:'))process.exit(0);try{childProcess.execFileSync(process.platform==='win32'?'lefthook.cmd':'lefthook',['install'],{stdio:'inherit'});}catch(error){if(error.code!=='ENOENT')process.exit(error.status??1);}\"",
     "spellcheck": "cspell lint --cache --gitignore --dot --no-must-find-files \"**/*.{ts,js,mjs,cjs,json,md,html,css,yml,yaml}\"",
     "test:library": "nx test convex-angular",
     "typecheck": "nx build frontend --configuration=development && nx build convex-angular --configuration=development && tsc -p apps/frontend/src/convex/tsconfig.json",
@@ -77,6 +78,7 @@
     "jscpd": "4.0.8",
     "jsonc-eslint-parser": "3.1.0",
     "knip": "6.1.1",
+    "lefthook": "1.13.6",
     "ng-packagr": "21.2.0",
     "nx": "22.5.4",
     "postcss": "8.5.8",
@@ -90,6 +92,11 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.57.0",
     "verdaccio": "6.3.1"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "lefthook"
+    ]
   },
   "nx": {
     "includedScripts": []

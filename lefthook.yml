@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: false
+  commands:
+    format-check:
+      run: pnpm format:check
+    spellcheck:
+      run: pnpm spellcheck
+    lint:
+      run: pnpm lint
+    test:
+      run: pnpm nx run-many -t test --projects frontend,convex-angular
+    typecheck:
+      run: pnpm typecheck
+    dupcheck:
+      run: pnpm dupcheck
+    knip:
+      run: pnpm knip

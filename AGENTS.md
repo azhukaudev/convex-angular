@@ -31,11 +31,19 @@
 ## Install And Dev Commands
 
 - Install dependencies: `pnpm install`
+- Git hooks use `lefthook`; hooks are installed automatically by `pnpm install`
+- If hooks are missing locally, install them manually with `pnpm lefthook install`
 - Start the demo frontend: `pnpm dev:frontend`
 - Equivalent frontend serve command: `pnpm nx serve frontend`
 - Start Convex local development: `pnpm dev:backend`
 - Show all Nx projects: `pnpm nx show projects`
 - Inspect one project config: `pnpm nx show project convex-angular --json`
+
+## Git Hooks
+
+- This repo uses `lefthook` for local git hooks.
+- The `pre-commit` hook is the final local gate and runs the full verification suite, while targeted commands are still preferred during iteration.
+- The hook enforces: `pnpm format:check`, `pnpm spellcheck`, `pnpm lint`, `pnpm nx run-many -t test --projects frontend,convex-angular`, `pnpm typecheck`, `pnpm dupcheck`, and `pnpm knip`.
 
 ## Build Commands
 
