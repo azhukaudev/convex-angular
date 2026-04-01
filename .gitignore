@@ -40,6 +40,7 @@ Thumbs.db
 
 .nx/cache
 .nx/workspace-data
+.cspellcache
 .cursor/rules/nx-rules.mdc
 .github/instructions/nx.instructions.md
 

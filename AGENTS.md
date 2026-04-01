@@ -80,6 +80,12 @@
 - Equivalent format write command: `pnpm prettier --write .`
 - Markdown files are formatted with Prettier too; use it after large edits to docs.
 
+## Spellcheck Commands
+
+- Preferred broader verification before claiming completion: `pnpm spellcheck`
+- Scope and excludes are defined in `cspell.json`
+- Generated Convex files remain excluded through `cspell.json`; do not hand-maintain `apps/frontend/src/convex/_generated/`
+
 ## Typecheck Commands
 
 - Preferred broader verification before claiming completion: `pnpm typecheck`
