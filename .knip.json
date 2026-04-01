@@ -21,6 +21,7 @@
     "!apps/frontend/src/convex/_generated/**"
   ],
   "ignoreFiles": ["apps/frontend/src/environments/environment.prod.ts"],
+  "ignoreBinaries": ["lefthook"],
   "ignoreDependencies": [
     "@angular/cli",
     "@angular/language-service",
@@ -37,6 +38,7 @@
     "primeicons",
     "postcss-url",
     "tailwindcss-primeui",
+    "lefthook",
     "ts-jest",
     "ts-node",
     "typescript-eslint"
