@@ -1,6 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, model, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import {
   injectMutation,
   injectPaginatedQuery,
@@ -9,21 +8,29 @@ import {
   insertAtTop,
   optimisticallyUpdateValueInPaginatedQuery,
 } from 'convex-angular';
-import { FunctionArgs } from 'convex/server';
+import type { FunctionArgs } from 'convex/server';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { api } from '../../../convex/_generated/api';
-import { Doc, Id } from '../../../convex/_generated/dataModel';
+import type { Doc, Id } from '../../../convex/_generated/dataModel';
+import { ExamplePageHeaderComponent } from '../shared/example-page-header/example-page-header';
 
 type DemoLane = 'alpha' | 'beta';
 type DemoItem = Doc<'optimisticDemoItems'>;
 type CreateItemArgs = FunctionArgs<typeof api.optimisticPaginationDemo.createItem>;
 
 @Component({
-  imports: [RouterLink, FormsModule, ButtonModule, CardModule, InputNumberModule, ProgressSpinnerModule],
+  imports: [
+    FormsModule,
+    ButtonModule,
+    CardModule,
+    InputNumberModule,
+    ProgressSpinnerModule,
+    ExamplePageHeaderComponent,
+  ],
   selector: 'cva-paginated-optimistic-demo',
   templateUrl: 'paginated-optimistic-demo.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -34,6 +41,13 @@ type CreateItemArgs = FunctionArgs<typeof api.optimisticPaginationDemo.createIte
 export default class PaginatedOptimisticDemo {
   private readonly autoSeededLanes = new Set<DemoLane>();
   private operationSequence = 0;
+
+  readonly pageLinks = [
+    { href: '/examples/paginated', label: 'Paginated Example' },
+    { href: '/examples/basic', label: 'Basic Example' },
+    { href: '/examples/prewarm-query', label: 'Prewarm Query Example' },
+    { href: '/examples/connection-state', label: 'Connection State Example' },
+  ];
 
   readonly selectedLane = model<DemoLane>('alpha');
   readonly pageSize = model(3);

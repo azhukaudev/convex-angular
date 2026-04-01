@@ -11,6 +11,7 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
+import { ExamplePageHeaderComponent } from '../shared/example-page-header/example-page-header';
 
 type OpenMode = 'normal' | 'prewarm';
 
@@ -34,7 +35,16 @@ type DemoHistoryEntry = {
 };
 
 @Component({
-  imports: [DatePipe, FormsModule, RouterLink, ButtonModule, CardModule, InputNumberModule, ProgressSpinnerModule],
+  imports: [
+    DatePipe,
+    FormsModule,
+    RouterLink,
+    ButtonModule,
+    CardModule,
+    InputNumberModule,
+    ProgressSpinnerModule,
+    ExamplePageHeaderComponent,
+  ],
   selector: 'cva-prewarm-query-demo',
   templateUrl: 'prewarm-query-demo.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -46,6 +56,13 @@ export default class PrewarmQueryDemo {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
+
+  readonly pageLinks = [
+    { href: '/examples/basic', label: 'Basic Example' },
+    { href: '/examples/paginated', label: 'Paginated Example' },
+    { href: '/examples/multi-query', label: 'Multi-query Example' },
+    { href: '/examples/connection-state', label: 'Connection State Example' },
+  ];
 
   private nextRunToken = 0;
   private pendingNavigationTimer: ReturnType<typeof setTimeout> | null = null;

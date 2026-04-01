@@ -1,7 +1,6 @@
 import { JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, model } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { injectQueries, skipToken } from 'convex-angular';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
@@ -10,12 +9,13 @@ import { InputNumberModule } from 'primeng/inputnumber';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { api } from '../../../convex/_generated/api';
+import { ExamplePageHeaderComponent } from '../shared/example-page-header/example-page-header';
 
 @Component({
   imports: [
+    ExamplePageHeaderComponent,
     JsonPipe,
     FormsModule,
-    RouterLink,
     ButtonModule,
     CardModule,
     CheckboxModule,
@@ -30,6 +30,12 @@ import { api } from '../../../convex/_generated/api';
   },
 })
 export default class MultiQueryDemo {
+  readonly pageLinks = [
+    { href: '/examples/basic', label: 'Basic Example' },
+    { href: '/examples/paginated', label: 'Paginated Example' },
+    { href: '/auth/login', label: 'Auth Example' },
+  ];
+
   readonly showPreview = model(true);
   readonly showFullList = model(true);
   readonly showCurrentUser = model(false);

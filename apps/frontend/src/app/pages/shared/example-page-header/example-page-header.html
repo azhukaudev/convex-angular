@@ -1,0 +1,20 @@
+<div class="flex flex-col gap-3">
+  <div class="flex items-center justify-between gap-4">
+    <div>
+      <h1 class="text-4xl font-extrabold opacity-80">{{ title() }}</h1>
+      <p class="text-sm text-gray-500" [innerHTML]="description()"></p>
+    </div>
+    <a routerLink="/" class="text-primary shrink-0 hover:underline">← Home</a>
+  </div>
+
+  @if (links().length) {
+    <div class="flex flex-wrap gap-3 text-sm">
+      @for (link of links(); track link.href; let last = $last) {
+        <a [routerLink]="link.href" class="text-primary hover:underline"> {{ link.label }} </a>
+        @if (!last) {
+          <span class="text-gray-300">•</span>
+        }
+      }
+    </div>
+  }
+</div>

@@ -47,113 +47,20 @@
     <h2 class="text-center text-2xl font-bold">Live Examples</h2>
 
     <div class="grid gap-6 md:grid-cols-2">
-      <p-card>
-        <ng-template #header>
-          <div class="px-4 pt-4">
-            <h3 class="text-lg font-semibold">Basic Example</h3>
-            <p class="text-sm text-gray-600">Todo list using injectQuery, injectMutation, and injectAction</p>
-          </div>
-        </ng-template>
-        <p class="mb-4 text-sm text-gray-500">
-          Demonstrates fetching data, adding/completing/deleting todos, and running bulk actions.
-        </p>
-        <a routerLink="/examples/basic">
-          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
-        </a>
-      </p-card>
-
-      <p-card>
-        <ng-template #header>
-          <div class="px-4 pt-4">
-            <h3 class="text-lg font-semibold">Paginated Example</h3>
-            <p class="text-sm text-gray-600">Todo list using injectPaginatedQuery with load more</p>
-          </div>
-        </ng-template>
-        <p class="mb-4 text-sm text-gray-500">
-          Demonstrates paginated queries, loading more items, and resetting pagination.
-        </p>
-        <a routerLink="/examples/paginated">
-          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
-        </a>
-      </p-card>
-
-      <p-card>
-        <ng-template #header>
-          <div class="px-4 pt-4">
-            <h3 class="text-lg font-semibold">Authentication Example</h3>
-            <p class="text-sm text-gray-600">Better Auth + Convex session verification with injectAuth</p>
-          </div>
-        </ng-template>
-        <p class="mb-4 text-sm text-gray-500">
-          Demonstrates provideConvexAuth, injectAuth, convexAuthGuard, and a protected Convex query using a real Better
-          Auth email/password flow.
-        </p>
-        <a routerLink="/auth/login">
-          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
-        </a>
-      </p-card>
-
-      <p-card>
-        <ng-template #header>
-          <div class="px-4 pt-4">
-            <h3 class="text-lg font-semibold">Multi-query Example</h3>
-            <p class="text-sm text-gray-600">Dynamic keyed queries with injectQueries and skipToken</p>
-          </div>
-        </ng-template>
-        <p class="mb-4 text-sm text-gray-500">
-          Demonstrates multiple live queries, removed keys, skipped keys, and aggregate loading across one keyed query
-          object.
-        </p>
-        <a routerLink="/examples/multi-query">
-          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
-        </a>
-      </p-card>
-
-      <p-card>
-        <ng-template #header>
-          <div class="px-4 pt-4">
-            <h3 class="text-lg font-semibold">Connection State Example</h3>
-            <p class="text-sm text-gray-600">Live transport diagnostics with injectConvexConnectionState</p>
-          </div>
-        </ng-template>
-        <p class="mb-4 text-sm text-gray-500">
-          Demonstrates connection retries, inflight request tracking, transport status, and a live transition log.
-        </p>
-        <a routerLink="/examples/connection-state">
-          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
-        </a>
-      </p-card>
-
-      <p-card>
-        <ng-template #header>
-          <div class="px-4 pt-4">
-            <h3 class="text-lg font-semibold">Prewarm Query Example</h3>
-            <p class="text-sm text-gray-600">Compare cold loads against injectPrewarmQuery</p>
-          </div>
-        </ng-template>
-        <p class="mb-4 text-sm text-gray-500">
-          Demonstrates prewarming a detail query before navigation, with timing data to compare cold and warmed opens.
-        </p>
-        <a routerLink="/examples/prewarm-query">
-          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
-        </a>
-      </p-card>
-
-      <p-card>
-        <ng-template #header>
-          <div class="px-4 pt-4">
-            <h3 class="text-lg font-semibold">Paginated Optimistic Example</h3>
-            <p class="text-sm text-gray-600">Dedicated demo for paginated optimistic update helpers</p>
-          </div>
-        </ng-template>
-        <p class="mb-4 text-sm text-gray-500">
-          Demonstrates insertAtTop, insertAtPosition, insertAtBottomIfLoaded, and in-place optimistic row updates on a
-          paginated dataset.
-        </p>
-        <a routerLink="/examples/paginated-optimistic">
-          <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
-        </a>
-      </p-card>
+      @for (example of examplePages; track example.href) {
+        <p-card>
+          <ng-template #header>
+            <div class="px-4 pt-4">
+              <h3 class="text-lg font-semibold">{{ example.title }}</h3>
+              <p class="text-sm text-gray-600">{{ example.subtitle }}</p>
+            </div>
+          </ng-template>
+          <p class="mb-4 text-sm text-gray-500">{{ example.description }}</p>
+          <a [routerLink]="example.href">
+            <p-button icon="pi pi-arrow-right" iconPos="right" label="View Example" />
+          </a>
+        </p-card>
+      }
     </div>
   </section>
 

@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { injectAction, injectMutation, injectQuery } from 'convex-angular';
 
 import TodoList from './todo-list';
@@ -27,6 +28,7 @@ describe('TodoList', () => {
 
     await TestBed.configureTestingModule({
       imports: [TodoList],
+      providers: [provideRouter([])],
     }).compileComponents();
   });
 
@@ -54,10 +56,10 @@ describe('TodoList', () => {
 
     component.newTask.set('Ship docs');
 
-    component.handleTodoChange('todo-1' as never, false);
-    component.handleTodoChange('todo-2' as never, true);
-    component.handleAddTodo();
-    component.handleDeleteTodo('todo-3' as never);
+    component.todoActions.handleTodoChange('todo-1', false);
+    component.todoActions.handleTodoChange('todo-2', true);
+    component.todoActions.handleAddTodo();
+    component.todoActions.handleDeleteTodo('todo-3');
 
     await Promise.resolve();
 
@@ -81,8 +83,8 @@ describe('TodoList', () => {
     const fixture = TestBed.createComponent(TodoList);
     const component = fixture.componentInstance;
 
-    component.handleCompleteAll();
-    component.handleReopenAll();
+    component.todoActions.handleCompleteAll();
+    component.todoActions.handleReopenAll();
 
     await Promise.resolve();
 

@@ -1,52 +1,22 @@
-import { DestroyRef, Signal, WritableSignal, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Signal, inject } from '@angular/core';
 import { FunctionArgs, FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { ActionStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
+import {
+  OptionalArgsTuple,
+  assertNotAccidentalArgument,
+  createInvocationSignals,
+  createInvocationState,
+  resetInvocationState,
+  runInvocation,
+} from './invocation-state';
 
 /**
  * A FunctionReference that refers to a Convex action.
  */
 export type ActionReference = FunctionReference<'action'>;
-
-type EmptyArgs = Record<string, never>;
-
-type OptionalArgsTuple<FuncRef extends FunctionReference<any>> =
-  FunctionArgs<FuncRef> extends EmptyArgs ? [args?: EmptyArgs] : [args: FunctionArgs<FuncRef>];
-
-function assertNotAccidentalArgument(value: unknown): void {
-  if (typeof Event !== 'undefined' && value instanceof Event) {
-    throw new Error(
-      'Convex function called with an Event object. Did you pass the helper directly as an event handler? Wrap it like `() => myAction()` instead.',
-    );
-  }
-
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    'bubbles' in value &&
-    'persist' in value &&
-    'isDefaultPrevented' in value
-  ) {
-    throw new Error(
-      'Convex function called with a SyntheticEvent object. Wrap the helper like `() => myAction()` instead of using it directly as an event handler.',
-    );
-  }
-
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    'preventDefault' in value &&
-    'stopPropagation' in value &&
-    'target' in value &&
-    'type' in value
-  ) {
-    throw new Error(
-      'Convex function called with an event-like object. Wrap the helper like `() => myAction()` instead of using it directly as an event handler.',
-    );
-  }
-}
 
 /**
  * Options for injectAction.
@@ -121,53 +91,16 @@ export interface AngularAction<Action extends ActionReference> {
   reset: () => void;
 }
 
-interface ActionState<Action extends ActionReference> {
-  data: WritableSignal<FunctionReturnType<Action> | undefined>;
-  error: WritableSignal<Error | undefined>;
-  isLoading: WritableSignal<boolean>;
-  hasCompleted: WritableSignal<boolean>;
-  currentVersion: WritableSignal<number>;
-  isDestroyed: boolean;
-  onSuccess?: (data: FunctionReturnType<Action>) => void;
-  onError?: (err: Error) => void;
-}
-
-function createActionState<Action extends ActionReference>(options?: ActionOptions<Action>): ActionState<Action> {
-  return {
-    data: signal<FunctionReturnType<Action> | undefined>(undefined),
-    error: signal<Error | undefined>(undefined),
-    isLoading: signal(false),
-    hasCompleted: signal(false),
-    currentVersion: signal(0),
-    isDestroyed: false,
-    onSuccess: options?.onSuccess,
-    onError: options?.onError,
-  };
-}
-
 function createActionHelper<Action extends ActionReference>(
   action: Action,
   convex: ReturnType<typeof injectConvex>,
   destroyRef: DestroyRef,
   options: ActionOptions<Action> | undefined,
 ): AngularAction<Action> {
-  const state = createActionState<Action>(options);
+  const state = createInvocationState<FunctionReturnType<Action>>();
+  const { isSuccess, status } = createInvocationSignals<ActionStatus>(state);
 
-  const isSuccess = computed(() => state.hasCompleted() && !state.isLoading() && !state.error());
-  const status = computed<ActionStatus>(() => {
-    if (state.isLoading()) return 'pending';
-    if (state.error()) return 'error';
-    if (state.hasCompleted()) return 'success';
-    return 'idle';
-  });
-
-  const reset = () => {
-    state.currentVersion.update((v) => v + 1);
-    state.data.set(undefined);
-    state.error.set(undefined);
-    state.isLoading.set(false);
-    state.hasCompleted.set(false);
-  };
+  const reset = () => resetInvocationState(state);
 
   destroyRef.onDestroy(() => {
     state.isDestroyed = true;
@@ -176,41 +109,13 @@ function createActionHelper<Action extends ActionReference>(
 
   const call = async (...args: OptionalArgsTuple<Action>): Promise<FunctionReturnType<Action>> => {
     const parsedArgs = (args[0] ?? {}) as FunctionArgs<Action>;
-    assertNotAccidentalArgument(parsedArgs);
+    assertNotAccidentalArgument(parsedArgs, 'myAction');
 
     if (state.isDestroyed) {
       return convex.action(action, parsedArgs);
     }
 
-    const callVersion = state.currentVersion() + 1;
-    state.currentVersion.set(callVersion);
-
-    try {
-      state.data.set(undefined);
-      state.error.set(undefined);
-      state.hasCompleted.set(false);
-      state.isLoading.set(true);
-
-      const result = await convex.action(action, parsedArgs);
-      if (state.currentVersion() === callVersion) {
-        state.data.set(result);
-        state.hasCompleted.set(true);
-        options?.onSuccess?.(result);
-      }
-      return result;
-    } catch (err) {
-      const errorObj = err instanceof Error ? err : new Error(String(err));
-      if (state.currentVersion() === callVersion) {
-        state.error.set(errorObj);
-        state.hasCompleted.set(true);
-        options?.onError?.(errorObj);
-      }
-      throw errorObj;
-    } finally {
-      if (state.currentVersion() === callVersion) {
-        state.isLoading.set(false);
-      }
-    }
+    return runInvocation(state, options, () => convex.action(action, parsedArgs));
   };
 
   return Object.assign(call, {

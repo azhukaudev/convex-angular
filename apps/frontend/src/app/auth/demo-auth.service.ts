@@ -29,6 +29,12 @@ type TokenExchangeResult = {
   } | null;
 };
 
+type EmailAuthResult = {
+  error: {
+    message?: string;
+  } | null;
+};
+
 function createDemoAuthClient() {
   return createAuthClient({
     baseURL: environment.convexSiteUrl,
@@ -79,21 +85,20 @@ export class DemoAuthService implements ConvexAuthProvider {
     return this.authClient;
   }
 
-  async signIn(email: string, password: string): Promise<boolean> {
+  private async runEmailAuth(
+    request: () => Promise<EmailAuthResult>,
+    formErrorMessage: string,
+    errorContext: string,
+  ): Promise<boolean> {
     this.formErrorMessage.set(null);
     this.error.set(undefined);
     this.isLoading.set(true);
 
     try {
-      const result = await this.getAuthClient().signIn.email({
-        email,
-        password,
-        callbackURL: this.getSuccessUrl(),
-        fetchOptions: { throw: false },
-      });
+      const result = await request();
 
       if (result.error) {
-        this.formErrorMessage.set(result.error.message ?? 'Unable to sign in with those credentials.');
+        this.formErrorMessage.set(result.error.message ?? formErrorMessage);
         this.applySession(null);
         this.isLoading.set(false);
         return false;
@@ -102,42 +107,40 @@ export class DemoAuthService implements ConvexAuthProvider {
       await this.refreshSession();
       return this.isAuthenticated();
     } catch (error) {
-      this.error.set(this.normalizeError(error, '[demo auth] Better Auth sign-in failed'));
+      this.error.set(this.normalizeError(error, errorContext));
       this.applySession(null);
       this.isLoading.set(false);
       return false;
     }
   }
 
+  async signIn(email: string, password: string): Promise<boolean> {
+    return this.runEmailAuth(
+      () =>
+        this.getAuthClient().signIn.email({
+          email,
+          password,
+          callbackURL: this.getSuccessUrl(),
+          fetchOptions: { throw: false },
+        }),
+      'Unable to sign in with those credentials.',
+      '[demo auth] Better Auth sign-in failed',
+    );
+  }
+
   async signUp(name: string, email: string, password: string): Promise<boolean> {
-    this.formErrorMessage.set(null);
-    this.error.set(undefined);
-    this.isLoading.set(true);
-
-    try {
-      const result = await this.getAuthClient().signUp.email({
-        name,
-        email,
-        password,
-        callbackURL: this.getSuccessUrl(),
-        fetchOptions: { throw: false },
-      });
-
-      if (result.error) {
-        this.formErrorMessage.set(result.error.message ?? 'Unable to create that account.');
-        this.applySession(null);
-        this.isLoading.set(false);
-        return false;
-      }
-
-      await this.refreshSession();
-      return this.isAuthenticated();
-    } catch (error) {
-      this.error.set(this.normalizeError(error, '[demo auth] Better Auth sign-up failed'));
-      this.applySession(null);
-      this.isLoading.set(false);
-      return false;
-    }
+    return this.runEmailAuth(
+      () =>
+        this.getAuthClient().signUp.email({
+          name,
+          email,
+          password,
+          callbackURL: this.getSuccessUrl(),
+          fetchOptions: { throw: false },
+        }),
+      'Unable to create that account.',
+      '[demo auth] Better Auth sign-up failed',
+    );
   }
 
   async signOut(): Promise<void> {

@@ -1,9 +1,10 @@
 import { DatePipe, JsonPipe, NgClass } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { injectConvexConnectionState } from 'convex-angular';
 import { ConnectionState } from 'convex/browser';
 import { CardModule } from 'primeng/card';
+
+import { ExamplePageHeaderComponent } from '../shared/example-page-header/example-page-header';
 
 type ConnectionLogEntry = {
   signature: string;
@@ -13,7 +14,7 @@ type ConnectionLogEntry = {
 };
 
 @Component({
-  imports: [DatePipe, JsonPipe, NgClass, RouterLink, CardModule],
+  imports: [DatePipe, JsonPipe, NgClass, CardModule, ExamplePageHeaderComponent],
   selector: 'cva-connection-state-demo',
   templateUrl: 'connection-state-demo.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -23,6 +24,13 @@ type ConnectionLogEntry = {
 })
 export default class ConnectionStateDemo {
   private readonly destroyRef = inject(DestroyRef);
+
+  readonly pageLinks = [
+    { href: '/examples/basic', label: 'Basic Example' },
+    { href: '/examples/paginated', label: 'Paginated Example' },
+    { href: '/examples/multi-query', label: 'Multi-query Example' },
+    { href: '/auth/login', label: 'Auth Example' },
+  ];
 
   readonly connectionState = injectConvexConnectionState();
   readonly now = signal(Date.now());

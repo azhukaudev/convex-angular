@@ -1,26 +1,9 @@
 <div class="mx-auto flex min-h-svh max-w-6xl flex-col gap-8 px-4 py-8">
-  <div class="flex flex-col gap-3">
-    <div class="flex items-center justify-between gap-4">
-      <div>
-        <h1 class="text-4xl font-extrabold opacity-80">Paginated Optimistic Helpers</h1>
-        <p class="text-sm text-gray-500">
-          Dedicated demo data for <code>insertAtTop()</code>, <code>insertAtBottomIfLoaded()</code>,
-          <code>insertAtPosition()</code>, and <code>optimisticallyUpdateValueInPaginatedQuery()</code>.
-        </p>
-      </div>
-      <a href="/" class="text-primary shrink-0 hover:underline">← Home</a>
-    </div>
-
-    <div class="flex flex-wrap gap-3 text-sm">
-      <a routerLink="/examples/paginated" class="text-primary hover:underline"> Paginated Example </a>
-      <span class="text-gray-300">•</span>
-      <a routerLink="/examples/basic" class="text-primary hover:underline"> Basic Example </a>
-      <span class="text-gray-300">•</span>
-      <a routerLink="/examples/prewarm-query" class="text-primary hover:underline"> Prewarm Query Example </a>
-      <span class="text-gray-300">•</span>
-      <a routerLink="/examples/connection-state" class="text-primary hover:underline"> Connection State Example </a>
-    </div>
-  </div>
+  <cva-example-page-header
+    title="Paginated Optimistic Helpers"
+    description="Dedicated demo data for <code>insertAtTop()</code>, <code>insertAtBottomIfLoaded()</code>, <code>insertAtPosition()</code>, and <code>optimisticallyUpdateValueInPaginatedQuery()</code>."
+    [links]="pageLinks"
+  />
 
   <p-card>
     <div class="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">

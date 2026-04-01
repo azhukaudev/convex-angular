@@ -1,23 +1,9 @@
 <div class="mx-auto flex min-h-svh max-w-6xl flex-col gap-8 px-4 py-8">
-  <div class="flex flex-col gap-3">
-    <div class="flex items-center justify-between gap-4">
-      <div>
-        <h1 class="text-4xl font-extrabold opacity-80">Multi-query Example</h1>
-        <p class="text-sm text-gray-500">
-          Dynamic keyed queries with <code>injectQueries()</code>, removed keys, and <code>skipToken</code>
-        </p>
-      </div>
-      <a href="/" class="text-primary shrink-0 hover:underline">← Home</a>
-    </div>
-
-    <div class="flex flex-wrap gap-3 text-sm">
-      <a routerLink="/examples/basic" class="text-primary hover:underline"> Basic Example </a>
-      <span class="text-gray-300">•</span>
-      <a routerLink="/examples/paginated" class="text-primary hover:underline"> Paginated Example </a>
-      <span class="text-gray-300">•</span>
-      <a routerLink="/auth/login" class="text-primary hover:underline"> Auth Example </a>
-    </div>
-  </div>
+  <cva-example-page-header
+    title="Multi-query Example"
+    description="Dynamic keyed queries with <code>injectQueries()</code>, removed keys, and <code>skipToken</code>"
+    [links]="pageLinks"
+  />
 
   <p-card>
     <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

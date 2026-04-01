@@ -13,6 +13,56 @@ import { CardModule } from 'primeng/card';
   },
 })
 export default class Landing {
+  readonly examplePages = [
+    {
+      title: 'Basic Example',
+      subtitle: 'Todo list using injectQuery, injectMutation, and injectAction',
+      description: 'Demonstrates fetching data, adding/completing/deleting todos, and running bulk actions.',
+      href: '/examples/basic',
+    },
+    {
+      title: 'Paginated Example',
+      subtitle: 'Todo list using injectPaginatedQuery with load more',
+      description: 'Demonstrates paginated queries, loading more items, and resetting pagination.',
+      href: '/examples/paginated',
+    },
+    {
+      title: 'Authentication Example',
+      subtitle: 'Better Auth + Convex session verification with injectAuth',
+      description:
+        'Demonstrates provideConvexAuth, injectAuth, convexAuthGuard, and a protected Convex query using a real Better Auth email/password flow.',
+      href: '/auth/login',
+    },
+    {
+      title: 'Multi-query Example',
+      subtitle: 'Dynamic keyed queries with injectQueries and skipToken',
+      description:
+        'Demonstrates multiple live queries, removed keys, skipped keys, and aggregate loading across one keyed query object.',
+      href: '/examples/multi-query',
+    },
+    {
+      title: 'Connection State Example',
+      subtitle: 'Live transport diagnostics with injectConvexConnectionState',
+      description:
+        'Demonstrates connection retries, inflight request tracking, transport status, and a live transition log.',
+      href: '/examples/connection-state',
+    },
+    {
+      title: 'Prewarm Query Example',
+      subtitle: 'Compare cold loads against injectPrewarmQuery',
+      description:
+        'Demonstrates prewarming a detail query before navigation, with timing data to compare cold and warmed opens.',
+      href: '/examples/prewarm-query',
+    },
+    {
+      title: 'Paginated Optimistic Example',
+      subtitle: 'Dedicated demo for paginated optimistic update helpers',
+      description:
+        'Demonstrates insertAtTop, insertAtPosition, insertAtBottomIfLoaded, and in-place optimistic row updates on a paginated dataset.',
+      href: '/examples/paginated-optimistic',
+    },
+  ];
+
   readonly features = [
     {
       name: 'injectQuery',
