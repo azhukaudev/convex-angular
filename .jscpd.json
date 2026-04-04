@@ -2,6 +2,8 @@
   "path": ["apps/frontend/src/app", "packages/convex-angular/src", "apps/frontend/src/convex"],
   "gitignore": true,
   "threshold": 0,
+  "minLines": 5,
+  "minTokens": 50,
   "reporters": ["console"],
   "format": ["typescript", "markup"],
   "ignore": [
