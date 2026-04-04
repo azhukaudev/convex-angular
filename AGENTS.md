@@ -15,11 +15,11 @@
 - Root project name: `@convex-angular/source`.
 - Main Nx projects with build/lint/test targets: `convex-angular`, `frontend`.
 
-## Existing Local Rules
+## Commenting Rules
 
-- Preserve existing code comments unless the task explicitly requires changing or removing them.
-- Add comments only for non-obvious logic or behavior contracts.
-- Avoid comments that just restate the code.
+- Add explanatory comments when creating or modifying code.
+- Prefer short comments that explain intent, constraints, edge cases, or non-obvious behavior.
+- Do not add comments that merely restate the code line-by-line.
 
 ## Cursor And Copilot Rules
 
