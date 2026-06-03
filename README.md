@@ -11,7 +11,7 @@ The Angular client for Convex.
 - 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectPrewarmQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
 - 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`
-- 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`
+- 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`, `*cvaAuthRefreshing`
 - 📄 Pagination: Built-in support for paginated queries with `loadMore` and `reset`
 - ⚡ Optimistic pagination helpers: `insertAtTop`, `insertAtBottomIfLoaded`, `insertAtPosition`
 - ⏭️ Conditional Queries: Use `skipToken` to conditionally skip queries
@@ -433,6 +433,10 @@ import { injectAuth } from 'convex-angular';
       @case ('authenticated') {
         <app-dashboard></app-dashboard>
       }
+      @case ('refreshing') {
+        <app-dashboard></app-dashboard>
+        <p>Reconnecting your session…</p>
+      }
       @case ('unauthenticated') {
         <app-login></app-login>
       }
@@ -447,9 +451,17 @@ export class AppComponent {
 The auth state provides:
 
 - `isLoading()` - True while the auth provider is loading or Convex is still validating the current token with the backend
-- `isAuthenticated()` - True only after the auth provider reports an authenticated user and Convex confirms the token
+- `isAuthenticated()` - True only after the auth provider reports an authenticated user and Convex confirms the token. Stays true during a refresh so the UI does not flicker to a signed-out state
+- `isRefreshing()` - True when the server rejected a previously-confirmed token and Convex paused the socket while fetching a replacement. Only ever true while `isAuthenticated()` is also true; routine background token rotation does not trigger it
 - `error()` - The most recent unexpected provider, token, or auth-sync failure
-- `status()` - `'loading' | 'authenticated' | 'unauthenticated'`
+- `status()` - `'loading' | 'authenticated' | 'refreshing' | 'unauthenticated'`
+
+Use the `*cvaAuthRefreshing` directive to layer a "reconnecting" affordance on top of authenticated content:
+
+```html
+<app-dashboard *cvaAuthenticated></app-dashboard>
+<div *cvaAuthRefreshing class="reconnecting-banner">Reconnecting your session…</div>
+```
 
 Returning `null` from `fetchAccessToken(...)` is treated as a normal
 unauthenticated outcome. It does not populate `error()`.

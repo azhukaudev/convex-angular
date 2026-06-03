@@ -61,8 +61,9 @@ describe('provideClerkAuth', () => {
     mockHasAuth = jest.fn().mockReturnValue(false);
 
     mockConvexClient = {
-      setAuth: mockSetAuth,
+      disabled: false,
       client: {
+        setAuth: mockSetAuth,
         clearAuth: mockClearAuth,
         hasAuth: mockHasAuth,
       },

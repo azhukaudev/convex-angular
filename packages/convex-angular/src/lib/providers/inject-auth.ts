@@ -88,6 +88,7 @@ function createConvexAuthState(): ConvexAuthState {
   const destroyRef = inject(DestroyRef);
 
   const backendAuthenticated = signal<boolean | null>(null);
+  const backendRefreshing = signal<boolean>(false);
   const providerError = signal<SequencedError | undefined>(undefined);
   const internalError = signal<SequencedError | undefined>(undefined);
 
@@ -136,13 +137,17 @@ function createConvexAuthState(): ConvexAuthState {
     return provider.isAuthenticated() && backendAuthenticated() === true;
   });
 
+  const isRefreshing = computed(() => {
+    return isAuthenticated() && backendRefreshing();
+  });
+
   const status = computed<ConvexAuthStatus>(() => {
     if (isLoading()) {
       return 'loading';
     }
 
     if (isAuthenticated()) {
-      return 'authenticated';
+      return isRefreshing() ? 'refreshing' : 'authenticated';
     }
 
     return 'unauthenticated';
@@ -186,6 +191,7 @@ function createConvexAuthState(): ConvexAuthState {
     if (upstreamLoading) {
       clearInternalError();
       backendAuthenticated.set(null);
+      backendRefreshing.set(false);
       clearAuthIfNeeded();
       return;
     }
@@ -193,49 +199,68 @@ function createConvexAuthState(): ConvexAuthState {
     if (!upstreamAuthenticated) {
       clearInternalError();
       backendAuthenticated.set(false);
+      backendRefreshing.set(false);
       clearAuthIfNeeded();
       return;
     }
 
     clearInternalError();
     backendAuthenticated.set(null);
+    backendRefreshing.set(false);
 
     try {
-      convex.setAuth(
-        async (args) => {
-          try {
-            const token = await provider.fetchAccessToken(args);
+      const fetchToken = async (args: { forceRefreshToken: boolean }) => {
+        try {
+          const token = await provider.fetchAccessToken(args);
 
-            if (generation !== currentGeneration) {
-              return null;
-            }
-
-            if (token == null) {
-              backendAuthenticated.set(false);
-              return null;
-            }
-
-            return token;
-          } catch (fetchError) {
-            if (generation === currentGeneration) {
-              setInternalError(fetchError, '[convex-angular auth] Token fetch failed');
-              backendAuthenticated.set(false);
-            }
-
+          if (generation !== currentGeneration) {
             return null;
           }
-        },
-        (isConvexAuthenticated) => {
-          if (generation !== currentGeneration) {
-            return;
+
+          if (token == null) {
+            backendAuthenticated.set(false);
+            return null;
           }
 
-          backendAuthenticated.set(isConvexAuthenticated);
-          if (isConvexAuthenticated) {
-            clearInternalError();
+          return token;
+        } catch (fetchError) {
+          if (generation === currentGeneration) {
+            setInternalError(fetchError, '[convex-angular auth] Token fetch failed');
+            backendAuthenticated.set(false);
           }
-        },
-      );
+
+          return null;
+        }
+      };
+
+      const onAuthChange = (isConvexAuthenticated: boolean) => {
+        if (generation !== currentGeneration) {
+          return;
+        }
+
+        backendAuthenticated.set(isConvexAuthenticated);
+        if (isConvexAuthenticated) {
+          clearInternalError();
+        }
+      };
+
+      const onRefreshChange = (isConvexRefreshing: boolean) => {
+        if (generation !== currentGeneration) {
+          return;
+        }
+
+        backendRefreshing.set(isConvexRefreshing);
+      };
+
+      if (convex.disabled) {
+        // A disabled client never opens a socket, so there is nothing to wire
+        // and no refresh can occur. This mirrors `ConvexClient.setAuth`, which
+        // is a no-op when disabled.
+      } else {
+        // Use the underlying base client directly: `ConvexClient.setAuth` drops
+        // the `onRefreshChange` callback, but `BaseConvexClient.setAuth` forwards it.
+        convex.client.setAuth(fetchToken, onAuthChange, onRefreshChange);
+      }
     } catch (syncError) {
       if (generation === currentGeneration) {
         setInternalError(syncError, '[convex-angular auth] Convex auth sync failed');
@@ -246,12 +271,14 @@ function createConvexAuthState(): ConvexAuthState {
 
   destroyRef.onDestroy(() => {
     currentGeneration += 1;
+    backendRefreshing.set(false);
     clearAuthIfNeeded();
   });
 
   return {
     isLoading,
     isAuthenticated,
+    isRefreshing,
     error,
     status,
   };

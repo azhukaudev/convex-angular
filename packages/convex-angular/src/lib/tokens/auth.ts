@@ -21,11 +21,14 @@ export type AuthTokenFetcher = (args: {
  *
  * - `'loading'`: Auth state is being determined (initial load or token validation)
  * - `'authenticated'`: User is fully authenticated with Convex
+ * - `'refreshing'`: The user remains authenticated, but the server rejected a
+ *   previously-confirmed token and Convex paused the socket while it fetches a
+ *   replacement. Routine background token rotation does not enter this state.
  * - `'unauthenticated'`: User is not authenticated
  *
  * @public
  */
-export type ConvexAuthStatus = 'loading' | 'authenticated' | 'unauthenticated';
+export type ConvexAuthStatus = 'loading' | 'authenticated' | 'refreshing' | 'unauthenticated';
 
 /**
  * The authentication state returned by `injectAuth()`.
@@ -46,9 +49,18 @@ export interface ConvexAuthState {
   /**
    * True when the user is fully authenticated with Convex.
    * This requires both the auth provider to report authenticated and Convex
-   * to confirm the token with the server.
+   * to confirm the token with the server. Remains true while `isRefreshing`
+   * is true so the UI does not flicker to a signed-out state during a refresh.
    */
   isAuthenticated: Signal<boolean>;
+
+  /**
+   * True when the server rejected a previously-confirmed token and Convex
+   * paused the socket while fetching a replacement. Only ever true while
+   * `isAuthenticated` is also true. Routine background token rotation does
+   * not trigger this state.
+   */
+  isRefreshing: Signal<boolean>;
 
   /**
    * The most recent authentication error, if any.
@@ -61,6 +73,8 @@ export interface ConvexAuthState {
    * The current authentication status.
    * - 'loading': Auth state is being determined
    * - 'authenticated': User is authenticated
+   * - 'refreshing': User is authenticated but Convex is fetching a replacement
+   *   token after a server rejection
    * - 'unauthenticated': User is not authenticated
    */
   status: Signal<ConvexAuthStatus>;

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { injectAuth, injectQuery } from 'convex-angular';
+import { CvaAuthRefreshingDirective, injectAuth, injectQuery } from 'convex-angular';
 import { ButtonModule } from 'primeng/button';
 import { CardModule } from 'primeng/card';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
@@ -9,7 +9,7 @@ import { api } from '../../../convex/_generated/api';
 import { DemoAuthService } from '../../auth/demo-auth.service';
 
 @Component({
-  imports: [RouterLink, ButtonModule, CardModule, ProgressSpinnerModule],
+  imports: [RouterLink, ButtonModule, CardModule, ProgressSpinnerModule, CvaAuthRefreshingDirective],
   selector: 'cva-auth-success',
   templateUrl: 'auth-success.html',
   changeDetection: ChangeDetectionStrategy.OnPush,

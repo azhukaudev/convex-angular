@@ -26,6 +26,7 @@ describe('injectAuth', () => {
   let reauthVersion: ReturnType<typeof signal<number>>;
   let setAuthFetcher: ((args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>) | undefined;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
+  let setAuthOnRefreshChange: ((isRefreshing: boolean) => void) | undefined;
 
   function createProvider(): ConvexAuthProvider {
     return {
@@ -71,17 +72,20 @@ describe('injectAuth', () => {
     fetchAccessToken = jest.fn().mockResolvedValue('token');
     setAuthFetcher = undefined;
     setAuthOnChange = undefined;
+    setAuthOnRefreshChange = undefined;
 
-    mockSetAuth = jest.fn((fetchToken, onChange) => {
+    mockSetAuth = jest.fn((fetchToken, onChange, onRefreshChange) => {
       setAuthFetcher = fetchToken;
       setAuthOnChange = onChange;
+      setAuthOnRefreshChange = onRefreshChange;
     });
     mockClearAuth = jest.fn();
     mockHasAuth = jest.fn().mockReturnValue(false);
 
     mockConvexClient = {
-      setAuth: mockSetAuth,
+      disabled: false,
       client: {
+        setAuth: mockSetAuth,
         clearAuth: mockClearAuth,
         hasAuth: mockHasAuth,
       },
@@ -201,6 +205,111 @@ describe('injectAuth', () => {
     expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
     expect(fixture.componentInstance.auth.error()).toBeUndefined();
+  }));
+
+  it('enters the refreshing state while staying authenticated', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    setAuthOnChange?.(true);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.status()).toBe('authenticated');
+    expect(fixture.componentInstance.auth.isRefreshing()).toBe(false);
+
+    setAuthOnRefreshChange?.(true);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.isAuthenticated()).toBe(true);
+    expect(fixture.componentInstance.auth.isRefreshing()).toBe(true);
+    expect(fixture.componentInstance.auth.status()).toBe('refreshing');
+  }));
+
+  it('returns to authenticated once the refresh completes', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    setAuthOnChange?.(true);
+    setAuthOnRefreshChange?.(true);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.status()).toBe('refreshing');
+
+    setAuthOnRefreshChange?.(false);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.isRefreshing()).toBe(false);
+    expect(fixture.componentInstance.auth.status()).toBe('authenticated');
+  }));
+
+  it('never reports refreshing while unauthenticated', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    setAuthOnRefreshChange?.(true);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
+    expect(fixture.componentInstance.auth.isRefreshing()).toBe(false);
+    expect(fixture.componentInstance.auth.status()).toBe('loading');
+  }));
+
+  it('clears the refreshing state when the provider signs out', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    setAuthOnChange?.(true);
+    setAuthOnRefreshChange?.(true);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.status()).toBe('refreshing');
+
+    providerAuthenticated.set(false);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.isRefreshing()).toBe(false);
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+  }));
+
+  it('ignores refresh callbacks from a superseded auth generation', fakeAsync(() => {
+    providerAuthenticated.set(true);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    setAuthOnChange?.(true);
+    fixture.detectChanges();
+    tick();
+
+    const staleOnRefreshChange = setAuthOnRefreshChange;
+
+    reauthVersion.update((value) => value + 1);
+    tick();
+    setAuthOnChange?.(true);
+    fixture.detectChanges();
+    tick();
+
+    staleOnRefreshChange?.(true);
+    fixture.detectChanges();
+    tick();
+
+    expect(fixture.componentInstance.auth.isRefreshing()).toBe(false);
+    expect(fixture.componentInstance.auth.status()).toBe('authenticated');
   }));
 
   it('treats a null token as unauthenticated without setting an error', fakeAsync(() => {
@@ -393,8 +502,9 @@ describe('provideConvexAuthFromExisting', () => {
 
   it('reuses the existing auth provider instance', fakeAsync(() => {
     const mockConvexClient = {
-      setAuth: jest.fn(),
+      disabled: false,
       client: {
+        setAuth: jest.fn(),
         clearAuth: jest.fn(),
         hasAuth: jest.fn().mockReturnValue(false),
       },
@@ -431,13 +541,14 @@ describe('provideConvexAuthFromExisting', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.setAuth).toHaveBeenCalledTimes(1);
+    expect(mockConvexClient.client.setAuth).toHaveBeenCalledTimes(1);
   }));
 
   it('throws when combined with provideConvexAuth in the same injector', () => {
     const mockConvexClient = {
-      setAuth: jest.fn(),
+      disabled: false,
       client: {
+        setAuth: jest.fn(),
         clearAuth: jest.fn(),
         hasAuth: jest.fn().mockReturnValue(false),
       },
@@ -465,8 +576,9 @@ describe('provideConvexAuthFromExisting', () => {
 
   it('throws when registered in a child injector after parent auth is configured', () => {
     const mockConvexClient = {
-      setAuth: jest.fn(),
+      disabled: false,
       client: {
+        setAuth: jest.fn(),
         clearAuth: jest.fn(),
         hasAuth: jest.fn().mockReturnValue(false),
       },

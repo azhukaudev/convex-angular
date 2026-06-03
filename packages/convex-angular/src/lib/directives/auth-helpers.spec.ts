@@ -7,6 +7,7 @@ import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import { CONVEX } from '../tokens/convex';
 import {
   CvaAuthLoadingDirective,
+  CvaAuthRefreshingDirective,
   CvaAuthenticatedDirective,
   CvaUnauthenticatedDirective,
 } from './auth-helpers';
@@ -17,19 +18,22 @@ describe('Auth Helper Directives', () => {
   let mockClearAuth: jest.Mock;
   let mockHasAuth: jest.Mock;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
+  let setAuthOnRefreshChange: ((isRefreshing: boolean) => void) | undefined;
   let isLoading: ReturnType<typeof signal<boolean>>;
   let isAuthenticated: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
-    mockSetAuth = jest.fn((_fetchToken, onChange) => {
+    mockSetAuth = jest.fn((_fetchToken, onChange, onRefreshChange) => {
       setAuthOnChange = onChange;
+      setAuthOnRefreshChange = onRefreshChange;
     });
     mockClearAuth = jest.fn();
     mockHasAuth = jest.fn().mockReturnValue(false);
 
     mockConvexClient = {
-      setAuth: mockSetAuth,
+      disabled: false,
       client: {
+        setAuth: mockSetAuth,
         clearAuth: mockClearAuth,
         hasAuth: mockHasAuth,
       },
@@ -38,6 +42,7 @@ describe('Auth Helper Directives', () => {
     isLoading = signal(true);
     isAuthenticated = signal(false);
     setAuthOnChange = undefined;
+    setAuthOnRefreshChange = undefined;
   });
 
   afterEach(() => {
@@ -337,6 +342,58 @@ describe('Auth Helper Directives', () => {
       tick();
 
       expect(fixture.nativeElement.textContent).toContain('Loading...');
+    }));
+  });
+
+  describe('CvaAuthRefreshingDirective', () => {
+    it('should not render while authenticated and not refreshing', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(true);
+      setupTestBed();
+
+      @Component({
+        template: `<div *cvaAuthRefreshing>Reconnecting…</div>`,
+        standalone: true,
+        imports: [CvaAuthRefreshingDirective],
+      })
+      class TestComponent {}
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      setAuthOnChange?.(true);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).not.toContain('Reconnecting…');
+    }));
+
+    it('should render when refreshing while authenticated', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(true);
+      setupTestBed();
+
+      @Component({
+        template: `<div *cvaAuthRefreshing>Reconnecting…</div>`,
+        standalone: true,
+        imports: [CvaAuthRefreshingDirective],
+      })
+      class TestComponent {}
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      setAuthOnChange?.(true);
+      setAuthOnRefreshChange?.(true);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).toContain('Reconnecting…');
+
+      setAuthOnRefreshChange?.(false);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.textContent).not.toContain('Reconnecting…');
     }));
   });
 

@@ -173,3 +173,51 @@ export class CvaAuthLoadingDirective {
     });
   }
 }
+
+/**
+ * Structural directive that renders content while Convex is refreshing auth.
+ *
+ * This directive will show its content when the server rejected a
+ * previously-confirmed token and Convex paused the socket to fetch a
+ * replacement. The user remains authenticated throughout, so `*cvaAuthenticated`
+ * content stays mounted; use this directive to layer a "reconnecting" affordance
+ * on top. Routine background token rotation does not trigger it.
+ *
+ * @example
+ * ```html
+ * <div *cvaAuthRefreshing class="banner">
+ *   Reconnecting your session…
+ * </div>
+ * ```
+ *
+ * @public
+ */
+@Directive({
+  selector: '[cvaAuthRefreshing]',
+  standalone: true,
+})
+export class CvaAuthRefreshingDirective {
+  private readonly templateRef = inject(TemplateRef);
+  private readonly viewContainer = inject(ViewContainerRef);
+  private readonly auth = injectAuth();
+  private viewRef: EmbeddedViewRef<unknown> | null = null;
+
+  constructor() {
+    effect(() => {
+      const isRefreshing = this.auth.isRefreshing();
+
+      if (isRefreshing) {
+        if (!this.viewRef) {
+          this.viewRef = this.viewContainer.createEmbeddedView(
+            this.templateRef,
+          );
+        }
+      } else {
+        if (this.viewRef) {
+          this.viewContainer.clear();
+          this.viewRef = null;
+        }
+      }
+    });
+  }
+}
