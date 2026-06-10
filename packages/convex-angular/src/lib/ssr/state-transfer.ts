@@ -13,10 +13,14 @@ export type TransferredQueryResult = { d: JSONValue } | { u: true };
 /**
  * Serialize query args into a stable cache key.
  *
+ * Accepts any Convex function args object: args are serializable Convex
+ * values by construction, so the single cast to the convexToJson input type
+ * lives here instead of at every call site.
+ *
  * @internal
  */
-export function serializeQueryArgs(args: Record<string, Value>): string {
-  return JSON.stringify(convexToJson(args));
+export function serializeQueryArgs(args: object): string {
+  return JSON.stringify(convexToJson(args as Value));
 }
 
 /**

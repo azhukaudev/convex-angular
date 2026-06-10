@@ -11,7 +11,6 @@ import {
   untracked,
 } from '@angular/core';
 import { FunctionReturnType, getFunctionName } from 'convex/server';
-import { Value } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
@@ -204,7 +203,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
         }
 
         const queryName = getFunctionName(definition.query);
-        const argsKey = serializeQueryArgs(definition.args as Record<string, Value>);
+        const argsKey = serializeQueryArgs(definition.args);
         const activeSubscription = activeSubscriptions.get(key);
         const isSameSubscription =
           activeSubscription?.queryName === queryName && activeSubscription.argsKey === argsKey;

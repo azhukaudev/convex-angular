@@ -19,7 +19,6 @@ import {
   PaginationResult,
   getFunctionName,
 } from 'convex/server';
-import { Value } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
@@ -194,8 +193,13 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
 
   /**
    * Load more items.
+   *
+   * After server-side rendering, the seeded first page reports
+   * `canLoadMore() === true` (matching the server HTML) while `loadMore`
+   * returns false until the live subscription syncs shortly after hydration.
+   *
    * @param numItems - Number of items to load
-   * @returns true if loading was initiated, false if already loading or exhausted
+   * @returns true if loading was initiated, false if already loading, exhausted, or not yet synced
    */
   loadMore: (numItems: number) => boolean;
 
@@ -337,7 +341,12 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       isExhausted.set(firstPage.isDone);
     };
 
-    const subscribe = (args: PaginatedQueryArgs<Query>, initialNumItems: number, generation: number, argsKey: string) => {
+    const subscribe = (
+      args: PaginatedQueryArgs<Query>,
+      initialNumItems: number,
+      generation: number,
+      argsKey: string,
+    ) => {
       cleanupSubscription();
       resetState();
 
@@ -447,7 +456,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         ...args,
         paginationOpts: { numItems: initialNumItems, cursor: null },
       } as FunctionArgs<Query>;
-      const argsKey = serializeQueryArgs(firstPageArgs as unknown as Record<string, Value>);
+      const argsKey = serializeQueryArgs(firstPageArgs);
 
       // Server-side rendering: the WebSocket client is disabled, so fetch the
       // first page once over HTTP. The loader registers a pending task (SSR

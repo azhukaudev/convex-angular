@@ -2,7 +2,6 @@ import { isPlatformServer } from '@angular/common';
 import { DestroyRef, PLATFORM_ID, inject } from '@angular/core';
 import { ActivatedRouteSnapshot, ResolveFn, RouterStateSnapshot } from '@angular/router';
 import { FunctionReturnType } from 'convex/server';
-import { Value } from 'convex/values';
 
 import { QueryReference } from '../providers/inject-query';
 import { SkipToken, skipToken } from '../skip-token';
@@ -91,9 +90,9 @@ export function convexQueryResolver<Query extends QueryReference>(
       if (!serverLoader?.enabled) {
         return undefined;
       }
-      return serverLoader
-        .fetch(query, args, serializeQueryArgs(args as Record<string, Value>))
-        .catch(() => undefined) as Promise<FunctionReturnType<Query> | undefined>;
+      return serverLoader.fetch(query, args, serializeQueryArgs(args)).catch(() => undefined) as Promise<
+        FunctionReturnType<Query> | undefined
+      >;
     }
 
     // A disabled client never emits; resolve immediately instead of hanging

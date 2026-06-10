@@ -11,7 +11,6 @@ import {
   untracked,
 } from '@angular/core';
 import { FunctionReference, FunctionReturnType, getFunctionName } from 'convex/server';
-import { Value } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
@@ -225,7 +224,7 @@ export function injectQuery<Query extends QueryReference>(
       // Not skipped - try to get cached data and start subscription
       isSkipped.set(false);
       isLoading.set(true);
-      const argsKey = serializeQueryArgs(args as Record<string, Value>);
+      const argsKey = serializeQueryArgs(args);
       const hasPreviousArgs = previousArgsKey !== undefined;
       previousArgsKey = argsKey;
 
