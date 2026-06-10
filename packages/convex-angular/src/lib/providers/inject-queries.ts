@@ -1,8 +1,21 @@
-import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
+import { isPlatformServer } from '@angular/common';
+import {
+  DestroyRef,
+  EnvironmentInjector,
+  PLATFORM_ID,
+  Signal,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { FunctionReturnType, getFunctionName } from 'convex/server';
-import { Value, convexToJson } from 'convex/values';
+import { Value } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
+import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
+import { ConvexHydrationState, serializeQueryArgs } from '../ssr/state-transfer';
 import { QueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { QueryReference } from './inject-query';
@@ -84,10 +97,6 @@ export interface QueriesResult<Definitions extends QueriesDefinition> {
   isLoading: Signal<boolean>;
 }
 
-function serializeArgs(args: Record<string, Value>): string {
-  return JSON.stringify(convexToJson(args));
-}
-
 function cloneWithoutKey<T extends Record<string, unknown>>(source: T, key: string): T {
   if (!(key in source)) {
     return source;
@@ -138,6 +147,11 @@ export function injectQueries<Definitions extends QueriesDefinition>(
   return runInResolvedInjectionContext(injectQueries, options?.injectRef, () => {
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
+    const isServer = isPlatformServer(inject(PLATFORM_ID));
+    // Both services are registered by provideConvex(...); optional injection
+    // keeps setups that only provide the CONVEX token working.
+    const serverLoader = isServer ? inject(ConvexServerQueryLoader, { optional: true }) : null;
+    const hydration = !isServer ? inject(ConvexHydrationState, { optional: true }) : null;
 
     const results = signal<Record<string, unknown>>({});
     const errors = signal<Record<string, Error | undefined>>({});
@@ -189,7 +203,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
         }
 
         const queryName = getFunctionName(definition.query);
-        const argsKey = serializeArgs(definition.args as Record<string, Value>);
+        const argsKey = serializeQueryArgs(definition.args as Record<string, Value>);
         const activeSubscription = activeSubscriptions.get(key);
         const isSameSubscription =
           activeSubscription?.queryName === queryName && activeSubscription.argsKey === argsKey;
@@ -206,20 +220,60 @@ export function injectQueries<Definitions extends QueriesDefinition>(
           results.update((current) => setKey(current, key, undefined));
         }
 
-        const cachedResult = convex.client.localQueryResult(queryName, definition.args) as
-          | FunctionReturnType<typeof definition.query>
-          | undefined;
-
-        if (cachedResult !== undefined) {
-          results.update((current) => setKey(current, key, cachedResult));
-        }
-
         const subscription: ActiveQuerySubscription = {
           key,
           queryName,
           argsKey,
           unsubscribe: () => {},
         };
+
+        // Server-side rendering: the WebSocket client is disabled, so fetch
+        // once over HTTP instead. The subscription entry keeps the staleness
+        // guard and removal bookkeeping identical to the browser path.
+        if (isServer) {
+          activeSubscriptions.set(key, subscription);
+
+          if (serverLoader?.enabled) {
+            serverLoader.fetch(definition.query, definition.args, argsKey).then(
+              (result) => {
+                if (activeSubscriptions.get(key) !== subscription) {
+                  return;
+                }
+
+                results.update((current) => setKey(current, key, result));
+                errors.update((current) => setKey(current, key, undefined));
+                statuses.update((current) => setKey(current, key, 'success'));
+              },
+              (error: Error) => {
+                if (activeSubscriptions.get(key) !== subscription) {
+                  return;
+                }
+
+                errors.update((current) => setKey(current, key, error));
+                statuses.update((current) => setKey(current, key, 'error'));
+              },
+            );
+          }
+          continue;
+        }
+
+        // Prefer the warm cache for the current args; fall back to data
+        // transferred from the server render so a hydrated app shows content
+        // immediately while the live subscription syncs.
+        const cachedResult = (convex.disabled ? undefined : convex.client.localQueryResult(queryName, definition.args)) as
+          | FunctionReturnType<typeof definition.query>
+          | undefined;
+
+        if (cachedResult !== undefined) {
+          results.update((current) => setKey(current, key, cachedResult));
+        } else {
+          const transferred = hydration?.consume(queryName, argsKey);
+          if (transferred !== undefined) {
+            results.update((current) => setKey(current, key, transferred.value));
+            errors.update((current) => setKey(current, key, undefined));
+            statuses.update((current) => setKey(current, key, 'success'));
+          }
+        }
 
         const unsubscribe = convex.onUpdate(
           definition.query,

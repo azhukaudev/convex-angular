@@ -1,9 +1,18 @@
-import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
+import {
+  Component,
+  EnvironmentInjector,
+  PLATFORM_ID,
+  TransferState,
+  createEnvironmentInjector,
+  signal,
+} from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, getFunctionName } from 'convex/server';
 
 import { skipToken } from '../skip-token';
+import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
+import { ConvexHydrationState, makeQueryStateKey, wrapQueryResult } from '../ssr/state-transfer';
 import { CONVEX } from '../tokens/convex';
 import { injectQueries } from './inject-queries';
 
@@ -398,5 +407,165 @@ describe('injectQueries', () => {
 
     expect(assertResultsType).toBe(true);
     expect(typedResults).toEqual({ user: undefined, todos: undefined });
+  });
+
+  describe('SSR (server platform)', () => {
+    let mockLoader: { enabled: boolean; fetch: jest.Mock };
+    let serverConvexClient: ConvexClient;
+
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+
+      mockLoader = {
+        enabled: true,
+        fetch: jest.fn((query: FunctionReference<'query'>) => {
+          const queryName = queryNames.get(query);
+          if (queryName === 'users:get') {
+            return Promise.resolve({ name: 'Server user' });
+          }
+          return Promise.resolve([{ _id: '1', title: 'Server todo' }]);
+        }),
+      };
+
+      serverConvexClient = {
+        get disabled() {
+          return true;
+        },
+        get client() {
+          throw new Error('ConvexClient is disabled');
+        },
+        onUpdate: jest.fn(),
+      } as unknown as ConvexClient;
+
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: PLATFORM_ID, useValue: 'server' },
+          { provide: CONVEX, useValue: serverConvexClient },
+          { provide: ConvexServerQueryLoader, useValue: mockLoader },
+        ],
+      });
+    });
+
+    it('fetches each definition over the loader without subscribing', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly queries = injectQueries(() => ({
+          user: { query: mockUserQuery, args: { userId: 'user-1' } },
+          todos: { query: mockTodosQuery, args: { count: 10 } },
+        }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockLoader.fetch).toHaveBeenCalledTimes(2);
+      expect(serverConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.queries.statuses()).toEqual({ user: 'success', todos: 'success' });
+      expect(fixture.componentInstance.queries.results()).toEqual({
+        user: { name: 'Server user' },
+        todos: [{ _id: '1', title: 'Server todo' }],
+      });
+      expect(fixture.componentInstance.queries.isLoading()).toBe(false);
+    }));
+
+    it('records per-key errors while other keys succeed', fakeAsync(() => {
+      const fetchError = new Error('users fetch failed');
+      mockLoader.fetch.mockImplementation((query: FunctionReference<'query'>) => {
+        if (queryNames.get(query) === 'users:get') {
+          return Promise.reject(fetchError);
+        }
+        return Promise.resolve([{ _id: '1', title: 'Server todo' }]);
+      });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly queries = injectQueries(() => ({
+          user: { query: mockUserQuery, args: { userId: 'user-1' } },
+          todos: { query: mockTodosQuery, args: { count: 10 } },
+        }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.queries.statuses()).toEqual({ user: 'error', todos: 'success' });
+      expect(fixture.componentInstance.queries.errors().user).toBe(fetchError);
+      expect(fixture.componentInstance.queries.results().todos).toEqual([{ _id: '1', title: 'Server todo' }]);
+    }));
+
+    it('keeps skipped keys skipped and stays pending without a loader', fakeAsync(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: PLATFORM_ID, useValue: 'server' },
+          { provide: CONVEX, useValue: serverConvexClient },
+        ],
+      });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly queries = injectQueries(() => ({
+          user: skipToken,
+          todos: { query: mockTodosQuery, args: { count: 10 } },
+        }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.queries.statuses()).toEqual({ user: 'skipped', todos: 'pending' });
+    }));
+  });
+
+  describe('hydration seeding (browser)', () => {
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [{ provide: CONVEX, useValue: mockConvexClient }, ConvexHydrationState],
+      });
+    });
+
+    it('seeds transferred entries individually with success status', fakeAsync(() => {
+      const transferState = TestBed.inject(TransferState);
+      transferState.set(makeQueryStateKey('todos:list', '{"count":10}'), wrapQueryResult([{ _id: '1', title: 'T' }]));
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly queries = injectQueries(() => ({
+          user: { query: mockUserQuery, args: { userId: 'user-1' } },
+          todos: { query: mockTodosQuery, args: { count: 10 } },
+        }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      // todos was transferred; user was not and stays pending.
+      expect(fixture.componentInstance.queries.statuses()).toEqual({ user: 'pending', todos: 'success' });
+      expect(fixture.componentInstance.queries.results().todos).toEqual([{ _id: '1', title: 'T' }]);
+
+      // Live subscriptions are established for both keys.
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+
+      // A live update replaces the seeded value.
+      onUpdateByKey.get(keyFor('todos:list', { count: 10 }))?.([{ _id: '1', title: 'Live' }]);
+      expect(fixture.componentInstance.queries.results().todos).toEqual([{ _id: '1', title: 'Live' }]);
+      tick();
+    }));
   });
 });
