@@ -1,7 +1,14 @@
+# Force a single @better-fetch/fetch copy. better-auth pins 1.2.2 exactly while
+# @convex-dev/better-auth resolves ^1.1.18 independently; two copies produce
+# incompatible BetterFetch type identities and break the better-auth client
+# plugin types (crossDomainClient/convexClient) during the Angular build.
+overrides:
+  '@better-fetch/fetch': 1.1.21
 allowBuilds:
   '@parcel/watcher': true
   '@swc/core': true
   esbuild: true
+  less: false
   lmdb: true
   msgpackr-extract: true
   nx: true
