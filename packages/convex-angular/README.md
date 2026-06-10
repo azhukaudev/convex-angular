@@ -14,6 +14,7 @@ The Angular client for Convex.
   - [Fetching data](#fetching-data) — `injectQuery`
   - [Fetching multiple queries](#fetching-multiple-queries) — `injectQueries`
   - [Prewarming queries](#prewarming-queries) — `injectPrewarmQuery`
+  - [Preloading route data](#preloading-route-data) — `convexQueryResolver`
   - [Mutating data](#mutating-data) — `injectMutation`
   - [Running actions](#running-actions) — `injectAction`
   - [Paginated queries](#paginated-queries) — `injectPaginatedQuery`
@@ -41,6 +42,7 @@ The Angular client for Convex.
 - 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectPrewarmQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
 - 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`
+- 🧭 Route Resolvers: Preload query data before navigation with `convexQueryResolver`
 - 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`, `*cvaAuthRefreshing`
 - 📄 Pagination: Built-in support for paginated queries with `loadMore` and `reset`
 - ⚡ Optimistic pagination helpers: `insertAtTop`, `insertAtBottomIfLoaded`, `insertAtPosition`
@@ -189,6 +191,49 @@ export class UsersComponent {
 
 By default the warm subscription stays alive for 5 seconds. Override that with
 `extendSubscriptionFor` when needed.
+
+### Preloading route data
+
+Use `convexQueryResolver` to block navigation until a query's first result is
+available locally. By the time the routed component is created, its
+`injectQuery(...)` for the same query and args reads the warm cache and renders
+without a loading state.
+
+```typescript
+// app.routes.ts
+import { Routes } from '@angular/router';
+import { convexQueryResolver } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
+
+export const routes: Routes = [
+  {
+    path: 'users/:id',
+    loadComponent: () => import('./user-profile.component').then((m) => m.UserProfileComponent),
+    resolve: {
+      profile: convexQueryResolver(api.users.getProfile, (route) => ({
+        userId: route.paramMap.get('id')!,
+      })),
+    },
+  },
+];
+
+// user-profile.component.ts — renders instantly from the warm cache
+export class UserProfileComponent {
+  private readonly route = inject(ActivatedRoute);
+
+  readonly profile = injectQuery(api.users.getProfile, () => ({
+    userId: this.route.snapshot.paramMap.get('id')!,
+  }));
+}
+```
+
+Resolution never blocks navigation on failure: subscription errors resolve
+`undefined` and the component's own `injectQuery` surfaces the error
+reactively. The resolver keeps its subscription warm for 5 seconds after
+resolving (configurable via `keepSubscribedFor`) so the component's
+subscription deduplicates onto it. During server-side rendering the resolver
+fetches over HTTP and transfers the result to the browser, like `injectQuery`.
 
 ### Mutating data
 
@@ -500,6 +545,10 @@ import { injectAuth } from 'convex-angular';
       @case ('authenticated') {
         <app-dashboard></app-dashboard>
       }
+      @case ('refreshing') {
+        <app-dashboard></app-dashboard>
+        <p>Reconnecting your session…</p>
+      }
       @case ('unauthenticated') {
         <app-login></app-login>
       }
@@ -514,9 +563,18 @@ export class AppComponent {
 The auth state provides:
 
 - `isLoading()` - True while the auth provider is loading or Convex is still validating the current token with the backend
-- `isAuthenticated()` - True only after the auth provider reports an authenticated user and Convex confirms the token
+- `isAuthenticated()` - True only after the auth provider reports an authenticated user and Convex confirms the token. Stays true during a refresh so the UI does not flicker to a signed-out state
+- `isRefreshing()` - True when the server rejected a previously-confirmed token and Convex paused the socket while fetching a replacement. Only ever true while `isAuthenticated()` is also true; routine background token rotation does not trigger it
 - `error()` - The most recent unexpected provider, token, or auth-sync failure
-- `status()` - `'loading' | 'authenticated' | 'unauthenticated'`
+- `status()` - `'loading' | 'authenticated' | 'refreshing' | 'unauthenticated'`
+- `getAuth()` - Snapshot of the JWT currently used by the Convex client together with its decoded claims, or undefined when no token is set. A method rather than a signal: the client emits no token-change events, so read it on demand (for example right before calling an external API that reuses the Convex token)
+
+Use the `*cvaAuthRefreshing` directive to layer a "reconnecting" affordance on top of authenticated content:
+
+```html
+<app-dashboard *cvaAuthenticated></app-dashboard>
+<div *cvaAuthRefreshing class="reconnecting-banner">Reconnecting your session…</div>
+```
 
 Returning `null` from `fetchAccessToken(...)` is treated as a normal
 unauthenticated outcome. It does not populate `error()`.
@@ -851,14 +909,20 @@ fetches unauthenticated. To disable server-side fetching entirely (helpers stay
 
 ### SSR behavior by helper
 
-| Helper                            | On the server                                                            |
-| --------------------------------- | ------------------------------------------------------------------------ |
-| `injectQuery` / `injectQueries`   | Fetch over HTTP, render data, transfer to the browser                    |
-| `injectPaginatedQuery`            | Stays `pending`; loads live after hydration                              |
-| `injectPrewarmQuery`              | `prewarm()` is a no-op                                                   |
-| `injectConvexConnectionState`     | Reports a static disconnected state                                      |
-| `injectAuth`                      | Reports the provider's state; Convex token sync resumes in the browser   |
-| `injectMutation` / `injectAction` | Calling them during SSR throws (mutations/actions are user interactions) |
+| Helper                            | On the server                                                                                                                          |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `injectQuery` / `injectQueries`   | Fetch over HTTP, render data, transfer to the browser                                                                                  |
+| `injectPaginatedQuery`            | Fetches the first page over HTTP, renders and transfers it; `loadMore` becomes active once the live subscription syncs after hydration |
+| `convexQueryResolver`             | Fetches over HTTP (blocking the render) and transfers to the browser                                                                   |
+| `injectPrewarmQuery`              | `prewarm()` is a no-op                                                                                                                 |
+| `injectConvexConnectionState`     | Reports a static disconnected state                                                                                                    |
+| `injectAuth`                      | Reports the provider's state; Convex token sync resumes in the browser                                                                 |
+| `injectMutation` / `injectAction` | Calling them during SSR throws (mutations/actions are user interactions)                                                               |
+
+> Design note: convex-angular intentionally exposes no `QueryJournal` API. The
+> journal's purpose in `convex/react` (resuming a server-started subscription in
+> the browser) is covered here by the `TransferState` handoff, and the underlying
+> `ConvexClient` does not accept journals on its subscription API.
 
 ## 🤝 Contributing
 

@@ -345,7 +345,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       // the server HTML; the live subscription below replaces it on sync.
       const transferred = hydration?.consume(getFunctionName(query), argsKey);
       if (transferred?.value !== undefined) {
-        applyFirstPage(transferred.value as PaginationResult<PaginatedQueryItem<Query>>);
+        applyFirstPage(transferred.value as unknown as PaginationResult<PaginatedQueryItem<Query>>);
       }
 
       unsubscribe = subscribeToPaginatedQuery(
@@ -447,7 +447,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         ...args,
         paginationOpts: { numItems: initialNumItems, cursor: null },
       } as FunctionArgs<Query>;
-      const argsKey = serializeQueryArgs(firstPageArgs as Record<string, Value>);
+      const argsKey = serializeQueryArgs(firstPageArgs as unknown as Record<string, Value>);
 
       // Server-side rendering: the WebSocket client is disabled, so fetch the
       // first page once over HTTP. The loader registers a pending task (SSR
