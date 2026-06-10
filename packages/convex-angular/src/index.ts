@@ -8,6 +8,10 @@ export type { ConvexSsrOptions } from './lib/ssr/tokens';
 // Types and utilities
 export * from './lib/skip-token';
 export * from './lib/types';
+// Re-exported so consumers can narrow helper errors to Convex's typed
+// application error (`err instanceof ConvexError` exposes `err.data`)
+// without importing from convex/values directly.
+export { ConvexError } from 'convex/values';
 
 // Core providers
 export * from './lib/providers/inject-action';

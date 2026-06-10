@@ -54,6 +54,9 @@ export interface ActionResult<Action extends ActionReference> {
   /**
    * The error from the last failed action call.
    * Undefined if the action hasn't failed.
+   *
+   * Errors thrown by your Convex function via `ConvexError` carry a typed
+   * payload — narrow with `error() instanceof ConvexError` to read `.data`.
    */
   error: Signal<Error | undefined>;
 

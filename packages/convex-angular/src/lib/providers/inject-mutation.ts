@@ -61,6 +61,9 @@ export interface MutationResult<Mutation extends MutationReference> {
   /**
    * The error from the last failed mutation call.
    * Undefined if the mutation hasn't failed.
+   *
+   * Errors thrown by your Convex function via `ConvexError` carry a typed
+   * payload — narrow with `error() instanceof ConvexError` to read `.data`.
    */
   error: Signal<Error | undefined>;
 

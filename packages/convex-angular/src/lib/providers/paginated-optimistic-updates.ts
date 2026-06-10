@@ -122,8 +122,38 @@ export function insertAtBottomIfLoaded<Query extends PaginatedQueryReference>(op
 }
 
 /**
+ * Build a `sortKeyFromItem` callback for {@link insertAtPosition} from one or
+ * more item fields. Pass the fields in the same order the server query sorts
+ * by, ending with a stable tie-breaker such as `_creationTime`.
+ *
+ * @example
+ * ```typescript
+ * insertAtPosition({
+ *   paginatedQuery: api.todos.listTodosPaginated,
+ *   sortOrder: 'desc',
+ *   sortKeyFromItem: sortByField('priority', '_creationTime'),
+ *   localQueryStore: localStore,
+ *   item: newTodo,
+ * });
+ * ```
+ *
+ * @public
+ */
+export function sortByField<Item extends Record<string, Value>>(
+  ...fields: Array<keyof Item & string>
+): (item: Item) => Value | Value[] {
+  return (item) => (fields.length === 1 ? item[fields[0]] : fields.map((field) => item[field]));
+}
+
+/**
  * Optimistically insert an item into a paginated query using the same sort key
  * and sort order as the server query.
+ *
+ * Assumes Convex's standard cursor pagination semantics: `cursor === null`
+ * marks the first page and `isDone === true` marks the final page. Make sure
+ * `sortKeyFromItem` matches the server query's sort exactly (include a stable
+ * tie-breaker such as `_creationTime`); {@link sortByField} covers the common
+ * single-field case.
  */
 export function insertAtPosition<Query extends PaginatedQueryReference>(options: {
   paginatedQuery: Query;

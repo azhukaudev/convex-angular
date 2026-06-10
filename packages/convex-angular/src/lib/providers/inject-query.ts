@@ -67,6 +67,9 @@ export interface QueryResult<Query extends QueryReference> {
   /**
    * The current error, if the query subscription failed.
    * Undefined when there is no error.
+   *
+   * Errors thrown by your Convex function via `ConvexError` carry a typed
+   * payload — narrow with `error() instanceof ConvexError` to read `.data`.
    */
   error: Signal<Error | undefined>;
 

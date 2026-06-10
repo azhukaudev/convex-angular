@@ -16,6 +16,7 @@ import {
   insertAtPosition,
   insertAtTop,
   optimisticallyUpdateValueInPaginatedQuery,
+  sortByField,
 } from './paginated-optimistic-updates';
 
 type Message = {
@@ -434,6 +435,18 @@ describe('paginated optimistic updates', () => {
           instanceId: 'stream-c',
         }),
       ).toEqual([{ author: 'Eve', rank: 50 }]);
+    });
+  });
+
+  describe('sortByField', () => {
+    it('extracts a single field as the sort key', () => {
+      const key = sortByField<{ rank: number }>('rank');
+      expect(key({ rank: 42 })).toBe(42);
+    });
+
+    it('extracts multiple fields as a composite sort key', () => {
+      const key = sortByField<{ rank: number; _creationTime: number }>('rank', '_creationTime');
+      expect(key({ rank: 42, _creationTime: 1000 })).toEqual([42, 1000]);
     });
   });
 });

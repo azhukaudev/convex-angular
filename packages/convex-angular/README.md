@@ -17,6 +17,7 @@ The Angular client for Convex.
   - [Preloading route data](#preloading-route-data) — `convexQueryResolver`
   - [Mutating data](#mutating-data) — `injectMutation`
   - [Running actions](#running-actions) — `injectAction`
+  - [Handling Convex errors](#handling-convex-errors) — `ConvexError`
   - [Paginated queries](#paginated-queries) — `injectPaginatedQuery`
   - [Optimistic paginated updates](#optimistic-paginated-updates) — `insertAtTop`, `insertAtPosition`, ...
   - [Conditional queries with skipToken](#conditional-queries-with-skiptoken)
@@ -310,6 +311,29 @@ If the owning Angular scope is destroyed while an action is in flight, the
 returned promise still settles, but the helper stops updating its reactive
 state and stops firing `onSuccess` / `onError`.
 
+### Handling Convex errors
+
+Every helper's `error()` signal (and `onError` callback) is typed as `Error`,
+but errors thrown by your Convex functions via `ConvexError` carry a typed
+`data` payload. Narrow with `instanceof` to read it — `ConvexError` is
+re-exported from `convex-angular` for convenience:
+
+```typescript
+import { ConvexError, injectMutation } from 'convex-angular';
+
+readonly addTodo = injectMutation(api.todos.addTodo, {
+  onError: (err) => {
+    if (err instanceof ConvexError) {
+      // Typed application error from your Convex function
+      this.toast.error(err.data.message);
+    } else {
+      // Transport or unexpected error
+      this.toast.error('Something went wrong');
+    }
+  },
+});
+```
+
 ### Paginated queries
 
 Use `injectPaginatedQuery` for infinite scroll or "load more" patterns.
@@ -317,7 +341,8 @@ Your Convex query must accept a `paginationOpts` argument.
 
 Note: `injectPaginatedQuery` currently relies on Convex's experimental
 paginated subscription client APIs. Check `convex-angular` release notes before
-upgrading `convex` to make sure your client version is still supported.
+upgrading `convex` to make sure your client version is still supported — this
+release is tested against `convex` 1.41.x.
 
 ```typescript
 import { Component } from '@angular/core';
@@ -662,6 +687,11 @@ export const appConfig: ApplicationConfig = {
 `provideAuth0Auth()` already includes `provideConvexAuth()`, so do not add both.
 If your Auth0 service can expose upstream auth failures, forward them via the
 optional `error` signal so `injectAuth().error()` can surface them.
+
+Unlike the Clerk integration, Auth0 has no automatic re-authentication when
+organization context changes. If your app switches Auth0 organizations while
+the user stays signed in, implement `ConvexAuthProvider` directly (see below)
+and bump its `reauthVersion` signal on org changes to force a fresh token.
 
 ### Custom Auth Providers
 
