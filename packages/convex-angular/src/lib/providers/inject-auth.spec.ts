@@ -96,6 +96,25 @@ describe('injectAuth', () => {
     TestBed.resetTestingModule();
   });
 
+  it('exposes the current token and decoded claims via getAuth()', fakeAsync(() => {
+    const authSnapshot = { token: 'jwt-token', decoded: { sub: 'user-1' } };
+    (mockConvexClient as unknown as { getAuth: jest.Mock }).getAuth = jest.fn().mockReturnValue(authSnapshot);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    expect(fixture.componentInstance.auth.getAuth()).toEqual(authSnapshot);
+  }));
+
+  it('returns undefined from getAuth() when no token is set', fakeAsync(() => {
+    (mockConvexClient as unknown as { getAuth: jest.Mock }).getAuth = jest.fn().mockReturnValue(undefined);
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    expect(fixture.componentInstance.auth.getAuth()).toBeUndefined();
+  }));
+
   it('throws when auth state providers are not configured', () => {
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],

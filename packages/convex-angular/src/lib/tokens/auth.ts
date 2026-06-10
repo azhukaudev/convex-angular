@@ -78,6 +78,17 @@ export interface ConvexAuthState {
    * - 'unauthenticated': User is not authenticated
    */
   status: Signal<ConvexAuthStatus>;
+
+  /**
+   * Get the JWT currently used by the Convex client together with its decoded
+   * claims, or undefined when no token is set (or during server-side
+   * rendering, where the WebSocket client is disabled).
+   *
+   * This is a snapshot method, not a signal: the Convex client does not emit
+   * token-change events, so read it on demand (for example right before
+   * calling an external API that should reuse the Convex token).
+   */
+  getAuth: () => { token: string; decoded: Record<string, unknown> } | undefined;
 }
 
 /**

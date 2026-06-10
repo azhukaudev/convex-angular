@@ -281,6 +281,9 @@ function createConvexAuthState(): ConvexAuthState {
     isRefreshing,
     error,
     status,
+    // Snapshot of the client's current token + decoded claims; the client
+    // exposes no token-change event, so this cannot be a signal.
+    getAuth: () => convex.getAuth(),
   };
 }
 
