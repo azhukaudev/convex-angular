@@ -184,7 +184,7 @@ export class MockConvexClient {
     }
   }
 
-  // --- ConvexClient surface used by the helpers ---
+  // ConvexClient surface used by the helpers.
 
   onUpdate(
     query: unknown,
