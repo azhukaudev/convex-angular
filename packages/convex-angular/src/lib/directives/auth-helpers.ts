@@ -1,13 +1,34 @@
-import {
-  Directive,
-  EmbeddedViewRef,
-  TemplateRef,
-  ViewContainerRef,
-  effect,
-  inject,
-} from '@angular/core';
+import { Directive, EmbeddedViewRef, TemplateRef, ViewContainerRef, effect, inject } from '@angular/core';
 
 import { injectAuth } from '../providers/inject-auth';
+
+/**
+ * Base for the auth structural directives: renders the attached template
+ * while `shouldRender()` is true, clears it otherwise. Subclasses only
+ * define the auth-state predicate.
+ *
+ * @internal
+ */
+@Directive()
+abstract class CvaAuthViewDirective {
+  private readonly templateRef = inject(TemplateRef);
+  private readonly viewContainer = inject(ViewContainerRef);
+  protected readonly auth = injectAuth();
+  private viewRef: EmbeddedViewRef<unknown> | null = null;
+
+  protected abstract shouldRender(): boolean;
+
+  constructor() {
+    effect(() => {
+      if (this.shouldRender()) {
+        this.viewRef ??= this.viewContainer.createEmbeddedView(this.templateRef);
+      } else if (this.viewRef) {
+        this.viewContainer.clear();
+        this.viewRef = null;
+      }
+    });
+  }
+}
 
 /**
  * Structural directive that renders content only when authenticated.
@@ -38,30 +59,9 @@ import { injectAuth } from '../providers/inject-auth';
   selector: '[cvaAuthenticated]',
   standalone: true,
 })
-export class CvaAuthenticatedDirective {
-  private readonly templateRef = inject(TemplateRef);
-  private readonly viewContainer = inject(ViewContainerRef);
-  private readonly auth = injectAuth();
-  private viewRef: EmbeddedViewRef<unknown> | null = null;
-
-  constructor() {
-    effect(() => {
-      const isAuth = this.auth.isAuthenticated();
-      const isLoading = this.auth.isLoading();
-
-      if (isAuth && !isLoading) {
-        if (!this.viewRef) {
-          this.viewRef = this.viewContainer.createEmbeddedView(
-            this.templateRef,
-          );
-        }
-      } else {
-        if (this.viewRef) {
-          this.viewContainer.clear();
-          this.viewRef = null;
-        }
-      }
-    });
+export class CvaAuthenticatedDirective extends CvaAuthViewDirective {
+  protected shouldRender(): boolean {
+    return this.auth.isAuthenticated() && !this.auth.isLoading();
   }
 }
 
@@ -95,30 +95,9 @@ export class CvaAuthenticatedDirective {
   selector: '[cvaUnauthenticated]',
   standalone: true,
 })
-export class CvaUnauthenticatedDirective {
-  private readonly templateRef = inject(TemplateRef);
-  private readonly viewContainer = inject(ViewContainerRef);
-  private readonly auth = injectAuth();
-  private viewRef: EmbeddedViewRef<unknown> | null = null;
-
-  constructor() {
-    effect(() => {
-      const isAuth = this.auth.isAuthenticated();
-      const isLoading = this.auth.isLoading();
-
-      if (!isAuth && !isLoading) {
-        if (!this.viewRef) {
-          this.viewRef = this.viewContainer.createEmbeddedView(
-            this.templateRef,
-          );
-        }
-      } else {
-        if (this.viewRef) {
-          this.viewContainer.clear();
-          this.viewRef = null;
-        }
-      }
-    });
+export class CvaUnauthenticatedDirective extends CvaAuthViewDirective {
+  protected shouldRender(): boolean {
+    return !this.auth.isAuthenticated() && !this.auth.isLoading();
   }
 }
 
@@ -148,29 +127,9 @@ export class CvaUnauthenticatedDirective {
   selector: '[cvaAuthLoading]',
   standalone: true,
 })
-export class CvaAuthLoadingDirective {
-  private readonly templateRef = inject(TemplateRef);
-  private readonly viewContainer = inject(ViewContainerRef);
-  private readonly auth = injectAuth();
-  private viewRef: EmbeddedViewRef<unknown> | null = null;
-
-  constructor() {
-    effect(() => {
-      const isLoading = this.auth.isLoading();
-
-      if (isLoading) {
-        if (!this.viewRef) {
-          this.viewRef = this.viewContainer.createEmbeddedView(
-            this.templateRef,
-          );
-        }
-      } else {
-        if (this.viewRef) {
-          this.viewContainer.clear();
-          this.viewRef = null;
-        }
-      }
-    });
+export class CvaAuthLoadingDirective extends CvaAuthViewDirective {
+  protected shouldRender(): boolean {
+    return this.auth.isLoading();
   }
 }
 
@@ -196,28 +155,8 @@ export class CvaAuthLoadingDirective {
   selector: '[cvaAuthRefreshing]',
   standalone: true,
 })
-export class CvaAuthRefreshingDirective {
-  private readonly templateRef = inject(TemplateRef);
-  private readonly viewContainer = inject(ViewContainerRef);
-  private readonly auth = injectAuth();
-  private viewRef: EmbeddedViewRef<unknown> | null = null;
-
-  constructor() {
-    effect(() => {
-      const isRefreshing = this.auth.isRefreshing();
-
-      if (isRefreshing) {
-        if (!this.viewRef) {
-          this.viewRef = this.viewContainer.createEmbeddedView(
-            this.templateRef,
-          );
-        }
-      } else {
-        if (this.viewRef) {
-          this.viewContainer.clear();
-          this.viewRef = null;
-        }
-      }
-    });
+export class CvaAuthRefreshingDirective extends CvaAuthViewDirective {
+  protected shouldRender(): boolean {
+    return this.auth.isRefreshing();
   }
 }
