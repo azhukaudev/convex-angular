@@ -1,0 +1,16 @@
+{
+  "minTokens": 70,
+  "minLines": 8,
+  "mode": "mild",
+  "reporters": ["console"],
+  "ignorePattern": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/_generated/**",
+    "**/.angular/**",
+    "**/*.spec.ts"
+  ],
+  "format": ["typescript", "html"],
+  "threshold": 2.5
+}

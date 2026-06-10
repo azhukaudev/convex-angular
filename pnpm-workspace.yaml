@@ -68,3 +68,10 @@ minimumReleaseAgeExclude:
   - '@swc/core@1.15.41'
   - better-auth@1.6.16
   - better-call@1.3.6
+  - cpd-darwin-arm64@5.0.6
+  - cpd-darwin-x64@5.0.6
+  - cpd-linux-arm64-gnu@5.0.6
+  - cpd-linux-x64-gnu@5.0.6
+  - cpd-linux-x64-musl@5.0.6
+  - cpd-windows-x64-msvc@5.0.6
+  - jscpd@5.0.6

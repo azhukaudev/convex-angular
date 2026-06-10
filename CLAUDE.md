@@ -15,6 +15,7 @@ Use pnpm. Nx targets can be run either via the package.json scripts or `nx <targ
 - `pnpm build:library` — build the publishable library (`nx build convex-angular`)
 - `pnpm build:frontend` — build the demo app
 - `pnpm test:library` — run the library unit tests (`nx test convex-angular`)
+- `pnpm check:duplication` — copy-paste detection over library + app sources (`jscpd`, config in `.jscpd.json`). Run it after adding or restructuring code; it exits non-zero when duplicated lines exceed the threshold (a ratchet set just above the current baseline). If your change trips it, extract a shared helper instead of raising the threshold; only raise the threshold deliberately, with justification. Spec files are excluded (mock scaffolding is intentionally repeated); the report's clone list tells you exactly which fragments to consolidate.
 - `pnpm update` — `nx migrate latest`
 
 Targeted operations:
