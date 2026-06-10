@@ -1,10 +1,6 @@
 import { ChangeDetectionStrategy, Component, model } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import {
-  injectAction,
-  injectMutation,
-  injectPaginatedQuery,
-} from 'convex-angular';
+import { injectPaginatedQuery } from 'convex-angular';
 import { ButtonModule } from 'primeng/button';
 import { CheckboxModule } from 'primeng/checkbox';
 import { InputNumberModule } from 'primeng/inputnumber';
@@ -12,17 +8,10 @@ import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { api } from '../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
+import { TodoMutationsBase } from '../shared/todo-mutations-base';
 
 @Component({
-  imports: [
-    FormsModule,
-    ButtonModule,
-    CheckboxModule,
-    InputNumberModule,
-    InputTextModule,
-    ProgressSpinnerModule,
-  ],
+  imports: [FormsModule, ButtonModule, CheckboxModule, InputNumberModule, InputTextModule, ProgressSpinnerModule],
   selector: 'cva-paginated-todo-list',
   templateUrl: 'paginated-todo-list.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -30,50 +19,10 @@ import { Id } from '../../../convex/_generated/dataModel';
     class: 'block',
   },
 })
-export default class PaginatedTodoList {
-  readonly newTask = model('');
+export default class PaginatedTodoList extends TodoMutationsBase {
   readonly pageSize = model(5);
 
-  readonly todos = injectPaginatedQuery(
-    api.todos.listTodosPaginated,
-    () => ({}),
-    { initialNumItems: this.pageSize },
-  );
-
-  readonly addTodo = injectMutation(api.todos.addTodo, {
-    onSuccess: () => this.newTask.set(''),
-  });
-  readonly completeTodo = injectMutation(api.todos.completeTodo);
-  readonly reopenTodo = injectMutation(api.todos.reopenTodo);
-  readonly deleteTodo = injectMutation(api.todos.deleteTodo);
-
-  readonly completeAll = injectAction(api.todoFunctions.completeAllTodos);
-  readonly reopenAll = injectAction(api.todoFunctions.reopenAllTodos);
-
-  handleTodoChange(id: Id<'todos'>, completed: boolean) {
-    if (completed) {
-      void this.runOperation(this.reopenTodo.mutate({ id }));
-      return;
-    }
-
-    void this.runOperation(this.completeTodo.mutate({ id }));
-  }
-
-  handleAddTodo() {
-    void this.runOperation(this.addTodo.mutate({ title: this.newTask() }));
-  }
-
-  handleDeleteTodo(id: Id<'todos'>) {
-    void this.runOperation(this.deleteTodo.mutate({ id }));
-  }
-
-  handleCompleteAll() {
-    void this.runOperation(this.completeAll.run({}));
-  }
-
-  handleReopenAll() {
-    void this.runOperation(this.reopenAll.run({}));
-  }
+  readonly todos = injectPaginatedQuery(api.todos.listTodosPaginated, () => ({}), { initialNumItems: this.pageSize });
 
   handleLoadMore() {
     this.todos.loadMore(this.pageSize());
@@ -90,13 +39,5 @@ export default class PaginatedTodoList {
 
   handleReset() {
     this.todos.reset();
-  }
-
-  private async runOperation(operation: Promise<unknown>) {
-    try {
-      await operation;
-    } catch (error) {
-      console.error(error);
-    }
   }
 }

@@ -1,9 +1,18 @@
-import {
-  EnvironmentInjector,
-  assertInInjectionContext,
-  inject,
-  runInInjectionContext,
-} from '@angular/core';
+import { EnvironmentInjector, assertInInjectionContext, inject, runInInjectionContext } from '@angular/core';
+
+// Like assertInInjectionContext, but the error mentions the library's
+// injectRef escape hatch alongside Angular's standard guidance.
+function assertHelperInjectionContext(target: (...args: any[]) => unknown): void {
+  try {
+    assertInInjectionContext(target);
+  } catch {
+    throw new Error(
+      `${target.name}() must be called from an injection context (for example, a component ` +
+        'or service field initializer or constructor), or be given an explicit injector via ' +
+        'the `injectRef` option to create it later from plain code.',
+    );
+  }
+}
 
 export function resolveEnvironmentInjector(
   target: (...args: any[]) => unknown,
@@ -17,7 +26,7 @@ export function resolveEnvironmentInjector(
 
   // Without an override we stay in Angular's ambient injection context so
   // component/service-owned lifecycles keep working as they do today.
-  assertInInjectionContext(target);
+  assertHelperInjectionContext(target);
   return inject(EnvironmentInjector);
 }
 
@@ -34,6 +43,6 @@ export function runInResolvedInjectionContext<T>(
 
   // Ambient calls should continue to execute in the current context so
   // ownership stays with the caller's existing Angular scope.
-  assertInInjectionContext(target);
+  assertHelperInjectionContext(target);
   return fn();
 }

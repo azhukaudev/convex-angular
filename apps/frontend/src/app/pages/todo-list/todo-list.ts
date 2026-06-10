@@ -1,22 +1,16 @@
 import { ChangeDetectionStrategy, Component, model } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { injectAction, injectMutation, injectQuery } from 'convex-angular';
+import { injectQuery } from 'convex-angular';
 import { ButtonModule } from 'primeng/button';
 import { CheckboxModule } from 'primeng/checkbox';
 import { InputTextModule } from 'primeng/inputtext';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { api } from '../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
+import { TodoMutationsBase } from '../shared/todo-mutations-base';
 
 @Component({
-  imports: [
-    FormsModule,
-    ButtonModule,
-    CheckboxModule,
-    InputTextModule,
-    ProgressSpinnerModule,
-  ],
+  imports: [FormsModule, ButtonModule, CheckboxModule, InputTextModule, ProgressSpinnerModule],
   selector: 'cva-todo-list',
   templateUrl: 'todo-list.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -24,54 +18,10 @@ import { Id } from '../../../convex/_generated/dataModel';
     class: 'block',
   },
 })
-export default class TodoList {
-  readonly newTask = model('');
+export default class TodoList extends TodoMutationsBase {
   readonly count = model(20);
 
   readonly todos = injectQuery(api.todos.listTodos, () => ({
     count: this.count(),
   }));
-
-  readonly addTodo = injectMutation(api.todos.addTodo, {
-    onSuccess: () => this.newTask.set(''),
-  });
-  readonly completeTodo = injectMutation(api.todos.completeTodo);
-  readonly reopenTodo = injectMutation(api.todos.reopenTodo);
-  readonly deleteTodo = injectMutation(api.todos.deleteTodo);
-
-  readonly completeAll = injectAction(api.todoFunctions.completeAllTodos);
-  readonly reopenAll = injectAction(api.todoFunctions.reopenAllTodos);
-
-  handleTodoChange(id: Id<'todos'>, completed: boolean) {
-    if (completed) {
-      void this.runOperation(this.reopenTodo.mutate({ id }));
-      return;
-    }
-
-    void this.runOperation(this.completeTodo.mutate({ id }));
-  }
-
-  handleAddTodo() {
-    void this.runOperation(this.addTodo.mutate({ title: this.newTask() }));
-  }
-
-  handleDeleteTodo(id: Id<'todos'>) {
-    void this.runOperation(this.deleteTodo.mutate({ id }));
-  }
-
-  handleCompleteAll() {
-    void this.runOperation(this.completeAll.run({}));
-  }
-
-  handleReopenAll() {
-    void this.runOperation(this.reopenAll.run({}));
-  }
-
-  private async runOperation(operation: Promise<unknown>) {
-    try {
-      await operation;
-    } catch (error) {
-      console.error(error);
-    }
-  }
 }

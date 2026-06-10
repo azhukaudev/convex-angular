@@ -9,7 +9,15 @@ import {
 } from 'convex-angular';
 import { FunctionReference } from 'convex/server';
 
-import { MockConvexClient, provideConvexTesting } from './mock-convex-client';
+import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from './mock-convex-client';
+
+function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscription {
+  const subscription = convex.lastQuerySubscription();
+  if (!subscription) {
+    throw new Error('Expected a captured query subscription');
+  }
+  return subscription;
+}
 
 jest.mock('convex/server', () => ({
   ...jest.requireActual('convex/server'),
@@ -56,15 +64,15 @@ describe('MockConvexClient with real library helpers', () => {
 
     expect(fixture.componentInstance.todos.status()).toBe('pending');
     expect(convex.querySubscriptions).toHaveLength(1);
-    expect(convex.lastQuerySubscription()!.args).toEqual({});
+    expect(requireLastQuerySubscription(convex).args).toEqual({});
 
-    convex.lastQuerySubscription()!.emit([{ _id: '1', title: 'Mocked todo' }]);
+    requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Mocked todo' }]);
 
     expect(fixture.componentInstance.todos.status()).toBe('success');
     expect(fixture.componentInstance.todos.data()).toEqual([{ _id: '1', title: 'Mocked todo' }]);
 
     fixture.destroy();
-    expect(convex.lastQuerySubscription()!.unsubscribed).toBe(true);
+    expect(requireLastQuerySubscription(convex).unsubscribed).toBe(true);
   }));
 
   it('surfaces emitted errors through injectQuery', fakeAsync(() => {
@@ -78,7 +86,7 @@ describe('MockConvexClient with real library helpers', () => {
     tick();
 
     const queryError = new Error('boom');
-    convex.lastQuerySubscription()!.emitError(queryError);
+    requireLastQuerySubscription(convex).emitError(queryError);
 
     expect(fixture.componentInstance.todos.status()).toBe('error');
     expect(fixture.componentInstance.todos.error()).toBe(queryError);
