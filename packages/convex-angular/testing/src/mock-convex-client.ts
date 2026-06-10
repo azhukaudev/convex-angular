@@ -68,6 +68,21 @@ export interface MockConvexClientOptions {
   disabled?: boolean;
 }
 
+// Key-order-independent serialization so seeded results are found regardless
+// of the property order the component happens to build its args with.
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`;
+  }
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([key, val]) => `${JSON.stringify(key)}:${stableStringify(val)}`);
+    return `{${entries.join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 const DEFAULT_CONNECTION_STATE: ConnectionState = {
   hasInflightRequests: false,
   isWebSocketConnected: true,
@@ -136,7 +151,7 @@ export class MockConvexClient {
     }
     return {
       localQueryResult: (queryName: string, args: Record<string, unknown>) =>
-        this.warmCache.get(`${queryName}:${JSON.stringify(args)}`),
+        this.warmCache.get(`${queryName}:${stableStringify(args)}`),
       setAuth: () => undefined,
       clearAuth: () => undefined,
       hasAuth: () => false,
@@ -158,7 +173,7 @@ export class MockConvexClient {
    * before their subscription delivers.
    */
   seedQueryResult(queryName: string, args: Record<string, unknown>, result: unknown): void {
-    this.warmCache.set(`${queryName}:${JSON.stringify(args)}`, result);
+    this.warmCache.set(`${queryName}:${stableStringify(args)}`, result);
   }
 
   /** Push a new connection state to injectConvexConnectionState consumers. */

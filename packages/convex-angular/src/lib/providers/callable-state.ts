@@ -1,12 +1,14 @@
 import { DestroyRef, Signal, computed, signal } from '@angular/core';
 
+import { MutationStatus } from '../types';
+
 /**
- * Status of an imperative Convex call (mutation or action).
- * Identical to MutationStatus/ActionStatus in types.ts.
+ * Status of an imperative Convex call. MutationStatus and ActionStatus are
+ * the same union; the canonical definition lives in types.ts.
  *
  * @internal
  */
-type CallableStatus = 'idle' | 'pending' | 'success' | 'error';
+type CallableStatus = MutationStatus;
 
 /**
  * Callbacks shared by injectMutation and injectAction.

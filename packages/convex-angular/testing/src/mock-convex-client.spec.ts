@@ -92,6 +92,12 @@ describe('MockConvexClient with real library helpers', () => {
     expect(fixture.componentInstance.todos.error()).toBe(queryError);
   }));
 
+  it('matches seeded results regardless of args property order', () => {
+    convex.seedQueryResult('todos:list', { b: 2, a: 1 }, 'seeded');
+
+    expect(convex.client.localQueryResult('todos:list', { a: 1, b: 2 })).toBe('seeded');
+  });
+
   it('serves seeded warm-cache results before any emission', fakeAsync(() => {
     convex.seedQueryResult('todos:list', {}, [{ _id: 'warm', title: 'Warm' }]);
 
