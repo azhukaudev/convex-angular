@@ -17,6 +17,7 @@
     "name": "Aliaksandr Zhukau"
   },
   "peerDependencies": {
+    "@angular/common": ">=20.0.0",
     "@angular/core": ">=20.0.0",
     "@angular/router": ">=20.0.0",
     "convex": ">=1.41.0",

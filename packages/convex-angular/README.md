@@ -16,6 +16,7 @@ The Angular client for Convex.
 - ⚡ Optimistic pagination helpers: `insertAtTop`, `insertAtBottomIfLoaded`, `insertAtPosition`
 - ⏭️ Conditional Queries: Use `skipToken` to conditionally skip queries
 - 📡 Signal Integration: [Angular Signals](https://angular.dev/guide/signals) for reactive state
+- 🖥️ Server-side rendering: zero-config Angular SSR/hydration support — queries are fetched on the server, transferred via `TransferState`, and seeded without a loading flash
 - 🧹 Auto Cleanup: Automatic lifecycle management for subscriptions and helper-owned reactive state
 
 ## 🚀 Getting Started
@@ -749,6 +750,72 @@ export const appConfig: ApplicationConfig = {
   ],
 };
 ```
+
+## 🖥️ Server-side rendering
+
+`convex-angular` works out of the box with Angular SSR (`@angular/ssr`) and hydration.
+No extra configuration is required — when the app renders on the server:
+
+- The WebSocket client is automatically disabled (no socket is opened on the server).
+- `injectQuery` and `injectQueries` fetch their data once over HTTP during the server
+  render, so the generated HTML contains real content. Angular's SSR serialization
+  waits for these fetches.
+- Results are transferred to the browser via `TransferState` and seeded into the same
+  helpers after hydration, so the page renders instantly with the server's data — no
+  loading flash — and the live WebSocket subscription takes over from there.
+
+```typescript
+// app.config.ts
+import { provideClientHydration } from '@angular/platform-browser';
+import { provideConvex } from 'convex-angular';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideClientHydration(), // recommended for SSR apps
+    provideConvex(environment.convexUrl),
+  ],
+};
+```
+
+### Authenticated SSR
+
+To fetch user-specific data during the server render, provide an `ssr.authToken`
+factory that returns a JWT (for example, read from the request cookies):
+
+```typescript
+// app.config.server.ts
+import { REQUEST } from '@angular/core';
+import { provideConvex } from 'convex-angular';
+
+export const serverConfig: ApplicationConfig = {
+  providers: [
+    provideConvex(environment.convexUrl, {
+      ssr: {
+        authToken: () => {
+          const request = inject(REQUEST);
+          return readSessionTokenFromCookies(request); // your cookie parsing
+        },
+      },
+    }),
+  ],
+};
+```
+
+The token factory is resolved once per server render. Returning `null` or `undefined`
+fetches unauthenticated. To disable server-side fetching entirely (helpers stay
+`pending` in the server HTML and load live after hydration), pass
+`ssr: { fetchOnServer: false }`.
+
+### SSR behavior by helper
+
+| Helper                          | On the server                                                                |
+| ------------------------------- | ---------------------------------------------------------------------------- |
+| `injectQuery` / `injectQueries` | Fetch over HTTP, render data, transfer to the browser                        |
+| `injectPaginatedQuery`          | Stays `pending`; loads live after hydration                                  |
+| `injectPrewarmQuery`            | `prewarm()` is a no-op                                                       |
+| `injectConvexConnectionState`   | Reports a static disconnected state                                          |
+| `injectAuth`                    | Reports the provider's state; Convex token sync resumes in the browser       |
+| `injectMutation` / `injectAction` | Calling them during SSR throws (mutations/actions are user interactions)   |
 
 ## 🤝 Contributing
 

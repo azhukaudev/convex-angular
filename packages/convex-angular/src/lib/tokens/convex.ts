@@ -101,7 +101,8 @@ function convexClientFactory(
   // constructor. On the server the client is disabled: no WebSocket is
   // opened and subscriptions are no-ops; data is fetched over HTTP by the
   // ConvexServerQueryLoader instead.
-  const { ssr: _ssr, ...clientOptions } = options ?? {};
+  const clientOptions: ProvideConvexOptions = { ...(options ?? {}) };
+  delete clientOptions.ssr;
   const client = new ConvexClient(convexUrl, isServer ? { ...clientOptions, disabled: true } : clientOptions);
   destroyRef.onDestroy(() => client.close());
   return client;

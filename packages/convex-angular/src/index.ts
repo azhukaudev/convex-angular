@@ -2,6 +2,9 @@
 export * from './lib/tokens/convex';
 export * from './lib/tokens/auth';
 
+// SSR
+export type { ConvexSsrOptions } from './lib/ssr/tokens';
+
 // Types and utilities
 export * from './lib/skip-token';
 export * from './lib/types';
