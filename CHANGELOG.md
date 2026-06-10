@@ -1,5 +1,35 @@
 # convex-angular
 
+## Unreleased
+
+### ✨ Features
+
+- Add zero-config server-side rendering and hydration support: on the server, `injectQuery()` and `injectQueries()` fetch over HTTP (SSR serialization waits via `PendingTasks`) and transfer results through `TransferState`; hydrated clients render instantly from the transferred data before the live subscription takes over. `injectPaginatedQuery()` fetches and transfers its first page. Configure via the new `ssr` option on `provideConvex(...)` (`fetchOnServer`, `authToken` for authenticated SSR).
+- Add `convexQueryResolver()` route resolver for explicit preloading: blocks navigation until the first query result is local so the routed component renders without a loading state (the `preloadQuery`/`usePreloadedQuery` equivalent).
+- Add a `convex-angular/testing` entry point with `MockConvexClient` and `provideConvexTesting()` for unit-testing components without a real Convex deployment: capture and drive subscriptions, settle mutations/actions, push connection state, and pre-seed the warm cache.
+- Add token refreshing state to `injectAuth()` (`isRefreshing()` and a `'refreshing'` status) plus a `*cvaAuthRefreshing` directive for layering a "reconnecting" affordance over authenticated content.
+- Add `injectAuth().getAuth()` exposing a snapshot of the current JWT and its decoded claims.
+- Add per-key `onSuccess`/`onError` callbacks and a `refetch()` method to `injectQueries()`.
+- Re-export `ConvexError` and add a `sortByField(...)` helper for building `insertAtPosition(...)` sort keys.
+
+### ⚠️ Breaking Changes
+
+- Raise the `convex` peer dependency floor to `>=1.41.0` and add `@angular/common` as a peer dependency.
+
+### 🐛 Bug Fixes
+
+- Preserve the return URL when `convexAuthGuard` redirects to the login route.
+- Surface token fetch errors from auth integrations through `injectAuth().error()`.
+- Stop mutation and action state updates (and callbacks) after the owning Angular scope is destroyed; the returned promise still settles.
+- Reset paginated queries correctly after first-page errors.
+- Fix `injectQuery()` warm-cache hydration when arguments change.
+- Make `injectConvexConnectionState()` and `injectPrewarmQuery()` safe on disabled (server-side) Convex clients.
+- Throw an actionable error naming the `injectRef` escape hatch when a helper is created outside an injection context.
+
+### 📖 Documentation
+
+- Add Quick Links navigation, a testing guide, a `ConvexError` handling section, a full server-side rendering section (setup, authenticated SSR, per-helper behavior), and an Auth0 organization-reauth note to both READMEs, and keep them in sync.
+
 ## [1.6.0](https://github.com/azhukaudev/convex-angular/compare/v1.5.0...v1.6.0) (2026-03-12)
 
 ### ✨ Features
