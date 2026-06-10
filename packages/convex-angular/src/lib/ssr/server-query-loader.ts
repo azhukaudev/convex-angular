@@ -23,6 +23,10 @@ export class ConvexServerQueryLoader {
   private readonly transferState = inject(TransferState);
   private readonly pendingTasks = inject(PendingTasks);
 
+  // Lives for one server render: Angular SSR bootstraps a fresh application
+  // (and injector, and loader) per request, so entries never leak across
+  // requests. Entries are intentionally kept after settling — every consumer
+  // of a query during the render shares one result (or one error).
   private readonly inflight = new Map<string, Promise<Value | undefined>>();
   private authApplied: Promise<void> | undefined;
 

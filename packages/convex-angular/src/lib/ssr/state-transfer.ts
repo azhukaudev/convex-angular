@@ -46,10 +46,7 @@ export function wrapQueryResult(value: Value | undefined): TransferredQueryResul
  * @internal
  */
 export function unwrapQueryResult(transferred: TransferredQueryResult): Value | undefined {
-  if ('u' in transferred && transferred.u) {
-    return undefined;
-  }
-  return jsonToConvex((transferred as { d: JSONValue }).d);
+  return 'd' in transferred ? jsonToConvex(transferred.d) : undefined;
 }
 
 /**
