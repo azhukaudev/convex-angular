@@ -1,4 +1,4 @@
-import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
+import { Component, EnvironmentInjector, PLATFORM_ID, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, PaginationResult } from 'convex/server';
@@ -1298,5 +1298,54 @@ describe('injectPaginatedQuery', () => {
         }),
       ).toThrow();
     });
+  });
+
+  describe('SSR (server platform)', () => {
+    it('stays pending without crashing on a disabled client', fakeAsync(() => {
+      TestBed.resetTestingModule();
+
+      // A disabled client's onPaginatedUpdate_experimental registration is a
+      // no-op (mirrors ConvexClient behavior on the server platform).
+      const noopUnsubscribe = Object.assign(() => undefined, {
+        unsubscribe: () => undefined,
+        getCurrentValue: () => undefined,
+        getQueryLogs: () => undefined,
+      });
+      const disabledConvexClient = {
+        get disabled() {
+          return true;
+        },
+        get client() {
+          throw new Error('ConvexClient is disabled');
+        },
+        onPaginatedUpdate_experimental: jest.fn(() => noopUnsubscribe),
+      } as unknown as ConvexClient;
+
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: PLATFORM_ID, useValue: 'server' },
+          { provide: CONVEX, useValue: disabledConvexClient },
+        ],
+      });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.status()).toBe('pending');
+      expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
+      expect(fixture.componentInstance.todos.results()).toEqual([]);
+      expect(fixture.componentInstance.todos.loadMore(10)).toBe(false);
+    }));
   });
 });
