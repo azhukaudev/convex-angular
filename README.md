@@ -6,6 +6,36 @@
 
 The Angular client for Convex.
 
+## 📚 Quick Links
+
+- [✨ Features](#-features)
+- [🚀 Getting Started](#-getting-started)
+- [📖 Usage](#-usage)
+  - [Fetching data](#fetching-data) — `injectQuery`
+  - [Fetching multiple queries](#fetching-multiple-queries) — `injectQueries`
+  - [Prewarming queries](#prewarming-queries) — `injectPrewarmQuery`
+  - [Mutating data](#mutating-data) — `injectMutation`
+  - [Running actions](#running-actions) — `injectAction`
+  - [Paginated queries](#paginated-queries) — `injectPaginatedQuery`
+  - [Optimistic paginated updates](#optimistic-paginated-updates) — `insertAtTop`, `insertAtPosition`, ...
+  - [Conditional queries with skipToken](#conditional-queries-with-skiptoken)
+  - [Using the Convex client](#using-the-convex-client) — `injectConvex`
+  - [Monitoring connection state](#monitoring-connection-state) — `injectConvexConnectionState`
+  - [Creating helpers outside the initial injection context](#creating-helpers-outside-the-initial-injection-context)
+- [🔐 Authentication](#-authentication)
+  - [Using injectAuth](#using-injectauth)
+  - [Clerk Integration](#clerk-integration)
+  - [Auth0 Integration](#auth0-integration)
+  - [Custom Auth Providers](#custom-auth-providers)
+  - [Convex Auth (@convex-dev/auth)](#convex-auth-convex-devauth)
+  - [Auth Directives](#auth-directives)
+  - [Route Guards](#route-guards)
+- [🖥️ Server-side rendering](#️-server-side-rendering)
+  - [Authenticated SSR](#authenticated-ssr)
+  - [SSR behavior by helper](#ssr-behavior-by-helper)
+- [🤝 Contributing](#-contributing)
+- [⚖️ License](#️-license)
+
 ## ✨ Features
 
 - 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectPrewarmQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
@@ -16,7 +46,8 @@ The Angular client for Convex.
 - ⚡ Optimistic pagination helpers: `insertAtTop`, `insertAtBottomIfLoaded`, `insertAtPosition`
 - ⏭️ Conditional Queries: Use `skipToken` to conditionally skip queries
 - 📡 Signal Integration: [Angular Signals](https://angular.dev/guide/signals) for reactive state
-- 🧹 Auto Cleanup: Automatic lifecycle management
+- 🖥️ Server-side rendering: zero-config Angular SSR/hydration support — queries are fetched on the server, transferred via `TransferState`, and seeded without a loading flash
+- 🧹 Auto Cleanup: Automatic lifecycle management for subscriptions and helper-owned reactive state
 
 ## 🚀 Getting Started
 
@@ -173,15 +204,30 @@ import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
-  template: ` <button (click)="addTodo.mutate({ title: 'Buy groceries' })">Add Todo</button> `,
+  template: ` <button (click)="addTodoItem()">Add Todo</button> `,
 })
 export class AppComponent {
   readonly addTodo = injectMutation(api.todos.addTodo);
+
+  async addTodoItem() {
+    try {
+      await this.addTodo.mutate({ title: 'Buy groceries' });
+    } catch (error) {
+      console.error(error);
+    }
+  }
 }
 ```
 
+`mutate()` rejects on failure. `error()` and `status()` are still updated, and
+`onError` still runs before the promise rejects.
+
 `data()` is typed as `T | undefined` and stays undefined until the first
 successful mutation result or after `reset()`.
+
+If the owning Angular scope is destroyed while a mutation is in flight, the
+returned promise still settles, but the helper stops updating its reactive
+state and stops firing `onSuccess` / `onError`.
 
 ### Running actions
 
@@ -195,20 +241,39 @@ import { api } from '../convex/_generated/api';
 
 @Component({
   selector: 'app-root',
-  template: `<button (click)="completeAllTodos.run({})">Complete All Todos</button>`,
+  template: `<button (click)="completeAll()">Complete All Todos</button>`,
 })
 export class AppComponent {
   readonly completeAllTodos = injectAction(api.todoFunctions.completeAllTodos);
+
+  async completeAll() {
+    try {
+      await this.completeAllTodos.run({});
+    } catch (error) {
+      console.error(error);
+    }
+  }
 }
 ```
 
+`run()` rejects on failure. `error()` and `status()` are still updated, and
+`onError` still runs before the promise rejects.
+
 `data()` is typed as `T | undefined` and stays undefined until the first
 successful action result or after `reset()`.
+
+If the owning Angular scope is destroyed while an action is in flight, the
+returned promise still settles, but the helper stops updating its reactive
+state and stops firing `onSuccess` / `onError`.
 
 ### Paginated queries
 
 Use `injectPaginatedQuery` for infinite scroll or "load more" patterns.
 Your Convex query must accept a `paginationOpts` argument.
+
+Note: `injectPaginatedQuery` currently relies on Convex's experimental
+paginated subscription client APIs. Check `convex-angular` release notes before
+upgrading `convex` to make sure your client version is still supported.
 
 ```typescript
 import { Component } from '@angular/core';
@@ -244,14 +309,14 @@ The paginated query returns:
 - `results()` - Accumulated results from all loaded pages
 - `isLoadingFirstPage()` - True when loading the first page
 - `isLoadingMore()` - True when loading additional pages
-- `canLoadMore()` - True when more items are available
+- `canLoadMore()` - True when the current subscription can load another page
 - `isExhausted()` - True when all items have been loaded
 - `isSkipped()` - True when the query is skipped via `skipToken`
 - `isSuccess()` - True when the first page has loaded successfully
 - `status()` - `'pending' | 'success' | 'error' | 'skipped'`
 - `error()` - Error if the query failed
 - `loadMore(n)` - Load `n` more items
-- `reset()` - Reset pagination and reload from the beginning
+- `reset()` - Reset pagination and reload from the beginning; also use this to retry first-page failures
 
 ### Optimistic paginated updates
 
@@ -398,12 +463,16 @@ import { api } from '../convex/_generated/api';
 export class AppComponent {
   private readonly injectRef = inject(EnvironmentInjector);
 
-  submit() {
+  async submit() {
     const mutation = injectMutation(api.todos.addTodo, {
       injectRef: this.injectRef,
     });
 
-    mutation.mutate({ title: 'Created outside the initial scope' });
+    try {
+      await mutation.mutate({ title: 'Created outside the initial scope' });
+    } catch (error) {
+      console.error(error);
+    }
   }
 }
 ```
@@ -433,10 +502,6 @@ import { injectAuth } from 'convex-angular';
       @case ('authenticated') {
         <app-dashboard></app-dashboard>
       }
-      @case ('refreshing') {
-        <app-dashboard></app-dashboard>
-        <p>Reconnecting your session…</p>
-      }
       @case ('unauthenticated') {
         <app-login></app-login>
       }
@@ -451,17 +516,9 @@ export class AppComponent {
 The auth state provides:
 
 - `isLoading()` - True while the auth provider is loading or Convex is still validating the current token with the backend
-- `isAuthenticated()` - True only after the auth provider reports an authenticated user and Convex confirms the token. Stays true during a refresh so the UI does not flicker to a signed-out state
-- `isRefreshing()` - True when the server rejected a previously-confirmed token and Convex paused the socket while fetching a replacement. Only ever true while `isAuthenticated()` is also true; routine background token rotation does not trigger it
+- `isAuthenticated()` - True only after the auth provider reports an authenticated user and Convex confirms the token
 - `error()` - The most recent unexpected provider, token, or auth-sync failure
-- `status()` - `'loading' | 'authenticated' | 'refreshing' | 'unauthenticated'`
-
-Use the `*cvaAuthRefreshing` directive to layer a "reconnecting" affordance on top of authenticated content:
-
-```html
-<app-dashboard *cvaAuthenticated></app-dashboard>
-<div *cvaAuthRefreshing class="reconnecting-banner">Reconnecting your session…</div>
-```
+- `status()` - `'loading' | 'authenticated' | 'unauthenticated'`
 
 Returning `null` from `fetchAccessToken(...)` is treated as a normal
 unauthenticated outcome. It does not populate `error()`.
@@ -488,11 +545,7 @@ export class ClerkAuthService implements ClerkAuthProvider {
   readonly orgRole = computed(() => this.clerk.organization()?.membership?.role);
 
   async getToken(options?: { template?: string; skipCache?: boolean }) {
-    try {
-      return (await this.clerk.session?.getToken(options)) ?? null;
-    } catch {
-      return null;
-    }
+    return (await this.clerk.session?.getToken(options)) ?? null;
   }
 }
 
@@ -510,6 +563,8 @@ If your Clerk service exposes upstream failures, forward them via the optional
 `error` signal so `injectAuth().error()` can surface them. Clerk integrations
 can also expose reactive auth context like `orgId`/`orgRole`; `provideClerkAuth()`
 uses that state to refresh the token when organization context changes.
+Return `null` only when the user is signed out or no token is available. Let
+real token-fetch failures throw so `injectAuth().error()` can surface them.
 
 ### Auth0 Integration
 
@@ -609,6 +664,8 @@ Optional `ConvexAuthProvider` hooks:
 Return `null` or `undefined` from `fetchAccessToken(...)` when the user is
 signed out or no token is available. That keeps auth unauthenticated without
 marking it as an error.
+Let unexpected token-fetch failures throw so they become `injectAuth().error()`
+instead of being treated as ordinary sign-out.
 
 If you wire `CONVEX_AUTH` manually, use `useExisting` (not `useClass`) when the
 auth provider is also injected elsewhere, otherwise you can end up with two
@@ -657,6 +714,11 @@ Use structural directives to conditionally render content based on auth state.
   <button (click)="login()">Sign In</button>
 </div>
 
+<!-- Show while a rejected token is being refreshed (user stays authenticated) -->
+<div *cvaAuthRefreshing>
+  <p>Reconnecting your session...</p>
+</div>
+
 <!-- Show while auth is loading -->
 <div *cvaAuthLoading>
   <p>Checking authentication...</p>
@@ -666,10 +728,20 @@ Use structural directives to conditionally render content based on auth state.
 Import the directives in your component:
 
 ```typescript
-import { CvaAuthLoadingDirective, CvaAuthenticatedDirective, CvaUnauthenticatedDirective } from 'convex-angular';
+import {
+  CvaAuthLoadingDirective,
+  CvaAuthRefreshingDirective,
+  CvaAuthenticatedDirective,
+  CvaUnauthenticatedDirective,
+} from 'convex-angular';
 
 @Component({
-  imports: [CvaAuthenticatedDirective, CvaUnauthenticatedDirective, CvaAuthLoadingDirective],
+  imports: [
+    CvaAuthenticatedDirective,
+    CvaUnauthenticatedDirective,
+    CvaAuthLoadingDirective,
+    CvaAuthRefreshingDirective,
+  ],
   // ...
 })
 export class AppComponent {}
@@ -702,7 +774,12 @@ export const routes: Routes = [
 ];
 ```
 
-By default, unauthenticated users are redirected to `/login`. To customize the redirect route:
+By default, unauthenticated users are redirected to `/login` with a
+`returnUrl` query param preserving the blocked destination. For example,
+visiting `/profile?tab=security#sessions` while signed out redirects to
+`/login?returnUrl=%2Fprofile%3Ftab%3Dsecurity%23sessions`.
+
+To customize the redirect route:
 
 ```typescript
 // app.config.ts
@@ -718,6 +795,72 @@ export const appConfig: ApplicationConfig = {
   ],
 };
 ```
+
+## 🖥️ Server-side rendering
+
+`convex-angular` works out of the box with Angular SSR (`@angular/ssr`) and hydration.
+No extra configuration is required — when the app renders on the server:
+
+- The WebSocket client is automatically disabled (no socket is opened on the server).
+- `injectQuery` and `injectQueries` fetch their data once over HTTP during the server
+  render, so the generated HTML contains real content. Angular's SSR serialization
+  waits for these fetches.
+- Results are transferred to the browser via `TransferState` and seeded into the same
+  helpers after hydration, so the page renders instantly with the server's data — no
+  loading flash — and the live WebSocket subscription takes over from there.
+
+```typescript
+// app.config.ts
+import { provideClientHydration } from '@angular/platform-browser';
+import { provideConvex } from 'convex-angular';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideClientHydration(), // recommended for SSR apps
+    provideConvex(environment.convexUrl),
+  ],
+};
+```
+
+### Authenticated SSR
+
+To fetch user-specific data during the server render, provide an `ssr.authToken`
+factory that returns a JWT (for example, read from the request cookies):
+
+```typescript
+// app.config.server.ts
+import { REQUEST } from '@angular/core';
+import { provideConvex } from 'convex-angular';
+
+export const serverConfig: ApplicationConfig = {
+  providers: [
+    provideConvex(environment.convexUrl, {
+      ssr: {
+        authToken: () => {
+          const request = inject(REQUEST);
+          return readSessionTokenFromCookies(request); // your cookie parsing
+        },
+      },
+    }),
+  ],
+};
+```
+
+The token factory is resolved once per server render. Returning `null` or `undefined`
+fetches unauthenticated. To disable server-side fetching entirely (helpers stay
+`pending` in the server HTML and load live after hydration), pass
+`ssr: { fetchOnServer: false }`.
+
+### SSR behavior by helper
+
+| Helper                            | On the server                                                            |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| `injectQuery` / `injectQueries`   | Fetch over HTTP, render data, transfer to the browser                    |
+| `injectPaginatedQuery`            | Stays `pending`; loads live after hydration                              |
+| `injectPrewarmQuery`              | `prewarm()` is a no-op                                                   |
+| `injectConvexConnectionState`     | Reports a static disconnected state                                      |
+| `injectAuth`                      | Reports the provider's state; Convex token sync resumes in the browser   |
+| `injectMutation` / `injectAction` | Calling them during SSR throws (mutations/actions are user interactions) |
 
 ## 🤝 Contributing
 

@@ -6,12 +6,42 @@
 
 The Angular client for Convex.
 
+## 📚 Quick Links
+
+- [✨ Features](#-features)
+- [🚀 Getting Started](#-getting-started)
+- [📖 Usage](#-usage)
+  - [Fetching data](#fetching-data) — `injectQuery`
+  - [Fetching multiple queries](#fetching-multiple-queries) — `injectQueries`
+  - [Prewarming queries](#prewarming-queries) — `injectPrewarmQuery`
+  - [Mutating data](#mutating-data) — `injectMutation`
+  - [Running actions](#running-actions) — `injectAction`
+  - [Paginated queries](#paginated-queries) — `injectPaginatedQuery`
+  - [Optimistic paginated updates](#optimistic-paginated-updates) — `insertAtTop`, `insertAtPosition`, ...
+  - [Conditional queries with skipToken](#conditional-queries-with-skiptoken)
+  - [Using the Convex client](#using-the-convex-client) — `injectConvex`
+  - [Monitoring connection state](#monitoring-connection-state) — `injectConvexConnectionState`
+  - [Creating helpers outside the initial injection context](#creating-helpers-outside-the-initial-injection-context)
+- [🔐 Authentication](#-authentication)
+  - [Using injectAuth](#using-injectauth)
+  - [Clerk Integration](#clerk-integration)
+  - [Auth0 Integration](#auth0-integration)
+  - [Custom Auth Providers](#custom-auth-providers)
+  - [Convex Auth (@convex-dev/auth)](#convex-auth-convex-devauth)
+  - [Auth Directives](#auth-directives)
+  - [Route Guards](#route-guards)
+- [🖥️ Server-side rendering](#️-server-side-rendering)
+  - [Authenticated SSR](#authenticated-ssr)
+  - [SSR behavior by helper](#ssr-behavior-by-helper)
+- [🤝 Contributing](#-contributing)
+- [⚖️ License](#️-license)
+
 ## ✨ Features
 
 - 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectPrewarmQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
 - 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`
-- 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`
+- 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`, `*cvaAuthRefreshing`
 - 📄 Pagination: Built-in support for paginated queries with `loadMore` and `reset`
 - ⚡ Optimistic pagination helpers: `insertAtTop`, `insertAtBottomIfLoaded`, `insertAtPosition`
 - ⏭️ Conditional Queries: Use `skipToken` to conditionally skip queries
@@ -684,6 +714,11 @@ Use structural directives to conditionally render content based on auth state.
   <button (click)="login()">Sign In</button>
 </div>
 
+<!-- Show while a rejected token is being refreshed (user stays authenticated) -->
+<div *cvaAuthRefreshing>
+  <p>Reconnecting your session...</p>
+</div>
+
 <!-- Show while auth is loading -->
 <div *cvaAuthLoading>
   <p>Checking authentication...</p>
@@ -693,10 +728,20 @@ Use structural directives to conditionally render content based on auth state.
 Import the directives in your component:
 
 ```typescript
-import { CvaAuthLoadingDirective, CvaAuthenticatedDirective, CvaUnauthenticatedDirective } from 'convex-angular';
+import {
+  CvaAuthLoadingDirective,
+  CvaAuthRefreshingDirective,
+  CvaAuthenticatedDirective,
+  CvaUnauthenticatedDirective,
+} from 'convex-angular';
 
 @Component({
-  imports: [CvaAuthenticatedDirective, CvaUnauthenticatedDirective, CvaAuthLoadingDirective],
+  imports: [
+    CvaAuthenticatedDirective,
+    CvaUnauthenticatedDirective,
+    CvaAuthLoadingDirective,
+    CvaAuthRefreshingDirective,
+  ],
   // ...
 })
 export class AppComponent {}
@@ -808,14 +853,14 @@ fetches unauthenticated. To disable server-side fetching entirely (helpers stay
 
 ### SSR behavior by helper
 
-| Helper                          | On the server                                                                |
-| ------------------------------- | ---------------------------------------------------------------------------- |
-| `injectQuery` / `injectQueries` | Fetch over HTTP, render data, transfer to the browser                        |
-| `injectPaginatedQuery`          | Stays `pending`; loads live after hydration                                  |
-| `injectPrewarmQuery`            | `prewarm()` is a no-op                                                       |
-| `injectConvexConnectionState`   | Reports a static disconnected state                                          |
-| `injectAuth`                    | Reports the provider's state; Convex token sync resumes in the browser       |
-| `injectMutation` / `injectAction` | Calling them during SSR throws (mutations/actions are user interactions)   |
+| Helper                            | On the server                                                            |
+| --------------------------------- | ------------------------------------------------------------------------ |
+| `injectQuery` / `injectQueries`   | Fetch over HTTP, render data, transfer to the browser                    |
+| `injectPaginatedQuery`            | Stays `pending`; loads live after hydration                              |
+| `injectPrewarmQuery`              | `prewarm()` is a no-op                                                   |
+| `injectConvexConnectionState`     | Reports a static disconnected state                                      |
+| `injectAuth`                      | Reports the provider's state; Convex token sync resumes in the browser   |
+| `injectMutation` / `injectAction` | Calling them during SSR throws (mutations/actions are user interactions) |
 
 ## 🤝 Contributing
 
