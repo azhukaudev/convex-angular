@@ -182,4 +182,40 @@ describe('injectPrewarmQuery', () => {
   it('throws outside an injection context without injectRef', () => {
     expect(() => injectPrewarmQuery(mockQuery)).toThrow();
   });
+
+  describe('disabled client (SSR)', () => {
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      mockConvexClient = {
+        get disabled() {
+          return true;
+        },
+        onUpdate: jest.fn(),
+      } as unknown as jest.Mocked<ConvexClient>;
+
+      TestBed.configureTestingModule({
+        providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      });
+    });
+
+    it('makes prewarm a no-op so SSR stability is not delayed by timers', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly prewarmUser = injectPrewarmQuery(mockQuery);
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
+
+      // The subscription and its cleanup timer are created in the same
+      // guarded path; no onUpdate call means no timer was scheduled either.
+      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(unsubscribeFns).toHaveLength(0);
+    }));
+  });
 });

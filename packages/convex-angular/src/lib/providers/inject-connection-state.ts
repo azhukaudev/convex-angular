@@ -34,6 +34,21 @@ export function injectConvexConnectionState(options?: InjectConvexConnectionStat
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
 
+    // A disabled client (server-side rendering) has no connection and its
+    // connection-state accessors throw; report a static disconnected state.
+    if (convex.disabled) {
+      return signal<ConnectionState>({
+        hasInflightRequests: false,
+        isWebSocketConnected: false,
+        timeOfOldestInflightRequest: null,
+        hasEverConnected: false,
+        connectionCount: 0,
+        connectionRetries: 0,
+        inflightMutations: 0,
+        inflightActions: 0,
+      }).asReadonly();
+    }
+
     const connectionState = signal<ConnectionState>(convex.connectionState());
     const unsubscribe = convex.subscribeToConnectionState((nextState) => {
       connectionState.set(nextState);

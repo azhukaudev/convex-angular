@@ -81,6 +81,12 @@ export function injectPrewarmQuery<Query extends PrewarmQueryReference>(
     destroyRef.onDestroy(() => cleanupAll());
 
     const prewarm = (args: Query['_args']) => {
+      // On a disabled client (server-side rendering) subscriptions are
+      // no-ops and the cleanup timer would only delay SSR stability.
+      if (convex.disabled) {
+        return;
+      }
+
       const extendSubscriptionFor = options?.extendSubscriptionFor ?? DEFAULT_EXTEND_SUBSCRIPTION_FOR;
 
       let disposed = false;

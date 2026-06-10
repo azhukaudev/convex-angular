@@ -112,4 +112,51 @@ describe('injectConvexConnectionState', () => {
   it('throws outside an injection context without injectRef', () => {
     expect(() => injectConvexConnectionState()).toThrow();
   });
+
+  describe('disabled client (SSR)', () => {
+    beforeEach(() => {
+      TestBed.resetTestingModule();
+      mockConvexClient = {
+        get disabled() {
+          return true;
+        },
+        connectionState: jest.fn(() => {
+          throw new Error('ConvexClient is disabled');
+        }),
+        subscribeToConnectionState: jest.fn(() => {
+          throw new Error('ConvexClient is disabled');
+        }),
+      } as unknown as jest.Mocked<ConvexClient>;
+
+      TestBed.configureTestingModule({
+        providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      });
+    });
+
+    it('returns a disconnected default state without touching the client', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly connectionState = injectConvexConnectionState();
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.connectionState()).toEqual({
+        hasInflightRequests: false,
+        isWebSocketConnected: false,
+        timeOfOldestInflightRequest: null,
+        hasEverConnected: false,
+        connectionCount: 0,
+        connectionRetries: 0,
+        inflightMutations: 0,
+        inflightActions: 0,
+      });
+      expect(mockConvexClient.connectionState).not.toHaveBeenCalled();
+      expect(mockConvexClient.subscribeToConnectionState).not.toHaveBeenCalled();
+    });
+  });
 });
