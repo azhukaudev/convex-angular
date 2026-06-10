@@ -70,6 +70,55 @@ function normalizeError(error: unknown, prefix: string): Error {
   return new Error(`${prefix}: ${String(error)}`);
 }
 
+/**
+ * Tracks provider and internal auth errors independently and surfaces the
+ * most recent one. A shared monotonic sequence orders the two sources, since
+ * either can fail and recover at any time.
+ */
+function createAuthErrorState() {
+  const providerError = signal<SequencedError | undefined>(undefined);
+  const internalError = signal<SequencedError | undefined>(undefined);
+  let currentSequence = 0;
+
+  const nextSequence = () => {
+    currentSequence += 1;
+    return currentSequence;
+  };
+
+  const error = computed(() => {
+    const currentProviderError = providerError();
+    const currentInternalError = internalError();
+
+    if (!currentProviderError) {
+      return currentInternalError?.error;
+    }
+
+    if (!currentInternalError) {
+      return currentProviderError.error;
+    }
+
+    return currentProviderError.sequence >= currentInternalError.sequence
+      ? currentProviderError.error
+      : currentInternalError.error;
+  });
+
+  return {
+    error,
+    setProviderError: (error: Error) => {
+      providerError.set({ error, sequence: nextSequence() });
+    },
+    clearProviderError: () => {
+      providerError.set(undefined);
+    },
+    setInternalError: (error: unknown, prefix: string) => {
+      internalError.set({ error: normalizeError(error, prefix), sequence: nextSequence() });
+    },
+    clearInternalError: () => {
+      internalError.set(undefined);
+    },
+  };
+}
+
 function createConvexAuthState(): ConvexAuthState {
   const provider = inject(CONVEX_AUTH, { optional: true });
   if (!provider) {
@@ -89,34 +138,9 @@ function createConvexAuthState(): ConvexAuthState {
 
   const backendAuthenticated = signal<boolean | null>(null);
   const backendRefreshing = signal<boolean>(false);
-  const providerError = signal<SequencedError | undefined>(undefined);
-  const internalError = signal<SequencedError | undefined>(undefined);
+  const errors = createAuthErrorState();
 
-  let currentSequence = 0;
   let currentGeneration = 0;
-
-  const nextSequence = () => {
-    currentSequence += 1;
-    return currentSequence;
-  };
-
-  const setProviderError = (error: Error) => {
-    providerError.set({
-      error,
-      sequence: nextSequence(),
-    });
-  };
-
-  const setInternalError = (error: unknown, prefix: string) => {
-    internalError.set({
-      error: normalizeError(error, prefix),
-      sequence: nextSequence(),
-    });
-  };
-
-  const clearInternalError = () => {
-    internalError.set(undefined);
-  };
 
   const clearAuthIfNeeded = () => {
     try {
@@ -124,10 +148,56 @@ function createConvexAuthState(): ConvexAuthState {
         convex.client.clearAuth();
       }
     } catch (error) {
-      setInternalError(error, '[convex-angular auth] Convex auth sync failed');
+      errors.setInternalError(error, '[convex-angular auth] Convex auth sync failed');
       backendAuthenticated.set(false);
     }
   };
+
+  // The fetchToken/onAuthChange/onRefreshChange trio handed to
+  // BaseConvexClient.setAuth, bound to one generation so callbacks from a
+  // superseded setup never touch current state.
+  const createSetAuthCallbacks = (generation: number) => ({
+    fetchToken: async (args: { forceRefreshToken: boolean }) => {
+      try {
+        const token = await provider.fetchAccessToken(args);
+
+        if (generation !== currentGeneration) {
+          return null;
+        }
+
+        if (token == null) {
+          backendAuthenticated.set(false);
+          return null;
+        }
+
+        return token;
+      } catch (fetchError) {
+        if (generation === currentGeneration) {
+          errors.setInternalError(fetchError, '[convex-angular auth] Token fetch failed');
+          backendAuthenticated.set(false);
+        }
+
+        return null;
+      }
+    },
+    onAuthChange: (isConvexAuthenticated: boolean) => {
+      if (generation !== currentGeneration) {
+        return;
+      }
+
+      backendAuthenticated.set(isConvexAuthenticated);
+      if (isConvexAuthenticated) {
+        errors.clearInternalError();
+      }
+    },
+    onRefreshChange: (isConvexRefreshing: boolean) => {
+      if (generation !== currentGeneration) {
+        return;
+      }
+
+      backendRefreshing.set(isConvexRefreshing);
+    },
+  });
 
   const isLoading = computed(() => {
     return provider.isLoading() || (provider.isAuthenticated() && backendAuthenticated() === null);
@@ -153,31 +223,14 @@ function createConvexAuthState(): ConvexAuthState {
     return 'unauthenticated';
   });
 
-  const error = computed(() => {
-    const currentProviderError = providerError();
-    const currentInternalError = internalError();
-
-    if (!currentProviderError) {
-      return currentInternalError?.error;
-    }
-
-    if (!currentInternalError) {
-      return currentProviderError.error;
-    }
-
-    return currentProviderError.sequence >= currentInternalError.sequence
-      ? currentProviderError.error
-      : currentInternalError.error;
-  });
-
   effect(() => {
     const upstreamError = provider.error?.();
     if (upstreamError) {
-      setProviderError(upstreamError);
+      errors.setProviderError(upstreamError);
       return;
     }
 
-    providerError.set(undefined);
+    errors.clearProviderError();
   });
 
   effect(() => {
@@ -189,7 +242,7 @@ function createConvexAuthState(): ConvexAuthState {
     const generation = currentGeneration;
 
     if (upstreamLoading) {
-      clearInternalError();
+      errors.clearInternalError();
       backendAuthenticated.set(null);
       backendRefreshing.set(false);
       clearAuthIfNeeded();
@@ -197,60 +250,19 @@ function createConvexAuthState(): ConvexAuthState {
     }
 
     if (!upstreamAuthenticated) {
-      clearInternalError();
+      errors.clearInternalError();
       backendAuthenticated.set(false);
       backendRefreshing.set(false);
       clearAuthIfNeeded();
       return;
     }
 
-    clearInternalError();
+    errors.clearInternalError();
     backendAuthenticated.set(null);
     backendRefreshing.set(false);
 
     try {
-      const fetchToken = async (args: { forceRefreshToken: boolean }) => {
-        try {
-          const token = await provider.fetchAccessToken(args);
-
-          if (generation !== currentGeneration) {
-            return null;
-          }
-
-          if (token == null) {
-            backendAuthenticated.set(false);
-            return null;
-          }
-
-          return token;
-        } catch (fetchError) {
-          if (generation === currentGeneration) {
-            setInternalError(fetchError, '[convex-angular auth] Token fetch failed');
-            backendAuthenticated.set(false);
-          }
-
-          return null;
-        }
-      };
-
-      const onAuthChange = (isConvexAuthenticated: boolean) => {
-        if (generation !== currentGeneration) {
-          return;
-        }
-
-        backendAuthenticated.set(isConvexAuthenticated);
-        if (isConvexAuthenticated) {
-          clearInternalError();
-        }
-      };
-
-      const onRefreshChange = (isConvexRefreshing: boolean) => {
-        if (generation !== currentGeneration) {
-          return;
-        }
-
-        backendRefreshing.set(isConvexRefreshing);
-      };
+      const { fetchToken, onAuthChange, onRefreshChange } = createSetAuthCallbacks(generation);
 
       if (convex.disabled) {
         // A disabled client never opens a socket, so there is nothing to wire
@@ -263,7 +275,7 @@ function createConvexAuthState(): ConvexAuthState {
       }
     } catch (syncError) {
       if (generation === currentGeneration) {
-        setInternalError(syncError, '[convex-angular auth] Convex auth sync failed');
+        errors.setInternalError(syncError, '[convex-angular auth] Convex auth sync failed');
         backendAuthenticated.set(false);
       }
     }
@@ -279,7 +291,7 @@ function createConvexAuthState(): ConvexAuthState {
     isLoading,
     isAuthenticated,
     isRefreshing,
-    error,
+    error: errors.error,
     status,
     // Snapshot of the client's current token + decoded claims; the client
     // exposes no token-change event, so this cannot be a signal.
