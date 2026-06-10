@@ -1,4 +1,15 @@
-import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, isSignal, signal } from '@angular/core';
+import { isPlatformServer } from '@angular/common';
+import {
+  DestroyRef,
+  EnvironmentInjector,
+  PLATFORM_ID,
+  Signal,
+  computed,
+  effect,
+  inject,
+  isSignal,
+  signal,
+} from '@angular/core';
 import { ConvexClient } from 'convex/browser';
 import {
   FunctionArgs,
@@ -6,9 +17,13 @@ import {
   FunctionReturnType,
   PaginationOptions,
   PaginationResult,
+  getFunctionName,
 } from 'convex/server';
+import { Value } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
+import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
+import { ConvexHydrationState, serializeQueryArgs } from '../ssr/state-transfer';
 import { PaginatedQueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
@@ -259,6 +274,11 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   return runInResolvedInjectionContext(injectPaginatedQuery, options.injectRef, () => {
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
+    const isServer = isPlatformServer(inject(PLATFORM_ID));
+    // Both services are registered by provideConvex(...); optional injection
+    // keeps setups that only provide the CONVEX token working.
+    const serverLoader = isServer ? inject(ConvexServerQueryLoader, { optional: true }) : null;
+    const hydration = !isServer ? inject(ConvexHydrationState, { optional: true }) : null;
 
     // Internal signals
     const results = signal<PaginatedQueryItem<Query>[]>([]);
@@ -294,10 +314,8 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     // Version counter to trigger reset
     const resetVersion = signal(0);
 
-    const subscribe = (args: PaginatedQueryArgs<Query>, initialNumItems: number, generation: number) => {
-      cleanupSubscription();
-
-      // Reset state for new subscription
+    // Reset state ahead of a new subscription or server fetch
+    const resetState = () => {
       results.set([]);
       error.set(undefined);
       isLoadingFirstPage.set(true);
@@ -306,6 +324,29 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       isExhausted.set(false);
       isSkipped.set(false);
       currentLoadMore = undefined;
+    };
+
+    // Apply a first page fetched on the server or transferred from a server
+    // render. loadMore stays inert until the live subscription syncs.
+    const applyFirstPage = (firstPage: PaginationResult<PaginatedQueryItem<Query>>) => {
+      results.set(firstPage.page);
+      error.set(undefined);
+      isLoadingFirstPage.set(false);
+      isLoadingMore.set(false);
+      canLoadMore.set(!firstPage.isDone);
+      isExhausted.set(firstPage.isDone);
+    };
+
+    const subscribe = (args: PaginatedQueryArgs<Query>, initialNumItems: number, generation: number, argsKey: string) => {
+      cleanupSubscription();
+      resetState();
+
+      // Seed from a server-rendered first page so the hydrated UI matches
+      // the server HTML; the live subscription below replaces it on sync.
+      const transferred = hydration?.consume(getFunctionName(query), argsKey);
+      if (transferred?.value !== undefined) {
+        applyFirstPage(transferred.value as PaginationResult<PaginatedQueryItem<Query>>);
+      }
 
       unsubscribe = subscribeToPaginatedQuery(
         convex,
@@ -400,7 +441,44 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         return;
       }
 
-      subscribe(args, initialNumItems, generation);
+      // The serialized full args (including the first page's paginationOpts)
+      // key both the server-side transfer write and the hydration read.
+      const firstPageArgs = {
+        ...args,
+        paginationOpts: { numItems: initialNumItems, cursor: null },
+      } as FunctionArgs<Query>;
+      const argsKey = serializeQueryArgs(firstPageArgs as Record<string, Value>);
+
+      // Server-side rendering: the WebSocket client is disabled, so fetch the
+      // first page once over HTTP. The loader registers a pending task (SSR
+      // serialization waits) and transfers the page to the browser.
+      if (isServer) {
+        resetState();
+        if (serverLoader?.enabled) {
+          serverLoader.fetch(query, firstPageArgs, argsKey).then(
+            (firstPage: FunctionReturnType<Query>) => {
+              if (generation !== activeGeneration) {
+                return;
+              }
+
+              applyFirstPage(firstPage);
+              options.onSuccess?.(firstPage.page);
+            },
+            (err: Error) => {
+              if (generation !== activeGeneration) {
+                return;
+              }
+
+              error.set(err);
+              isLoadingFirstPage.set(false);
+              options.onError?.(err);
+            },
+          );
+        }
+        return;
+      }
+
+      subscribe(args, initialNumItems, generation, argsKey);
     });
 
     destroyRef.onDestroy(() => {
