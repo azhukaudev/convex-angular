@@ -17,6 +17,7 @@ import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { ConvexHydrationState, serializeQueryArgs } from '../ssr/state-transfer';
 import { QueryStatus } from '../types';
+import { readInitialQueryData } from './initial-query-data';
 import { injectConvex } from './inject-convex';
 import { QueryReference } from './inject-query';
 import { runInResolvedInjectionContext } from './injection-context';
@@ -227,32 +228,33 @@ export function injectQueries<Definitions extends QueriesDefinition>(
           unsubscribe: () => {},
         };
 
-        // Server-side rendering: the WebSocket client is disabled, so fetch
-        // once over HTTP instead. The subscription entry keeps the staleness
-        // guard and removal bookkeeping identical to the browser path.
+        const settle = (result: unknown) => {
+          if (activeSubscriptions.get(key) !== subscription) {
+            return;
+          }
+
+          results.update((current) => setKey(current, key, result));
+          errors.update((current) => setKey(current, key, undefined));
+          statuses.update((current) => setKey(current, key, 'success'));
+        };
+        const fail = (error: Error) => {
+          if (activeSubscriptions.get(key) !== subscription) {
+            return;
+          }
+
+          errors.update((current) => setKey(current, key, error));
+          statuses.update((current) => setKey(current, key, 'error'));
+        };
+
+        // Server-side rendering: the WebSocket client is disabled, so each
+        // query is a one-shot HTTP fetch that settles like a subscription
+        // emission. The subscription entry keeps the staleness guard and
+        // removal bookkeeping identical to the browser path.
         if (isServer) {
           activeSubscriptions.set(key, subscription);
 
           if (serverLoader?.enabled) {
-            serverLoader.fetch(definition.query, definition.args, argsKey).then(
-              (result) => {
-                if (activeSubscriptions.get(key) !== subscription) {
-                  return;
-                }
-
-                results.update((current) => setKey(current, key, result));
-                errors.update((current) => setKey(current, key, undefined));
-                statuses.update((current) => setKey(current, key, 'success'));
-              },
-              (error: Error) => {
-                if (activeSubscriptions.get(key) !== subscription) {
-                  return;
-                }
-
-                errors.update((current) => setKey(current, key, error));
-                statuses.update((current) => setKey(current, key, 'error'));
-              },
-            );
+            serverLoader.fetch(definition.query, definition.args, argsKey).then(settle, fail);
           }
           continue;
         }
@@ -260,44 +262,16 @@ export function injectQueries<Definitions extends QueriesDefinition>(
         // Prefer the warm cache for the current args; fall back to data
         // transferred from the server render so a hydrated app shows content
         // immediately while the live subscription syncs.
-        const cachedResult = (convex.disabled ? undefined : convex.client.localQueryResult(queryName, definition.args)) as
-          | FunctionReturnType<typeof definition.query>
-          | undefined;
-
-        if (cachedResult !== undefined) {
-          results.update((current) => setKey(current, key, cachedResult));
-        } else {
-          const transferred = hydration?.consume(queryName, argsKey);
-          if (transferred !== undefined) {
-            results.update((current) => setKey(current, key, transferred.value));
-            errors.update((current) => setKey(current, key, undefined));
-            statuses.update((current) => setKey(current, key, 'success'));
-          }
+        const initial = readInitialQueryData(convex, hydration, queryName, definition.args, argsKey);
+        if (initial?.kind === 'cache') {
+          results.update((current) => setKey(current, key, initial.value));
+        } else if (initial?.kind === 'transferred') {
+          results.update((current) => setKey(current, key, initial.value));
+          errors.update((current) => setKey(current, key, undefined));
+          statuses.update((current) => setKey(current, key, 'success'));
         }
 
-        const unsubscribe = convex.onUpdate(
-          definition.query,
-          definition.args,
-          (result) => {
-            if (activeSubscriptions.get(key) !== subscription) {
-              return;
-            }
-
-            results.update((current) => setKey(current, key, result));
-            errors.update((current) => setKey(current, key, undefined));
-            statuses.update((current) => setKey(current, key, 'success'));
-          },
-          (error) => {
-            if (activeSubscriptions.get(key) !== subscription) {
-              return;
-            }
-
-            errors.update((current) => setKey(current, key, error));
-            statuses.update((current) => setKey(current, key, 'error'));
-          },
-        );
-
-        subscription.unsubscribe = unsubscribe;
+        subscription.unsubscribe = convex.onUpdate(definition.query, definition.args, settle, fail);
         activeSubscriptions.set(key, subscription);
       }
     });

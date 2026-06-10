@@ -17,6 +17,7 @@ import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { ConvexHydrationState, serializeQueryArgs } from '../ssr/state-transfer';
 import { QueryStatus } from '../types';
+import { readInitialQueryData } from './initial-query-data';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 
@@ -37,7 +38,10 @@ export interface QueryOptions<Query extends QueryReference> {
 
   /**
    * Callback invoked when the query receives data.
-   * Called on initial load and every subsequent update.
+   * Called on initial load and every subsequent update, including the
+   * one-shot fetch during server-side rendering. It is NOT called for data
+   * seeded from the server render during hydration — the first live update
+   * after the WebSocket syncs fires it instead.
    * @param data - The return value of the query
    */
   onSuccess?: (data: FunctionReturnType<Query>) => void;
@@ -225,81 +229,57 @@ export function injectQuery<Query extends QueryReference>(
       const hasPreviousArgs = previousArgsKey !== undefined;
       previousArgsKey = argsKey;
 
-      // Server-side rendering: the WebSocket client is disabled, so fetch
-      // once over HTTP instead. The loader registers a pending task (SSR
-      // serialization waits) and transfers the result to the browser.
+      const settle = (result: FunctionReturnType<Query>) => {
+        if (generation !== activeGeneration) {
+          return;
+        }
+
+        data.set(result);
+        error.set(undefined);
+        isLoading.set(false);
+        options?.onSuccess?.(result);
+      };
+      const fail = (err: Error) => {
+        if (generation !== activeGeneration) {
+          return;
+        }
+
+        // Preserve existing data on error for better UX
+        error.set(err);
+        isLoading.set(false);
+        options?.onError?.(err);
+      };
+
+      // Server-side rendering: the WebSocket client is disabled, so the
+      // query is a one-shot HTTP fetch that settles like a subscription
+      // emission. The loader registers a pending task (SSR serialization
+      // waits) and transfers the result to the browser.
       if (isServer) {
         if (serverLoader?.enabled) {
-          serverLoader.fetch(query, args, argsKey).then(
-            (result: FunctionReturnType<Query>) => {
-              if (generation !== activeGeneration) {
-                return;
-              }
-
-              data.set(result);
-              error.set(undefined);
-              isLoading.set(false);
-              options?.onSuccess?.(result);
-            },
-            (err: Error) => {
-              if (generation !== activeGeneration) {
-                return;
-              }
-
-              error.set(err);
-              isLoading.set(false);
-              options?.onError?.(err);
-            },
-          );
+          serverLoader.fetch(query, args, argsKey).then(settle, fail);
         }
         return;
       }
 
-      // Prefer the warm cache for the current args. When the new args are not
-      // cached yet, fall back to data transferred from the server render so a
-      // hydrated app shows content immediately; otherwise preserve the
-      // previous value during the pending resubscribe.
-      const cachedData = convex.disabled ? undefined : convex.client.localQueryResult(getFunctionName(query), args);
-      if (cachedData !== undefined) {
-        data.set(cachedData);
-      } else {
-        const transferred = hydration?.consume(getFunctionName(query), argsKey);
-        if (transferred !== undefined) {
-          // Match the server-rendered HTML: report success immediately. The
-          // live subscription below replaces the value once it syncs.
-          data.set(transferred.value as FunctionReturnType<Query> | undefined);
-          error.set(undefined);
-          isLoading.set(false);
-        } else if (!hasPreviousArgs && untracked(data) !== undefined) {
-          data.set(undefined);
-        }
+      // Prefer the warm cache for the current args; fall back to data
+      // transferred from the server render so a hydrated app shows content
+      // immediately; otherwise preserve the previous value during the
+      // pending resubscribe.
+      const initial = readInitialQueryData(convex, hydration, getFunctionName(query), args, argsKey);
+      if (initial?.kind === 'cache') {
+        data.set(initial.value as FunctionReturnType<Query>);
+      } else if (initial?.kind === 'transferred') {
+        // Match the server-rendered HTML: report success immediately. The
+        // live subscription below replaces the value once it syncs.
+        data.set(initial.value as FunctionReturnType<Query> | undefined);
+        error.set(undefined);
+        isLoading.set(false);
+      } else if (!hasPreviousArgs && untracked(data) !== undefined) {
+        data.set(undefined);
       }
 
       // Subscribe to the query
-      unsubscribe = convex.onUpdate(
-        query,
-        args,
-        (result: FunctionReturnType<Query>) => {
-          if (generation !== activeGeneration) {
-            return;
-          }
-
-          data.set(result);
-          error.set(undefined);
-          isLoading.set(false);
-          options?.onSuccess?.(result);
-        },
-        (err: Error) => {
-          if (generation !== activeGeneration) {
-            return;
-          }
-
-          // Preserve existing data on error for better UX
-          error.set(err);
-          isLoading.set(false);
-          options?.onError?.(err);
-        },
-      );
+      unsubscribe = convex.onUpdate(query, args, settle, fail);
     });
 
     // Cleanup subscription when the owning scope is destroyed
