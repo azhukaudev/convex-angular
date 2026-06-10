@@ -1,7 +1,8 @@
-import { DestroyRef, EnvironmentInjector, Signal, computed, inject, signal } from '@angular/core';
+import { DestroyRef, EnvironmentInjector, Signal, inject } from '@angular/core';
 import { FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { ActionStatus } from '../types';
+import { createCallableState } from './callable-state';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 
@@ -121,99 +122,24 @@ export function injectAction<Action extends ActionReference>(
   action: Action,
   options?: ActionOptions<Action>,
 ): ActionResult<Action> {
-  const { convex, destroyRef } = runInResolvedInjectionContext(
-    injectAction,
-    options?.injectRef,
-    () => ({
-      convex: injectConvex(),
-      destroyRef: inject(DestroyRef),
-    }),
+  const { convex, destroyRef } = runInResolvedInjectionContext(injectAction, options?.injectRef, () => ({
+    convex: injectConvex(),
+    destroyRef: inject(DestroyRef),
+  }));
+
+  const state = createCallableState<Action['_args'], FunctionReturnType<Action>>(
+    destroyRef,
+    (args) => convex.action(action, args),
+    options,
   );
 
-  // Internal signals for tracking state
-  const data = signal<FunctionReturnType<Action> | undefined>(undefined);
-  const error = signal<Error | undefined>(undefined);
-  const isLoading = signal(false);
-  const currentVersion = signal(0);
-  let isDestroyed = false;
-
-  // Track if action has been called (to distinguish idle from success)
-  const hasCompleted = signal(false);
-
-  // Computed signals
-  const isSuccess = computed(() => hasCompleted() && !isLoading() && !error());
-  const status = computed<ActionStatus>(() => {
-    if (isLoading()) return 'pending';
-    if (error()) return 'error';
-    if (hasCompleted()) return 'success';
-    return 'idle';
-  });
-
-  /**
-   * Reset all state.
-   */
-  const reset = () => {
-    currentVersion.update((version) => version + 1);
-    data.set(undefined);
-    error.set(undefined);
-    isLoading.set(false);
-    hasCompleted.set(false);
-  };
-
-  destroyRef.onDestroy(() => {
-    isDestroyed = true;
-    reset();
-  });
-
-  /**
-   * Execute the action with the given arguments.
-   */
-  const run = async (
-    args: Action['_args'],
-  ): Promise<FunctionReturnType<Action>> => {
-    if (isDestroyed) {
-      return convex.action(action, args);
-    }
-
-    const callVersion = currentVersion() + 1;
-    currentVersion.set(callVersion);
-
-    try {
-      // Reset state for the latest action invocation.
-      data.set(undefined);
-      error.set(undefined);
-      hasCompleted.set(false);
-      isLoading.set(true);
-
-      const result = await convex.action(action, args);
-      if (currentVersion() === callVersion) {
-        data.set(result);
-        hasCompleted.set(true);
-        options?.onSuccess?.(result);
-      }
-      return result;
-    } catch (err) {
-      const errorObj = err instanceof Error ? err : new Error(String(err));
-      if (currentVersion() === callVersion) {
-        error.set(errorObj);
-        hasCompleted.set(true);
-        options?.onError?.(errorObj);
-      }
-      throw errorObj;
-    } finally {
-      if (currentVersion() === callVersion) {
-        isLoading.set(false);
-      }
-    }
-  };
-
   return {
-    run,
-    data: data.asReadonly(),
-    error: error.asReadonly(),
-    isLoading: isLoading.asReadonly(),
-    isSuccess,
-    status,
-    reset,
+    run: state.execute,
+    data: state.data,
+    error: state.error,
+    isLoading: state.isLoading,
+    isSuccess: state.isSuccess,
+    status: state.status,
+    reset: state.reset,
   };
 }

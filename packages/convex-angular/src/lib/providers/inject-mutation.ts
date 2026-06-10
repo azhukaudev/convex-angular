@@ -1,12 +1,9 @@
-import { DestroyRef, EnvironmentInjector, Signal, computed, inject, signal } from '@angular/core';
+import { DestroyRef, EnvironmentInjector, Signal, inject } from '@angular/core';
 import { OptimisticUpdate } from 'convex/browser';
-import {
-  FunctionArgs,
-  FunctionReference,
-  FunctionReturnType,
-} from 'convex/server';
+import { FunctionArgs, FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { MutationStatus } from '../types';
+import { createCallableState } from './callable-state';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 
@@ -53,9 +50,7 @@ export interface MutationResult<Mutation extends MutationReference> {
    * @param args - The arguments to pass to the mutation
    * @returns A promise that resolves with the mutation's return value or rejects with the mutation error
    */
-  mutate: (
-    args: FunctionArgs<Mutation>,
-  ) => Promise<FunctionReturnType<Mutation>>;
+  mutate: (args: FunctionArgs<Mutation>) => Promise<FunctionReturnType<Mutation>>;
 
   /**
    * The data returned by the last successful mutation call.
@@ -141,103 +136,24 @@ export function injectMutation<Mutation extends MutationReference>(
   mutation: Mutation,
   options?: MutationOptions<Mutation>,
 ): MutationResult<Mutation> {
-  const { convex, destroyRef } = runInResolvedInjectionContext(
-    injectMutation,
-    options?.injectRef,
-    () => ({
-      convex: injectConvex(),
-      destroyRef: inject(DestroyRef),
-    }),
+  const { convex, destroyRef } = runInResolvedInjectionContext(injectMutation, options?.injectRef, () => ({
+    convex: injectConvex(),
+    destroyRef: inject(DestroyRef),
+  }));
+
+  const state = createCallableState<FunctionArgs<Mutation>, FunctionReturnType<Mutation>>(
+    destroyRef,
+    (args) => convex.mutation(mutation, args, { optimisticUpdate: options?.optimisticUpdate }),
+    options,
   );
 
-  // Internal signals for tracking state
-  const data = signal<FunctionReturnType<Mutation> | undefined>(undefined);
-  const error = signal<Error | undefined>(undefined);
-  const isLoading = signal(false);
-  const currentVersion = signal(0);
-  let isDestroyed = false;
-
-  // Track if mutation has been called (to distinguish idle from success)
-  const hasCompleted = signal(false);
-
-  // Computed signals
-  const isSuccess = computed(() => hasCompleted() && !isLoading() && !error());
-  const status = computed<MutationStatus>(() => {
-    if (isLoading()) return 'pending';
-    if (error()) return 'error';
-    if (hasCompleted()) return 'success';
-    return 'idle';
-  });
-
-  /**
-   * Reset all state.
-   */
-  const reset = () => {
-    currentVersion.update((version) => version + 1);
-    data.set(undefined);
-    error.set(undefined);
-    isLoading.set(false);
-    hasCompleted.set(false);
-  };
-
-  destroyRef.onDestroy(() => {
-    isDestroyed = true;
-    reset();
-  });
-
-  /**
-   * Execute the mutation with the given arguments.
-   */
-  const mutate = async (
-    args: FunctionArgs<Mutation>,
-  ): Promise<FunctionReturnType<Mutation>> => {
-    if (isDestroyed) {
-      return convex.mutation(mutation, args, {
-        optimisticUpdate: options?.optimisticUpdate,
-      });
-    }
-
-    const callVersion = currentVersion() + 1;
-    currentVersion.set(callVersion);
-
-    try {
-      // Reset state for the latest mutation invocation.
-      data.set(undefined);
-      error.set(undefined);
-      hasCompleted.set(false);
-      isLoading.set(true);
-
-      const result = await convex.mutation(mutation, args, {
-        optimisticUpdate: options?.optimisticUpdate,
-      });
-      if (currentVersion() === callVersion) {
-        data.set(result);
-        hasCompleted.set(true);
-        options?.onSuccess?.(result);
-      }
-      return result;
-    } catch (err) {
-      const errorObj = err instanceof Error ? err : new Error(String(err));
-      if (currentVersion() === callVersion) {
-        error.set(errorObj);
-        hasCompleted.set(true);
-        options?.onError?.(errorObj);
-      }
-      throw errorObj;
-    } finally {
-      if (currentVersion() === callVersion) {
-        isLoading.set(false);
-      }
-    }
-  };
-
   return {
-    mutate,
-    data: data.asReadonly(),
-    error: error.asReadonly(),
-    isLoading: isLoading.asReadonly(),
-    isSuccess,
-    status,
-    reset,
+    mutate: state.execute,
+    data: state.data,
+    error: state.error,
+    isLoading: state.isLoading,
+    isSuccess: state.isSuccess,
+    status: state.status,
+    reset: state.reset,
   };
 }
