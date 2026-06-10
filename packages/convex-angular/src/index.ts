@@ -32,3 +32,6 @@ export * from './lib/directives/auth-helpers';
 
 // Auth guards
 export * from './lib/guards/auth-guards';
+
+// Route resolvers
+export * from './lib/resolvers/query-resolver';
