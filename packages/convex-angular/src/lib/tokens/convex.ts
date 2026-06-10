@@ -1,12 +1,31 @@
+import { isPlatformServer } from '@angular/common';
 import {
   DestroyRef,
   EnvironmentProviders,
   InjectionToken,
+  PLATFORM_ID,
   inject,
   makeEnvironmentProviders,
   provideEnvironmentInitializer,
 } from '@angular/core';
-import { ConvexClient, ConvexClientOptions } from 'convex/browser';
+import { ConvexClient, ConvexClientOptions, ConvexHttpClient } from 'convex/browser';
+
+import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
+import { ConvexHydrationState } from '../ssr/state-transfer';
+import { CONVEX_HTTP_CLIENT, CONVEX_SSR_CONFIG, ConvexSsrOptions } from '../ssr/tokens';
+
+/**
+ * Options for {@link provideConvex}: all ConvexClient options plus
+ * Angular-specific server-side rendering configuration.
+ *
+ * @public
+ */
+export interface ProvideConvexOptions extends ConvexClientOptions {
+  /**
+   * Server-side rendering options. See {@link ConvexSsrOptions}.
+   */
+  ssr?: ConvexSsrOptions;
+}
 
 /**
  * Injection token for the ConvexClient instance.
@@ -74,10 +93,16 @@ function convexProviderGuardFactory(): true {
  */
 function convexClientFactory(
   convexUrl: string,
-  options?: ConvexClientOptions,
+  options?: ProvideConvexOptions,
 ): ConvexClient {
   const destroyRef = inject(DestroyRef);
-  const client = new ConvexClient(convexUrl, options);
+  const isServer = isPlatformServer(inject(PLATFORM_ID));
+  // The `ssr` key is Angular-specific and must not reach the ConvexClient
+  // constructor. On the server the client is disabled: no WebSocket is
+  // opened and subscriptions are no-ops; data is fetched over HTTP by the
+  // ConvexServerQueryLoader instead.
+  const { ssr: _ssr, ...clientOptions } = options ?? {};
+  const client = new ConvexClient(convexUrl, isServer ? { ...clientOptions, disabled: true } : clientOptions);
   destroyRef.onDestroy(() => client.close());
   return client;
 }
@@ -109,7 +134,7 @@ function convexClientFactory(
  */
 export function provideConvex(
   convexUrl: string,
-  options?: ConvexClientOptions,
+  options?: ProvideConvexOptions,
 ): EnvironmentProviders {
   return makeEnvironmentProviders([
     // Registration marker for the current injector scope (multi so we can
@@ -129,6 +154,13 @@ export function provideConvex(
         return convexClientFactory(convexUrl, options);
       },
     },
+    // SSR/hydration support: configuration, the HTTP client used for
+    // server-side fetches, the server query loader, and the browser-side
+    // hydration state reader. All are inert until injected.
+    { provide: CONVEX_SSR_CONFIG, useValue: { url: convexUrl, ssr: options?.ssr ?? {} } },
+    { provide: CONVEX_HTTP_CLIENT, useFactory: () => new ConvexHttpClient(convexUrl) },
+    ConvexServerQueryLoader,
+    ConvexHydrationState,
     // Eagerly run the guard during injector initialization for earlier, clearer
     // feedback when provideConvex(...) is misconfigured.
     provideEnvironmentInitializer(() => {
