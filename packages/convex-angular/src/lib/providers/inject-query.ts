@@ -1,8 +1,21 @@
-import { DestroyRef, EnvironmentInjector, Signal, computed, effect, inject, signal, untracked } from '@angular/core';
+import { isPlatformServer } from '@angular/common';
+import {
+  DestroyRef,
+  EnvironmentInjector,
+  PLATFORM_ID,
+  Signal,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+} from '@angular/core';
 import { FunctionReference, FunctionReturnType, getFunctionName } from 'convex/server';
-import { Value, convexToJson } from 'convex/values';
+import { Value } from 'convex/values';
 
 import { SkipToken, skipToken } from '../skip-token';
+import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
+import { ConvexHydrationState, serializeQueryArgs } from '../ssr/state-transfer';
 import { QueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
@@ -88,10 +101,6 @@ export interface QueryResult<Query extends QueryReference> {
   refetch: () => void;
 }
 
-function serializeArgs(args: Record<string, Value>): string {
-  return JSON.stringify(convexToJson(args));
-}
-
 /**
  * Subscribe to a Convex query reactively.
  *
@@ -153,6 +162,11 @@ export function injectQuery<Query extends QueryReference>(
   return runInResolvedInjectionContext(injectQuery, options?.injectRef, () => {
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
+    const isServer = isPlatformServer(inject(PLATFORM_ID));
+    // Both services are registered by provideConvex(...); optional injection
+    // keeps setups that only provide the CONVEX token working.
+    const serverLoader = isServer ? inject(ConvexServerQueryLoader, { optional: true }) : null;
+    const hydration = !isServer ? inject(ConvexHydrationState, { optional: true }) : null;
 
     // Initialize signals
     const data = signal<FunctionReturnType<Query> | undefined>(undefined);
@@ -207,17 +221,58 @@ export function injectQuery<Query extends QueryReference>(
       // Not skipped - try to get cached data and start subscription
       isSkipped.set(false);
       isLoading.set(true);
-      const argsKey = serializeArgs(args as Record<string, Value>);
+      const argsKey = serializeQueryArgs(args as Record<string, Value>);
       const hasPreviousArgs = previousArgsKey !== undefined;
       previousArgsKey = argsKey;
 
+      // Server-side rendering: the WebSocket client is disabled, so fetch
+      // once over HTTP instead. The loader registers a pending task (SSR
+      // serialization waits) and transfers the result to the browser.
+      if (isServer) {
+        if (serverLoader?.enabled) {
+          serverLoader.fetch(query, args, argsKey).then(
+            (result: FunctionReturnType<Query>) => {
+              if (generation !== activeGeneration) {
+                return;
+              }
+
+              data.set(result);
+              error.set(undefined);
+              isLoading.set(false);
+              options?.onSuccess?.(result);
+            },
+            (err: Error) => {
+              if (generation !== activeGeneration) {
+                return;
+              }
+
+              error.set(err);
+              isLoading.set(false);
+              options?.onError?.(err);
+            },
+          );
+        }
+        return;
+      }
+
       // Prefer the warm cache for the current args. When the new args are not
-      // cached yet, preserve the previous value during the pending resubscribe.
-      const cachedData = convex.client.localQueryResult(getFunctionName(query), args);
+      // cached yet, fall back to data transferred from the server render so a
+      // hydrated app shows content immediately; otherwise preserve the
+      // previous value during the pending resubscribe.
+      const cachedData = convex.disabled ? undefined : convex.client.localQueryResult(getFunctionName(query), args);
       if (cachedData !== undefined) {
         data.set(cachedData);
-      } else if (!hasPreviousArgs && untracked(data) !== undefined) {
-        data.set(undefined);
+      } else {
+        const transferred = hydration?.consume(getFunctionName(query), argsKey);
+        if (transferred !== undefined) {
+          // Match the server-rendered HTML: report success immediately. The
+          // live subscription below replaces the value once it syncs.
+          data.set(transferred.value as FunctionReturnType<Query> | undefined);
+          error.set(undefined);
+          isLoading.set(false);
+        } else if (!hasPreviousArgs && untracked(data) !== undefined) {
+          data.set(undefined);
+        }
       }
 
       // Subscribe to the query
