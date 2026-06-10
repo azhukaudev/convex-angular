@@ -1,0 +1,23 @@
+# Fast feedback on every commit; the heavy suite runs on push, where the Nx
+# cache makes unchanged targets nearly free. Skip everything once with
+# LEFTHOOK=0 git commit ... (use sparingly, e.g. mid-rebase).
+pre-commit:
+  parallel: true
+  jobs:
+    - name: format
+      glob: '*.{ts,js,mjs,html,css,json,md,yml,yaml}'
+      exclude:
+        - pnpm-lock.yaml
+      run: pnpm exec prettier --write {staged_files}
+      stage_fixed: true
+
+    - name: duplication
+      run: pnpm check:duplication
+
+    - name: deadcode
+      run: pnpm check:deadcode
+
+pre-push:
+  jobs:
+    - name: verify
+      run: pnpm nx run-many -t lint,test,build

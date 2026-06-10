@@ -19,6 +19,8 @@ Use pnpm. Nx targets can be run either via the package.json scripts or `nx <targ
 - `pnpm check:deadcode` — unused files, exports, and dependencies (`knip`, config in `knip.ts`). The baseline is zero findings; keep it that way. Run it after adding/removing files, exports, or dependencies. If it flags your change, delete the dead code or remove the export from `index.ts` rather than suppressing; every entry in `knip.ts`'s ignore lists carries a comment justifying it — follow that pattern if a new exception is genuinely needed (e.g. a dependency used only by a builder at runtime).
 - `pnpm update` — `nx migrate latest`
 
+Git hooks (`lefthook`, config in `lefthook.yml`, installed via the `prepare` script): pre-commit auto-formats staged files with prettier (re-staging fixes) and runs `check:duplication` + `check:deadcode` in parallel (~2s); pre-push runs `nx run-many -t lint,test,build` (cheap when the Nx cache is warm). A hook failure means the commit/push was rejected — fix the findings and retry; never bypass with `LEFTHOOK=0` except mid-rebase on already-reviewed commits.
+
 Targeted operations:
 
 - Single library test file: `nx test convex-angular --testFile=inject-query.spec.ts`
