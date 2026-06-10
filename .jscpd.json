@@ -3,14 +3,7 @@
   "minLines": 8,
   "mode": "mild",
   "reporters": ["console"],
-  "ignorePattern": [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/coverage/**",
-    "**/_generated/**",
-    "**/.angular/**",
-    "**/*.spec.ts"
-  ],
   "format": ["typescript", "html"],
-  "threshold": 2.5
+  "threshold": 2.5,
+  "ignore": ["**/node_modules/**", "**/dist/**", "**/coverage/**", "**/_generated/**", "**/.angular/**", "**/*.spec.ts"]
 }

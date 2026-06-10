@@ -14,6 +14,7 @@ allowBuilds:
   nx: true
   unrs-resolver: true
 minimumReleaseAgeExclude:
+  - jscpd@5.0.6
   - '@angular-devkit/architect@0.2102.14'
   - '@angular-devkit/build-angular@21.2.14'
   - '@angular-devkit/build-webpack@0.2102.14'
