@@ -51,8 +51,6 @@ The Angular client for Convex.
 
 ## 🚀 Getting Started
 
-> Requirements: Angular >= 20, Convex >= 1.31, RxJS >= 7.8.
-
 1. Install the dependencies:
 
 ```bash
