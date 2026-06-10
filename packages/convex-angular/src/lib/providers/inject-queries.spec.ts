@@ -409,6 +409,96 @@ describe('injectQueries', () => {
     expect(typedResults).toEqual({ user: undefined, todos: undefined });
   });
 
+  describe('per-key callbacks', () => {
+    it('invokes onSuccess with the key and data for each query', fakeAsync(() => {
+      const onSuccess = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly queries = injectQueries(
+          () => ({
+            user: { query: mockUserQuery, args: { userId: 'user-1' } },
+            todos: { query: mockTodosQuery, args: { count: 10 } },
+          }),
+          { onSuccess },
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))?.({ name: 'Ada' });
+      expect(onSuccess).toHaveBeenCalledWith('user', { name: 'Ada' });
+
+      onUpdateByKey.get(keyFor('todos:list', { count: 10 }))?.([{ _id: '1', title: 'T' }]);
+      expect(onSuccess).toHaveBeenCalledWith('todos', [{ _id: '1', title: 'T' }]);
+    }));
+
+    it('invokes onError with the key and error', fakeAsync(() => {
+      const onError = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly queries = injectQueries(
+          () => ({
+            user: { query: mockUserQuery, args: { userId: 'user-1' } },
+          }),
+          { onError },
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const queryError = new Error('boom');
+      onErrorByKey.get(keyFor('users:get', { userId: 'user-1' }))?.(queryError);
+
+      expect(onError).toHaveBeenCalledWith('user', queryError);
+    }));
+  });
+
+  describe('refetch', () => {
+    it('resubscribes all active queries with unchanged definitions', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly queries = injectQueries(() => ({
+          user: { query: mockUserQuery, args: { userId: 'user-1' } },
+          todos: { query: mockTodosQuery, args: { count: 10 } },
+        }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+
+      // Deliver data, then refetch: subscriptions are re-established and
+      // existing data is preserved while pending.
+      onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))?.({ name: 'Ada' });
+      const originalUnsubscribe = unsubscribeByKey.get(keyFor('users:get', { userId: 'user-1' }));
+      fixture.componentInstance.queries.refetch();
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(4);
+      expect(originalUnsubscribe).toHaveBeenCalled();
+      expect(fixture.componentInstance.queries.statuses()).toEqual({ user: 'pending', todos: 'pending' });
+      expect(fixture.componentInstance.queries.results().user).toEqual({ name: 'Ada' });
+    }));
+  });
+
   describe('SSR (server platform)', () => {
     let mockLoader: { enabled: boolean; fetch: jest.Mock };
     let serverConvexClient: ConvexClient;

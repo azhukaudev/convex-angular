@@ -64,6 +64,24 @@ export interface QueriesOptions {
    * injection context.
    */
   injectRef?: EnvironmentInjector;
+
+  /**
+   * Callback invoked when any keyed query receives data.
+   * Called on initial load and every subsequent update, including the
+   * one-shot fetch during server-side rendering. It is NOT called for data
+   * seeded from the server render during hydration — the first live update
+   * after the WebSocket syncs fires it instead.
+   * @param key - The definition key the data belongs to
+   * @param data - The return value of that query
+   */
+  onSuccess?: (key: string, data: unknown) => void;
+
+  /**
+   * Callback invoked when any keyed query fails.
+   * @param key - The definition key the error belongs to
+   * @param err - The error that occurred
+   */
+  onError?: (key: string, err: Error) => void;
 }
 
 /**
@@ -95,6 +113,12 @@ export interface QueriesResult<Definitions extends QueriesDefinition> {
    * True while at least one active query is waiting for its first result.
    */
   isLoading: Signal<boolean>;
+
+  /**
+   * Force every active query to refetch by resubscribing.
+   * Existing results are preserved while the refetch is pending.
+   */
+  refetch: () => void;
 }
 
 function cloneWithoutKey<T extends Record<string, unknown>>(source: T, key: string): T {
@@ -181,9 +205,17 @@ export function injectQueries<Definitions extends QueriesDefinition>(
       }
     };
 
+    // Version counter for manual refetch; bumping it forces every key to
+    // resubscribe even when its definition is unchanged.
+    const refetchVersion = signal(0);
+    let lastRefetchVersion = 0;
+
     effect(() => {
       const definitions = definitionsFn();
       const nextKeys = new Set(Object.keys(definitions));
+      const currentRefetchVersion = refetchVersion();
+      const forceResubscribe = currentRefetchVersion !== lastRefetchVersion;
+      lastRefetchVersion = currentRefetchVersion;
 
       for (const key of Array.from(activeSubscriptions.keys())) {
         if (!nextKeys.has(key)) {
@@ -208,7 +240,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
         const isSameSubscription =
           activeSubscription?.queryName === queryName && activeSubscription.argsKey === argsKey;
 
-        if (isSameSubscription) {
+        if (isSameSubscription && !forceResubscribe) {
           continue;
         }
 
@@ -235,6 +267,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
           results.update((current) => setKey(current, key, result));
           errors.update((current) => setKey(current, key, undefined));
           statuses.update((current) => setKey(current, key, 'success'));
+          options?.onSuccess?.(key, result);
         };
         const fail = (error: Error) => {
           if (activeSubscriptions.get(key) !== subscription) {
@@ -243,6 +276,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
 
           errors.update((current) => setKey(current, key, error));
           statuses.update((current) => setKey(current, key, 'error'));
+          options?.onError?.(key, error);
         };
 
         // Server-side rendering: the WebSocket client is disabled, so each
@@ -279,11 +313,16 @@ export function injectQueries<Definitions extends QueriesDefinition>(
 
     const isLoading = computed(() => Object.values(statuses()).some((status) => status === 'pending'));
 
+    const refetch = () => {
+      refetchVersion.update((version) => version + 1);
+    };
+
     return {
       results: results.asReadonly() as Signal<QueryResultsRecord<Definitions>>,
       errors: errors.asReadonly() as Signal<QueryErrorsRecord<Definitions>>,
       statuses: statuses.asReadonly() as Signal<QueryStatusesRecord<Definitions>>,
       isLoading,
+      refetch,
     };
   });
 }
