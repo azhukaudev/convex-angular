@@ -18,6 +18,8 @@ const config: KnipConfig = {
     // Published library public API and test harness
     'packages/convex-angular/src/index.ts',
     'packages/convex-angular/src/test-setup.ts',
+    // Secondary entry point: convex-angular/testing
+    'packages/convex-angular/testing/src/index.ts',
     // Specs are entries (discovered by Jest, not imported)
     '{apps,packages}/**/*.spec.ts',
     // Tooling configs

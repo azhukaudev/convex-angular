@@ -34,6 +34,7 @@ The Angular client for Convex.
 - [🖥️ Server-side rendering](#️-server-side-rendering)
   - [Authenticated SSR](#authenticated-ssr)
   - [SSR behavior by helper](#ssr-behavior-by-helper)
+- [🧪 Testing](#-testing)
 - [🤝 Contributing](#-contributing)
 - [⚖️ License](#️-license)
 
@@ -923,6 +924,55 @@ fetches unauthenticated. To disable server-side fetching entirely (helpers stay
 > journal's purpose in `convex/react` (resuming a server-started subscription in
 > the browser) is covered here by the `TransferState` handoff, and the underlying
 > `ConvexClient` does not accept journals on its subscription API.
+
+## 🧪 Testing
+
+Unit-test components that use convex-angular helpers without a real Convex
+deployment via the `convex-angular/testing` entry point. `MockConvexClient`
+captures every subscription and invocation the helpers make so the test can
+drive them: emit query results, settle mutations, change connection state, or
+pre-seed the warm cache.
+
+```typescript
+import { TestBed } from '@angular/core/testing';
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+
+describe('TodoListComponent', () => {
+  let convex: MockConvexClient;
+
+  beforeEach(() => {
+    convex = new MockConvexClient();
+    TestBed.configureTestingModule({
+      providers: [provideConvexTesting(convex)],
+    });
+  });
+
+  it('renders todos from the query', () => {
+    const fixture = TestBed.createComponent(TodoListComponent);
+    fixture.detectChanges();
+
+    // Drive the injectQuery subscription like the live WebSocket would.
+    convex.lastQuerySubscription()!.emit([{ _id: '1', title: 'Buy groceries' }]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Buy groceries');
+  });
+
+  it('saves new todos', async () => {
+    const fixture = TestBed.createComponent(TodoListComponent);
+    fixture.detectChanges();
+
+    fixture.componentInstance.add('New todo');
+    expect(convex.mutationCalls[0].args).toEqual({ title: 'New todo' });
+
+    // Settle the captured mutation to drive status/data signals.
+    convex.mutationCalls[0].resolve('todo-id');
+  });
+});
+```
+
+`new MockConvexClient({ disabled: true })` mirrors the server-side rendering
+client (no subscriptions, throwing `client` getter) for SSR-behavior tests.
 
 ## 🤝 Contributing
 
