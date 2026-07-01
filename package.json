@@ -10,6 +10,13 @@
     "test:library": "nx test convex-angular",
     "check:duplication": "jscpd packages/convex-angular/src apps/frontend/src",
     "check:deadcode": "knip",
+    "typecheck": "tsc --noEmit -p packages/convex-angular/tsconfig.lib.json",
+    "typecheck:spec": "tsc --noEmit -p packages/convex-angular/tsconfig.spec.json",
+    "lint": "nx run-many -t lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify:quick": "pnpm run typecheck && pnpm run lint && pnpm run check:duplication && pnpm run check:deadcode",
+    "verify:full": "pnpm run typecheck && nx run-many -t lint,test,build && pnpm run check:duplication && pnpm run check:deadcode",
     "prepare": "lefthook install",
     "update": "nx migrate latest"
   },

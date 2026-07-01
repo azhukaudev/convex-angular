@@ -148,7 +148,7 @@ describe('Auth Guards', () => {
       const redirectUrl = router.parseUrl(router.url);
 
       expect(router.url.startsWith('/login?')).toBe(true);
-      expect(redirectUrl.queryParams.returnUrl).toBe('/dashboard?tab=activity#details');
+      expect(redirectUrl.queryParams['returnUrl']).toBe('/dashboard?tab=activity#details');
     }));
 
     it('waits for Convex confirmation before allowing navigation', fakeAsync(() => {
@@ -211,7 +211,7 @@ describe('Auth Guards', () => {
       const redirectUrl = router.parseUrl(router.url);
 
       expect(router.url.startsWith('/login?')).toBe(true);
-      expect(redirectUrl.queryParams.returnUrl).toBe('/dashboard?tab=activity#details');
+      expect(redirectUrl.queryParams['returnUrl']).toBe('/dashboard?tab=activity#details');
     }));
 
     it('allows matching once Convex confirms authentication', fakeAsync(() => {

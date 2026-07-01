@@ -17,6 +17,12 @@ Use pnpm. Nx targets can be run either via the package.json scripts or `nx <targ
 - `pnpm test:library` — run the library unit tests (`nx test convex-angular`)
 - `pnpm check:duplication` — copy-paste detection over library + app sources (`jscpd`, config in `.jscpd.json`). Run it after adding or restructuring code; it exits non-zero when duplicated lines exceed the threshold (a ratchet set just above the current baseline). If your change trips it, extract a shared helper instead of raising the threshold; only raise the threshold deliberately, with justification. Spec files are excluded (mock scaffolding is intentionally repeated); the report's clone list tells you exactly which fragments to consolidate.
 - `pnpm check:deadcode` — unused files, exports, and dependencies (`knip`, config in `knip.ts`). The baseline is zero findings; keep it that way. Run it after adding/removing files, exports, or dependencies. If it flags your change, delete the dead code or remove the export from `index.ts` rather than suppressing; every entry in `knip.ts`'s ignore lists carries a comment justifying it — follow that pattern if a new exception is genuinely needed (e.g. a dependency used only by a builder at runtime).
+- `pnpm typecheck` — type-check the library sources with no emit (`tsc -p packages/convex-angular/tsconfig.lib.json`).
+- `pnpm typecheck:spec` — type-check `*.spec.ts` files (`tsconfig.spec.json`). The Jest runner transpiles specs with `isolatedModules` and does **not** type-check them, so a passing test suite can still hide spec type errors. This command surfaces a pre-existing backlog, so confirm your _changed_ specs are clean rather than expecting a fully green run.
+- `pnpm lint` — ESLint across all projects (`nx run-many -t lint`). Warnings are tolerated; errors block. `nx lint convex-angular --fix` auto-fixes.
+- `pnpm format` / `pnpm format:check` — Prettier write / check over the repo. Note: the pre-commit hook only formats _staged_ files, so a repo-wide `format:check` reports pre-existing drift in files untouched since the last config change — fix only the files you changed.
+- `pnpm verify:quick` — fast gate for localized changes: `typecheck` → `lint` → `check:duplication` → `check:deadcode`. Run a targeted test yourself (see below).
+- `pnpm verify:full` — full gate for broad/higher-risk changes: `typecheck` → `nx run-many -t lint,test,build` → `check:duplication` → `check:deadcode`.
 - `pnpm update` — `nx migrate latest`
 
 Git hooks (`lefthook`, config in `lefthook.yml`, installed via the `prepare` script): pre-commit auto-formats staged files with prettier (re-staging fixes) and runs `check:duplication` + `check:deadcode` in parallel (~2s); pre-push runs `nx run-many -t lint,test,build` (cheap when the Nx cache is warm). A hook failure means the commit/push was rejected — fix the findings and retry; never bypass with `LEFTHOOK=0` except mid-rebase on already-reviewed commits.
@@ -29,6 +35,22 @@ Targeted operations:
 - Run a target across everything: `nx run-many -t build` / `nx run-many -t lint`
 
 Convex `functions` root is configured in `convex.json` as `apps/frontend/src/convex`. `convex dev` regenerates `apps/frontend/src/convex/_generated` (do not edit generated files by hand).
+
+## Verification Flow
+
+Run these gates yourself before committing — the git hooks enforce a subset (`check:duplication` + `check:deadcode` on pre-commit; `lint,test,build` on pre-push), so verifying up front catches failures early instead of at commit/push time. Gates are ordered cheap → expensive so the first failure stops the run.
+
+- **Localized change** (one or two files, no API surface change): run the relevant targeted test — `nx test convex-angular --testFile=<file>.spec.ts` or `-t "<name>"` — then `pnpm verify:quick`.
+- **Broad or higher-risk change** (new exports, cross-cutting refactor, dependency or config change): `pnpm verify:full`.
+- **Touched a `*.spec.ts`**: also run `pnpm typecheck:spec` and confirm your changed specs are error-free — the Jest runner does not type-check specs.
+- **Touched only Markdown/docs**: `pnpm format:check` is enough; skip the test/build gates.
+
+Rules that hold across the flow:
+
+- **Duplication (`check:duplication`)**: when jscpd reports a clone you introduced, extract the shared logic (helper, base class, or constant) and reuse it — do not raise the threshold to silence it. The threshold is a ratchet that only moves down. Check existing `src/lib/providers/*` helpers before writing new shared code.
+- **Dead code (`check:deadcode`)**: keep the baseline at zero. Delete unused code or drop the export from `index.ts`; only add a `knip.ts` ignore with a justifying comment when genuinely required.
+- **Node version**: run on Node 22 LTS (`.nvmrc`). Node 24.14.0 has a V8 GC segfault that crashes Jest workers intermittently under parallel runs; `nvm use` before testing/pushing.
+- Never bypass a failing hook with `LEFTHOOK=0` except mid-rebase on already-reviewed commits.
 
 ## Architecture
 
