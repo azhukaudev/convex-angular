@@ -26,6 +26,16 @@ import { runInResolvedInjectionContext } from './injection-context';
 export type QueryReference = FunctionReference<'query'>;
 
 /**
+ * Placeholder data for a query: a plain value, or a factory called with the
+ * current args returning the value (or undefined for no placeholder).
+ *
+ * @public
+ */
+export type QueryPlaceholderData<Query extends QueryReference> =
+  | FunctionReturnType<Query>
+  | ((args: Query['_args']) => FunctionReturnType<Query> | undefined);
+
+/**
  * Options for injectQuery.
  */
 export interface QueryOptions<Query extends QueryReference> {
@@ -39,8 +49,9 @@ export interface QueryOptions<Query extends QueryReference> {
    * Callback invoked when the query receives data.
    * Called on initial load and every subsequent update, including the
    * one-shot fetch during server-side rendering. It is NOT called for data
-   * seeded from the server render during hydration — the first live update
-   * after the WebSocket syncs fires it instead.
+   * that only seeds the pending state — warm-cache values, data seeded from
+   * the server render during hydration, or `placeholderData` — the first
+   * live update after the WebSocket syncs fires it instead.
    * @param data - The return value of the query
    */
   onSuccess?: (data: FunctionReturnType<Query>) => void;
@@ -50,6 +61,21 @@ export interface QueryOptions<Query extends QueryReference> {
    * @param err - The error that occurred
    */
   onError?: (err: Error) => void;
+
+  /**
+   * Value shown in `data` while the first result for the current args loads,
+   * or a factory called with the current args (useful to seed a detail view
+   * from a list item already on hand; return undefined for no placeholder).
+   *
+   * Placeholder data never marks the query successful: `status` stays
+   * 'pending', `isPlaceholderData()` is true, and `onSuccess` does not fire.
+   * It is also cleared when the query errors, so invented data is never
+   * shown next to an error state. Real local data wins — the placeholder is
+   * not used when a warm-cache, server-transferred, or preserved previous
+   * value is available. Factories run untracked: reading signals inside one
+   * does not retrigger the subscription.
+   */
+  placeholderData?: QueryPlaceholderData<Query>;
 }
 
 /**
@@ -76,8 +102,26 @@ export interface QueryResult<Query extends QueryReference> {
   /**
    * True while waiting for the initial query result.
    * Becomes false once data or error is received.
+   * Also true while resubscribing after an args change or `refetch()`.
    */
   isLoading: Signal<boolean>;
+
+  /**
+   * True while resubscribing (after an args change or `refetch()`) with a
+   * previous value still shown in `data`, and when a new subscription starts
+   * from a warm-cache value and is waiting for the live result to confirm it.
+   * False during the initial load (no data yet) and while placeholder data
+   * is shown — use it to render a "refreshing" affordance instead of a
+   * full skeleton.
+   */
+  isRefetching: Signal<boolean>;
+
+  /**
+   * True while `data` is showing `placeholderData` instead of a real query
+   * result. Cleared as soon as a real value arrives (live result, warm
+   * cache, or server-transferred data) and when the query errors.
+   */
+  isPlaceholderData: Signal<boolean>;
 
   /**
    * True when the query is skipped via skipToken.
@@ -179,12 +223,14 @@ export function injectQuery<Query extends QueryReference>(
     const error = signal<Error | undefined>(undefined);
     const isLoading = signal(false);
     const isSkipped = signal(false);
+    const isPlaceholderData = signal(false);
 
     // Version counter for manual refetch
     const refetchVersion = signal(0);
 
     // Computed signals
     const isSuccess = computed(() => !isLoading() && !isSkipped() && !error());
+    const isRefetching = computed(() => isLoading() && !isPlaceholderData() && data() !== undefined);
     const status = computed<QueryStatus>(() => {
       if (isSkipped()) return 'skipped';
       if (isLoading()) return 'pending';
@@ -195,7 +241,6 @@ export function injectQuery<Query extends QueryReference>(
     // Track current subscription for cleanup
     let unsubscribe: (() => void) | undefined;
     let activeGeneration = 0;
-    let previousArgsKey: string | undefined;
     const cleanupSubscription = () => {
       const currentUnsubscribe = unsubscribe;
       if (!currentUnsubscribe) {
@@ -221,15 +266,18 @@ export function injectQuery<Query extends QueryReference>(
         error.set(undefined);
         isLoading.set(false);
         isSkipped.set(true);
+        isPlaceholderData.set(false);
         return;
       }
 
       // Not skipped - try to get cached data and start subscription
       isSkipped.set(false);
       isLoading.set(true);
+      // A placeholder never carries across runs: it is re-derived for the
+      // current args below when still needed.
+      const wasPlaceholder = untracked(isPlaceholderData);
+      isPlaceholderData.set(false);
       const argsKey = serializeQueryArgs(args);
-      const hasPreviousArgs = previousArgsKey !== undefined;
-      previousArgsKey = argsKey;
 
       const settle = (result: FunctionReturnType<Query>) => {
         if (generation !== activeGeneration) {
@@ -239,6 +287,7 @@ export function injectQuery<Query extends QueryReference>(
         data.set(result);
         error.set(undefined);
         isLoading.set(false);
+        isPlaceholderData.set(false);
         options?.onSuccess?.(result);
       };
       const fail = (err: Error) => {
@@ -246,7 +295,12 @@ export function injectQuery<Query extends QueryReference>(
           return;
         }
 
-        // Preserve existing data on error for better UX
+        // Preserve existing real data on error for better UX — but never a
+        // placeholder: invented data next to an error state would mislead.
+        if (untracked(isPlaceholderData)) {
+          data.set(undefined);
+          isPlaceholderData.set(false);
+        }
         error.set(err);
         isLoading.set(false);
         options?.onError?.(err);
@@ -265,8 +319,9 @@ export function injectQuery<Query extends QueryReference>(
 
       // Prefer the warm cache for the current args; fall back to data
       // transferred from the server render so a hydrated app shows content
-      // immediately; otherwise preserve the previous value during the
-      // pending resubscribe.
+      // immediately; otherwise preserve the previous real value during the
+      // pending resubscribe, or show the placeholder when nothing local is
+      // available.
       const initial = readInitialQueryData(convex, hydration, getFunctionName(query), args, argsKey);
       if (initial?.kind === 'cache') {
         data.set(initial.value as FunctionReturnType<Query>);
@@ -276,8 +331,14 @@ export function injectQuery<Query extends QueryReference>(
         data.set(initial.value as FunctionReturnType<Query> | undefined);
         error.set(undefined);
         isLoading.set(false);
-      } else if (!hasPreviousArgs && untracked(data) !== undefined) {
-        data.set(undefined);
+      } else if (untracked(data) === undefined || wasPlaceholder) {
+        // Nothing local and no real previous value to preserve: show the
+        // placeholder (re-evaluated for the current args) or clear a stale
+        // one. Untracked so signals read inside a placeholder factory don't
+        // retrigger this subscription effect.
+        const placeholder = untracked(() => resolvePlaceholderData(options?.placeholderData, args));
+        data.set(placeholder);
+        isPlaceholderData.set(placeholder !== undefined);
       }
 
       // Subscribe to the query
@@ -299,10 +360,24 @@ export function injectQuery<Query extends QueryReference>(
       data: data.asReadonly(),
       error: error.asReadonly(),
       isLoading: isLoading.asReadonly(),
+      isRefetching,
+      isPlaceholderData: isPlaceholderData.asReadonly(),
       isSkipped: isSkipped.asReadonly(),
       isSuccess,
       status,
       refetch,
     };
   });
+}
+
+// Convex values are never functions, so a function-typed placeholder is
+// unambiguously a factory.
+function resolvePlaceholderData<Query extends QueryReference>(
+  placeholderData: QueryPlaceholderData<Query> | undefined,
+  args: Query['_args'],
+): FunctionReturnType<Query> | undefined {
+  if (typeof placeholderData === 'function') {
+    return (placeholderData as (args: Query['_args']) => FunctionReturnType<Query> | undefined)(args);
+  }
+  return placeholderData;
 }

@@ -43,7 +43,7 @@ The Angular client for Convex.
 
 - 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectPrewarmQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
 - 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
-- 🛡️ Route Guards: Protect routes with `convexAuthGuard`
+- 🛡️ Route Guards: Protect routes with `convexAuthGuard`, `convexUnauthGuard`, and claims-based guards via `createConvexAuthGuard` — all usable in `canActivate` and `canMatch`
 - 🧭 Route Resolvers: Preload query data before navigation with `convexQueryResolver`
 - 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`, `*cvaAuthRefreshing`
 - 📄 Pagination: Built-in support for paginated queries with `loadMore` and `reset`
@@ -117,6 +117,27 @@ export class AppComponent {
 
 `data()` is typed as `T | undefined`. Handle the initial/skipped state with
 `?.` or `??` until the first successful result arrives.
+
+`isLoading()` is true during the initial load and while resubscribing (after
+an args change or `refetch()`). Use `isRefetching()` to tell the two apart:
+it is true only while a previous value is still shown in `data()` during a
+resubscribe, so you can render a lightweight "refreshing" affordance instead
+of a full skeleton.
+
+To avoid an empty initial state entirely, pass `placeholderData` — a value
+(or a factory receiving the current args) shown in `data()` while the first
+result loads. Placeholder data never marks the query successful: `status()`
+stays `'pending'`, `isPlaceholderData()` is true, `onSuccess` does not fire,
+and the placeholder is cleared if the query errors. A typical use is seeding
+a detail view from a list item already on hand:
+
+```typescript
+readonly todo = injectQuery(api.todos.getTodo, () => ({ id: this.todoId() }), {
+  // Shown instantly while the full record loads; signals read inside the
+  // factory are not tracked.
+  placeholderData: (args) => this.todoList.data()?.find((todo) => todo._id === args.id),
+});
+```
 
 ### Fetching multiple queries
 
@@ -193,6 +214,12 @@ export class UsersComponent {
 
 By default the warm subscription stays alive for 5 seconds. Override that with
 `extendSubscriptionFor` when needed.
+
+`prewarm(...)` returns a `Promise<boolean>` you can ignore for
+fire-and-forget usage. It resolves `true` once the warm subscription receives
+its first result (a later `injectQuery` for the same query and args reads the
+warm cache), and `false` when the subscription fails, expires before a result
+arrives, or runs during server-side rendering where prewarming is a no-op.
 
 ### Preloading route data
 
@@ -864,7 +891,9 @@ export const routes: Routes = [
 By default, unauthenticated users are redirected to `/login` with a
 `returnUrl` query param preserving the blocked destination. For example,
 visiting `/profile?tab=security#sessions` while signed out redirects to
-`/login?returnUrl=%2Fprofile%3Ftab%3Dsecurity%23sessions`.
+`/login?returnUrl=%2Fprofile%3Ftab%3Dsecurity%23sessions`. Users whose
+rejected token is being refreshed (`injectAuth().isRefreshing()`) are still
+treated as authenticated and pass the guard.
 
 To customize the redirect route:
 
@@ -881,6 +910,54 @@ export const appConfig: ApplicationConfig = {
     },
   ],
 };
+```
+
+All guards work in both `canActivate` and `canMatch`. Prefer `canMatch` for
+lazy-loaded routes: a failed `canMatch` prevents the route from matching at
+all, so the protected bundle is never downloaded for unauthenticated users.
+
+```typescript
+{
+  path: 'dashboard',
+  loadComponent: () => import('./dashboard/dashboard.component').then((m) => m.DashboardComponent),
+  canMatch: [convexAuthGuard],
+},
+```
+
+Use `convexUnauthGuard` for routes that only make sense signed out (login,
+registration). Authenticated users are redirected to `authenticatedRoute`
+from `CONVEX_AUTH_GUARD_CONFIG` (default `/`):
+
+```typescript
+{
+  path: 'login',
+  loadComponent: () => import('./login/login.component').then((m) => m.LoginComponent),
+  canActivate: [convexUnauthGuard],
+},
+```
+
+For role- or claim-gated routes, create a guard with `createConvexAuthGuard`.
+After authentication is confirmed, the `allow` callback receives the current
+JWT and its decoded claims (from `injectAuth().getAuth()`); while a rejected
+token is being refreshed the guard waits for the refresh to settle so the
+claims are never stale. Authenticated users who fail the check are sent to
+`forbiddenRoute`, or blocked when it is omitted:
+
+```typescript
+import { createConvexAuthGuard } from 'convex-angular';
+
+const adminGuard = createConvexAuthGuard({
+  allow: ({ claims }) => claims['role'] === 'admin',
+  forbiddenRoute: '/forbidden',
+});
+
+export const routes: Routes = [
+  {
+    path: 'admin',
+    loadComponent: () => import('./admin/admin.component').then((m) => m.AdminComponent),
+    canMatch: [adminGuard],
+  },
+];
 ```
 
 ## 🖥️ Server-side rendering

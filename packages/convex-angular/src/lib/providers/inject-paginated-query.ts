@@ -124,7 +124,12 @@ export interface PaginatedQueryOptions<Query extends PaginatedQueryReference> {
 
   /**
    * Callback invoked when the query receives data.
-   * Called on initial load and every subsequent update.
+   * Called once the first page has loaded and on every subsequent update,
+   * including the one-shot first-page fetch during server-side rendering.
+   * It is NOT called for a first page seeded from the server render during
+   * hydration — the first live update after the WebSocket syncs fires it
+   * instead. This matches the `onSuccess` timing of `injectQuery` and
+   * `injectQueries`.
    * @param results - The accumulated results from all pages
    */
   onSuccess?: (results: PaginatedQueryItem<Query>[]) => void;

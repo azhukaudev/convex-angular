@@ -16,14 +16,17 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
 describe('injectPrewarmQuery', () => {
   let mockConvexClient: jest.Mocked<ConvexClient>;
   let unsubscribeFns: jest.Mock[];
+  let updateCallbacks: Array<(result: unknown) => void>;
   let errorCallbacks: Array<(err: Error) => void>;
 
   beforeEach(() => {
     unsubscribeFns = [];
+    updateCallbacks = [];
     errorCallbacks = [];
 
     mockConvexClient = {
-      onUpdate: jest.fn((_query, _args, _onUpdate, onError) => {
+      onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
+        updateCallbacks.push(onUpdate);
         errorCallbacks.push(onError);
 
         const unsubscribe = jest.fn();
@@ -183,6 +186,92 @@ describe('injectPrewarmQuery', () => {
     expect(() => injectPrewarmQuery(mockQuery)).toThrow();
   });
 
+  describe('prewarm feedback promise', () => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly prewarmUser = injectPrewarmQuery(mockQuery);
+    }
+
+    it('resolves true once the warm subscription receives its first result', fakeAsync(() => {
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let warmed: boolean | undefined;
+      void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+        warmed = result;
+      });
+
+      updateCallbacks[0]({ name: 'Ada' });
+      tick();
+
+      expect(warmed).toBe(true);
+    }));
+
+    it('resolves false when the subscription fails before a result arrives', fakeAsync(() => {
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let warmed: boolean | undefined;
+      void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+        warmed = result;
+      });
+
+      errorCallbacks[0](new Error('subscription failed'));
+      tick();
+
+      expect(warmed).toBe(false);
+      // A failed subscription is released immediately, not at expiry.
+      expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+    }));
+
+    it('resolves false when the subscription expires before a result arrives', fakeAsync(() => {
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let warmed: boolean | undefined;
+      void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+        warmed = result;
+      });
+
+      tick(5_000);
+
+      expect(warmed).toBe(false);
+    }));
+
+    it('stays true when the subscription expires after a result arrived', fakeAsync(() => {
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let warmed: boolean | undefined;
+      void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+        warmed = result;
+      });
+
+      updateCallbacks[0]({ name: 'Ada' });
+      tick(5_000);
+
+      expect(warmed).toBe(true);
+    }));
+
+    it('resolves false when the owning scope is destroyed before a result arrives', fakeAsync(() => {
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      let warmed: boolean | undefined;
+      void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+        warmed = result;
+      });
+
+      fixture.destroy();
+      tick();
+
+      expect(warmed).toBe(false);
+    }));
+  });
+
   describe('disabled client (SSR)', () => {
     beforeEach(() => {
       TestBed.resetTestingModule();
@@ -210,12 +299,17 @@ describe('injectPrewarmQuery', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
+      let warmed: boolean | undefined;
+      void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+        warmed = result;
+      });
+      tick();
 
       // The subscription and its cleanup timer are created in the same
       // guarded path; no onUpdate call means no timer was scheduled either.
       expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
       expect(unsubscribeFns).toHaveLength(0);
+      expect(warmed).toBe(false);
     }));
   });
 });

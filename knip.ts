@@ -32,8 +32,15 @@ const config: KnipConfig = {
     // Convex codegen output
     'apps/frontend/src/convex/_generated/**',
   ],
-  // Dynamic imports inside TSDoc @example blocks (auth-guards.ts)
-  ignoreUnresolved: ['./dashboard/dashboard.component', './profile/profile.component'],
+  // Dynamic route-component imports inside TSDoc @example blocks (auth-guards.ts).
+  // Kept as literals so a real broken dynamic import still surfaces; add the
+  // path here when a new doc example references another component.
+  ignoreUnresolved: [
+    './dashboard/dashboard.component',
+    './profile/profile.component',
+    './admin/admin.component',
+    './login/login.component',
+  ],
   ignoreDependencies: [
     // Toolchain required by Nx Angular executors and `nx migrate`; never imported
     '@angular/cli',

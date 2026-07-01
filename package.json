@@ -27,7 +27,7 @@
     "@convex-dev/better-auth": "0.12.3",
     "@primeuix/themes": "2.0.3",
     "better-auth": "1.6.16",
-    "convex": "1.41.0",
+    "convex": "1.42.0",
     "primeicons": "7.0.0",
     "primeng": "21.1.9",
     "rxjs": "7.8.2",

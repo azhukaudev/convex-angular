@@ -1,5 +1,20 @@
 # convex-angular
 
+## Unreleased
+
+### ✨ Features
+
+- Add `createConvexAuthGuard(...)` for claims-based route protection: an optional `allow` check receives the current JWT and its decoded claims (via `injectAuth().getAuth()`) and can redirect failures to `forbiddenRoute`. When a rejected token is refreshing, the guard waits for the refresh to settle so claims are never stale.
+- Add `convexUnauthGuard` for signed-out-only routes (login, registration); it redirects authenticated users to `authenticatedRoute` from `CONVEX_AUTH_GUARD_CONFIG` (default `/`).
+- Make `convexAuthGuard` usable in both `canActivate` and `canMatch` (prefer `canMatch` for lazy routes so the protected bundle is never downloaded when unauthenticated), preserve the redirect target through router redirects, and treat a token refresh as authenticated instead of bouncing to login.
+- Add `placeholderData` to `injectQuery(...)` — a value or args factory shown in `data()` while the first result loads (e.g. seeding a detail view from a list item). It never marks the query successful (`status()` stays `'pending'`, `isPlaceholderData()` is `true`, `onSuccess` does not fire) and is cleared on error.
+- Add `isRefetching()` and `isPlaceholderData()` signals to `injectQuery(...)` so a lightweight "refreshing" affordance can replace a full skeleton during resubscribes.
+- Change `injectPrewarmQuery().prewarm(...)` to return `Promise<boolean>` that resolves `true` once the warm subscription receives its first result, and `false` when it fails, expires, or runs during server-side rendering. Still fire-and-forget when ignored.
+
+### 📖 Documentation
+
+- Document claims-based guards, `convexUnauthGuard`, `canMatch` usage, `placeholderData`/`isRefetching`, and the `prewarm(...)` promise in both READMEs.
+
 ## [1.8.0](https://github.com/azhukaudev/convex-angular/compare/v1.6.0...v1.8.0) (2026-06-10)
 
 ### ✨ Features
