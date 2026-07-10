@@ -1,6 +1,6 @@
 # convex-angular
 
-## Unreleased
+## [1.9.0](https://github.com/azhukaudev/convex-angular/compare/v1.8.0...v1.9.0) (2026-07-10)
 
 ### ✨ Features
 
