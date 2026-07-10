@@ -1,0 +1,30 @@
+@use 'layout' as *;
+
+.page {
+  @include page-container(36rem);
+}
+
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.add-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.add-form__field {
+  flex: 1;
+}
+
+.todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}

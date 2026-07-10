@@ -1,0 +1,6 @@
+<mat-checkbox [ngModel]="todo().completed" (ngModelChange)="toggled.emit()">
+  {{ todo().title }}
+</mat-checkbox>
+<button matIconButton class="delete-button" aria-label="Delete" (click)="deleted.emit()">
+  <mat-icon>delete</mat-icon>
+</button>

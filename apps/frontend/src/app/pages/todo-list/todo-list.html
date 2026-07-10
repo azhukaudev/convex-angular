@@ -1,77 +1,33 @@
-<div class="mx-auto flex min-h-svh max-w-xl flex-col gap-8 px-4 py-8">
-  <div class="flex flex-col gap-2">
-    <div class="flex items-center justify-between">
-      <h1 class="text-4xl font-extrabold opacity-80">Basic Example</h1>
-      <a href="/" class="text-primary hover:underline">← Home</a>
-    </div>
-    <p class="text-sm text-gray-500">
-      Using injectQuery, injectMutation, and injectAction
-    </p>
-    <a href="/examples/paginated" class="text-primary text-sm hover:underline">
-      See Paginated Example →
-    </a>
+<div class="page">
+  <cva-page-header
+    pageTitle="Basic Example"
+    description="Using injectQuery, injectMutation, and injectAction"
+    [links]="[{ label: 'See Paginated Example →', path: '/examples/paginated' }]"
+  />
+
+  <div class="bulk-actions">
+    <button matButton="tonal" (click)="handleCompleteAll()"><mat-icon>check</mat-icon>Complete All</button>
+    <button matButton="tonal" (click)="handleReopenAll()"><mat-icon>undo</mat-icon>Reopen All</button>
   </div>
 
-  <div class="flex items-center gap-2">
-    <p-button
-      icon="pi pi-check"
-      label="Complete All"
-      severity="secondary"
-      (onClick)="handleCompleteAll()"
-    />
-    <p-button
-      icon="pi pi-undo"
-      label="Reopen All"
-      severity="secondary"
-      (onClick)="handleReopenAll()"
-    />
-  </div>
-
-  <form (ngSubmit)="handleAddTodo()" class="flex items-center gap-2">
-    <div class="flex-grow">
-      <input
-        #newTaskInput
-        name="new-task"
-        type="text"
-        pInputText
-        [(ngModel)]="newTask"
-        placeholder="Add new task"
-        autocomplete="off"
-        class="w-full shadow-xs"
-      />
-    </div>
-    <div>
-      <p-button
-        type="submit"
-        icon="pi pi-plus"
-        label="New Task"
-        [disabled]="!newTaskInput.value"
-      />
-    </div>
+  <form (ngSubmit)="handleAddTodo()" class="add-form">
+    <mat-form-field appearance="outline" class="add-form__field" subscriptSizing="dynamic">
+      <mat-label>Add new task</mat-label>
+      <input matInput #newTaskInput name="new-task" type="text" [(ngModel)]="newTask" autocomplete="off" />
+    </mat-form-field>
+    <button matButton="filled" type="submit" [disabled]="!newTaskInput.value"><mat-icon>add</mat-icon>New Task</button>
   </form>
 
   @if (todos.isLoading()) {
-    <p-progress-spinner aria-label="loading" class="size-10" strokeWidth="8" />
+    <mat-spinner [diameter]="40" aria-label="loading" />
   } @else {
-    <ul class="flex flex-col gap-4">
+    <ul class="todo-list">
       @for (task of todos.data(); track task._id) {
-        <li
-          class="border-surface-200 flex items-center justify-between gap-2 rounded-md border px-2 py-1 shadow-xs"
-        >
-          <div class="flex items-center gap-2">
-            <p-checkbox
-              [ngModel]="task.completed"
-              [binary]="true"
-              (ngModelChange)="handleTodoChange(task._id, task.completed)"
-            />
-            <span>{{ task.title }}</span>
-          </div>
-          <p-button
-            icon="pi pi-trash"
-            aria-label="Delete"
-            severity="danger"
-            variant="text"
-            (onClick)="handleDeleteTodo(task._id)"
+        <li>
+          <cva-todo-item
+            [todo]="task"
+            (toggled)="handleTodoChange(task._id, task.completed)"
+            (deleted)="handleDeleteTodo(task._id)"
           />
         </li>
       }

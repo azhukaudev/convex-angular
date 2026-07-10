@@ -1,0 +1,17 @@
+<div class="header-row">
+  <div class="header-copy">
+    <h1>{{ pageTitle() }}</h1>
+    @if (description()) {
+      <p class="description">{{ description() }}</p>
+    }
+  </div>
+  <a href="/" class="home-link">← Home</a>
+</div>
+
+@if (links().length) {
+  <nav class="header-links">
+    @for (link of links(); track link.path) {
+      <a [routerLink]="link.path">{{ link.label }}</a>
+    }
+  </nav>
+}

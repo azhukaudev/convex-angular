@@ -1,0 +1,15 @@
+@use 'layout' as *;
+
+:host {
+  @include panel;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.delete-button {
+  @include danger-icon-button;
+}

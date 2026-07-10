@@ -1,0 +1,49 @@
+@use 'layout' as *;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.header-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+
+  h1 {
+    margin: 0;
+    font: var(--mat-sys-headline-large);
+  }
+}
+
+.description {
+  @include muted;
+
+  margin: 0;
+  font: var(--mat-sys-body-small);
+}
+
+.home-link {
+  @include inline-link;
+
+  flex-shrink: 0;
+}
+
+.header-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font: var(--mat-sys-body-small);
+
+  a {
+    @include inline-link;
+  }
+}
