@@ -2,15 +2,17 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, model, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { injectPrewarmQuery, injectQuery, skipToken } from 'convex-angular';
-import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
-import { InputNumberModule } from 'primeng/inputnumber';
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
+import { PageHeader } from '../shared/page-header/page-header';
 
 type OpenMode = 'normal' | 'prewarm';
 
@@ -34,9 +36,20 @@ type DemoHistoryEntry = {
 };
 
 @Component({
-  imports: [DatePipe, FormsModule, RouterLink, ButtonModule, CardModule, InputNumberModule, ProgressSpinnerModule],
+  imports: [
+    DatePipe,
+    FormsModule,
+    RouterLink,
+    MatButtonModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+    PageHeader,
+  ],
   selector: 'cva-prewarm-query-demo',
   templateUrl: 'prewarm-query-demo.html',
+  styleUrl: 'prewarm-query-demo.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block',
