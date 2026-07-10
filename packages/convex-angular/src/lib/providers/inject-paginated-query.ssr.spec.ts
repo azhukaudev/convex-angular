@@ -270,6 +270,57 @@ describe('injectPaginatedQuery SSR and hydration', () => {
       expect(fixture.componentInstance.todos.loadMore(10)).toBe(true);
     }));
 
+    it('survives the client initial LoadingFirstPage emission until a real update arrives', fakeAsync(() => {
+      const transferState = TestBed.inject(TransferState);
+      const argsKey = serializeQueryArgs({ paginationOpts: { numItems: 10, cursor: null } });
+      transferState.set(
+        makeQueryStateKey('todos:listTodosPaginated', argsKey),
+        wrapQueryResult({
+          page: [{ _id: '1', name: 'Transferred todo' }],
+          isDone: false,
+          continueCursor: 'cursor-1',
+        } as never),
+      );
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), { initialNumItems: 10 });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      // Seeded before any live update arrives.
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+      expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Transferred todo' }]);
+
+      // The real client always fires an initial LoadingFirstPage emission for
+      // a fresh subscription; it must not clobber the seed.
+      tick();
+      onUpdateCallback({
+        results: [],
+        status: 'LoadingFirstPage',
+        loadMore: jest.fn().mockReturnValue(false),
+      });
+
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+      expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Transferred todo' }]);
+      expect(fixture.componentInstance.todos.canLoadMore()).toBe(true);
+      expect(fixture.componentInstance.todos.loadMore(10)).toBe(false); // still inert
+
+      // A real emission then replaces the seed and re-arms loadMore.
+      onUpdateCallback({
+        results: [{ _id: '1', name: 'Live todo' }],
+        status: 'CanLoadMore',
+        loadMore: jest.fn().mockReturnValue(true),
+      });
+      expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Live todo' }]);
+      expect(fixture.componentInstance.todos.loadMore(10)).toBe(true);
+    }));
+
     it('stays pending when nothing was transferred', fakeAsync(() => {
       @Component({
         template: '',

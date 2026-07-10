@@ -358,8 +358,10 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       // Seed from a server-rendered first page so the hydrated UI matches
       // the server HTML; the live subscription below replaces it on sync.
       const transferred = hydration?.consume(getFunctionName(query), argsKey);
+      let seedActive = false;
       if (transferred?.value !== undefined) {
         applyFirstPage(transferred.value as unknown as PaginationResult<PaginatedQueryItem<Query>>);
+        seedActive = true;
       }
 
       unsubscribe = subscribeToPaginatedQuery(
@@ -371,6 +373,15 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
           if (generation !== activeGeneration) {
             return;
           }
+
+          // The client always fires one LoadingFirstPage emission for a fresh
+          // subscription; while a transferred seed is displayed it must not
+          // clobber the server-rendered page. loadMore stays inert until a
+          // real emission arrives (see parity-gaps design, Gap 3).
+          if (seedActive && rawResult.status === 'LoadingFirstPage') {
+            return;
+          }
+          seedActive = false;
 
           const result = rawResult;
 
