@@ -1,7 +1,7 @@
 <div class="page">
   <mat-card appearance="outlined">
     <mat-card-content>
-      <mat-tab-group [selectedIndex]="mode() === 'sign-up' ? 1 : 0" (selectedIndexChange)="onTabChange($event)">
+      <mat-tab-group [selectedIndex]="selectedTabIndex()" (selectedIndexChange)="onTabChange($event)">
         <mat-tab label="Sign In">
           <ng-template matTabContent>
             <div class="tab-intro">

@@ -42,6 +42,11 @@ export default class AuthLogin {
   readonly mode = signal<AuthMode>('sign-in');
   readonly hidePassword = signal(true);
 
+  // Single source of truth for the tab order — must match the mat-tab order
+  // in the template.
+  private readonly tabModes: readonly AuthMode[] = ['sign-in', 'sign-up'];
+  readonly selectedTabIndex = computed(() => this.tabModes.indexOf(this.mode()));
+
   readonly authForm = this.fb.group({
     name: ['', [Validators.minLength(2)]],
     email: ['', [Validators.required, Validators.email]],
@@ -75,7 +80,7 @@ export default class AuthLogin {
   }
 
   onTabChange(index: number): void {
-    this.setMode(index === 1 ? 'sign-up' : 'sign-in');
+    this.setMode(this.tabModes[index] ?? 'sign-in');
   }
 
   async onSubmit(): Promise<void> {

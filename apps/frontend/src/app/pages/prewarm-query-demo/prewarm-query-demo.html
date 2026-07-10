@@ -30,7 +30,16 @@
       <div class="lead-panel">
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-label>Prewarm lead time (ms)</mat-label>
-          <input matInput id="prewarmLead" type="number" [(ngModel)]="prewarmLeadMs" min="0" max="3000" step="50" />
+          <input
+            matInput
+            id="prewarmLead"
+            type="number"
+            [(ngModel)]="prewarmLeadMs"
+            (blur)="prewarmLeadMs.set(effectivePrewarmLeadMs())"
+            min="0"
+            max="3000"
+            step="50"
+          />
         </mat-form-field>
       </div>
     </mat-card-content>

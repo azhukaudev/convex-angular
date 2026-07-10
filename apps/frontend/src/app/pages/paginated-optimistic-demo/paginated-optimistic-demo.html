@@ -57,7 +57,15 @@
 
           <mat-form-field appearance="outline" subscriptSizing="dynamic">
             <mat-label>Page size</mat-label>
-            <input matInput id="optimisticPageSize" type="number" [(ngModel)]="pageSize" min="1" max="6" />
+            <input
+              matInput
+              id="optimisticPageSize"
+              type="number"
+              [(ngModel)]="pageSize"
+              (blur)="pageSize.set(effectivePageSize())"
+              min="1"
+              max="6"
+            />
           </mat-form-field>
 
           <div class="controls__actions">

@@ -8,7 +8,15 @@
   <div class="controls">
     <mat-form-field appearance="outline" class="controls__page-size" subscriptSizing="dynamic">
       <mat-label>Page Size</mat-label>
-      <input matInput id="pageSize" type="number" [(ngModel)]="pageSize" min="1" max="50" />
+      <input
+        matInput
+        id="pageSize"
+        type="number"
+        [(ngModel)]="pageSize"
+        (blur)="pageSize.set(effectivePageSize())"
+        min="1"
+        max="50"
+      />
     </mat-form-field>
     <button matButton="tonal" (click)="handleReset()"><mat-icon>refresh</mat-icon>Reset</button>
   </div>
