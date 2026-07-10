@@ -34,25 +34,18 @@ minimumReleaseAgeExclude:
   - '@angular/platform-browser-dynamic@21.2.16'
   - '@angular/platform-browser@21.2.16'
   - '@angular/router@21.2.16'
-  - '@better-auth/core@1.6.14'
-  - '@better-auth/drizzle-adapter@1.6.14'
-  - '@better-auth/kysely-adapter@1.6.14'
-  - '@better-auth/memory-adapter@1.6.14'
-  - '@better-auth/mongo-adapter@1.6.14'
-  - '@better-auth/prisma-adapter@1.6.14'
-  - '@better-auth/telemetry@1.6.14'
+  - '@better-auth/core@1.6.14 || 1.6.16'
+  - '@better-auth/drizzle-adapter@1.6.14 || 1.6.16'
+  - '@better-auth/kysely-adapter@1.6.14 || 1.6.16'
+  - '@better-auth/memory-adapter@1.6.14 || 1.6.16'
+  - '@better-auth/mongo-adapter@1.6.14 || 1.6.16'
+  - '@better-auth/prisma-adapter@1.6.14 || 1.6.16'
+  - '@better-auth/telemetry@1.6.14 || 1.6.16'
   - '@ngtools/webpack@21.2.14'
   - '@schematics/angular@21.2.14'
-  - better-auth@1.6.14
+  - better-auth@1.6.14 || 1.6.16
   - convex@1.41.0
   - jest-preset-angular@16.2.0
-  - '@better-auth/core@1.6.16'
-  - '@better-auth/drizzle-adapter@1.6.16'
-  - '@better-auth/kysely-adapter@1.6.16'
-  - '@better-auth/memory-adapter@1.6.16'
-  - '@better-auth/mongo-adapter@1.6.16'
-  - '@better-auth/prisma-adapter@1.6.16'
-  - '@better-auth/telemetry@1.6.16'
   - '@better-fetch/fetch@1.2.2'
   - '@convex-dev/better-auth@0.12.3'
   - '@swc/core-darwin-arm64@1.15.41'
@@ -68,7 +61,6 @@ minimumReleaseAgeExclude:
   - '@swc/core-win32-ia32-msvc@1.15.41'
   - '@swc/core-win32-x64-msvc@1.15.41'
   - '@swc/core@1.15.41'
-  - better-auth@1.6.16
   - better-call@1.3.6
   - cpd-darwin-arm64@5.0.6
   - cpd-darwin-x64@5.0.6
@@ -76,4 +68,4 @@ minimumReleaseAgeExclude:
   - cpd-linux-x64-gnu@5.0.6
   - cpd-linux-x64-musl@5.0.6
   - cpd-windows-x64-msvc@5.0.6
-  - jscpd@5.0.6
+  - material-symbols@0.45.7

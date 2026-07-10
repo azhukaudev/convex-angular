@@ -29,6 +29,9 @@ importers:
       '@angular/forms':
         specifier: 21.2.16
         version: 21.2.16(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(@angular/platform-browser@21.2.16(@angular/animations@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))(rxjs@7.8.2)
+      '@angular/material':
+        specifier: 21.2.14
+        version: 21.2.14(eecce170710e2c4e2fb7aac27a3425e1)
       '@angular/platform-browser':
         specifier: 21.2.16
         version: 21.2.16(@angular/animations@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))
@@ -41,15 +44,18 @@ importers:
       '@convex-dev/better-auth':
         specifier: 0.12.3
         version: 0.12.3(@standard-schema/spec@1.1.0)(better-auth@1.6.16(react@19.2.7))(convex@1.42.1(react@19.2.7))(hono@4.12.25)(react@19.2.7)(typescript@5.9.3)
-      '@primeuix/themes':
-        specifier: 2.0.3
-        version: 2.0.3
+      '@fontsource/roboto':
+        specifier: 5.2.10
+        version: 5.2.10
       better-auth:
         specifier: 1.6.16
         version: 1.6.16(react@19.2.7)
       convex:
         specifier: 1.42.1
         version: 1.42.1(react@19.2.7)
+      material-symbols:
+        specifier: 0.45.7
+        version: 0.45.7
       primeicons:
         specifier: 7.0.0
         version: 7.0.0
@@ -503,6 +509,16 @@ packages:
   '@angular/language-service@21.2.16':
     resolution: {integrity: sha512-LBhoBmIVopMBfFVOoc5MDD2JWO+6+fHg7kNWc2Wy+YKhSndgsWVCo4F8MIgZh6HXxofZe3pEMXO0GfDPc0Ny3g==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
+
+  '@angular/material@21.2.14':
+    resolution: {integrity: sha512-fMQca8VRtei93JRRG9qQ+u08DCb0nga59Esoakq5yx3+A1NfdpFeUS1tBns56U04o8KAaIAwZK3NBqXz8ZKNqg==}
+    peerDependencies:
+      '@angular/cdk': 21.2.14
+      '@angular/common': ^21.0.0 || ^22.0.0
+      '@angular/core': ^21.0.0 || ^22.0.0
+      '@angular/forms': ^21.0.0 || ^22.0.0
+      '@angular/platform-browser': ^21.0.0 || ^22.0.0
+      rxjs: ^6.5.3 || ^7.4.0
 
   '@angular/platform-browser-dynamic@21.2.16':
     resolution: {integrity: sha512-WtTnkJOmKiGccHRQfBdkwODAkpTB4zbPN3IKhcqCjlezKaPqZB5tjrIu72Z5pmi5VIgJz1LmfO1LSVCMC5h7dA==}
@@ -2021,6 +2037,9 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
+  '@fontsource/roboto@5.2.10':
+    resolution: {integrity: sha512-8HlA5FtSfz//oFSr2eL7GFXAiE7eIkcGOtx7tjsLKq+as702x9+GU7K95iDeWFapHC4M2hv9RrpXKRTGGBI8Zg==}
+
   '@gar/promise-retry@1.0.3':
     resolution: {integrity: sha512-GmzA9ckNokPypTg10pgpeHNQe7ph+iIKKmhKu3Ob9ANkswreCx7R3cKmY781K8QK3AqVL3xVh9A42JvIAbkkSA==}
     engines: {node: ^20.17.0 || >=22.9.0}
@@ -3384,9 +3403,6 @@ packages:
 
   '@primeuix/styles@2.0.3':
     resolution: {integrity: sha512-2ykAB6BaHzR/6TwF8ShpJTsZrid6cVIEBVlookSdvOdmlWuevGu5vWOScgIwqWwlZcvkFYAGR/SUV3OHCTBMdw==}
-
-  '@primeuix/themes@2.0.3':
-    resolution: {integrity: sha512-3fS1883mtCWhgUgNf/feiaaDSOND4EBIOu9tZnzJlJ8QtYyL6eFLcA6V3ymCWqLVXQ1+lTVEZv1gl47FIdXReg==}
 
   '@primeuix/utils@0.6.4':
     resolution: {integrity: sha512-pZ5f+vj7wSzRhC7KoEQRU5fvYAe+RP9+m39CTscZ3UywCD1Y2o6Fe1rRgklMPSkzUcty2jzkA0zMYkiJBD1hgg==}
@@ -7190,6 +7206,9 @@ packages:
   makeerror@1.0.12:
     resolution: {integrity: sha512-JmqCvUhmt43madlpFzG4BQzG2Z3m6tvQDNKdClZnO3VbIudJYmxsT0FNJMeiB2+JTSlTQTSbU8QdesVmwJcmLg==}
 
+  material-symbols@0.45.7:
+    resolution: {integrity: sha512-aaBSgZEVLb0Ngdn1WlIILfExd3ni77KVAJih/+ONE7UgbKLRm7/0jPN0fErrn7Idame/ElibxEn6k7jhpNxBpg==}
+
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
     engines: {node: '>= 0.4'}
@@ -10208,6 +10227,16 @@ snapshots:
 
   '@angular/language-service@21.2.16': {}
 
+  '@angular/material@21.2.14(eecce170710e2c4e2fb7aac27a3425e1)':
+    dependencies:
+      '@angular/cdk': 21.2.14(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(@angular/platform-browser@21.2.16(@angular/animations@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))(rxjs@7.8.2)
+      '@angular/common': 21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2)
+      '@angular/core': 21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)
+      '@angular/forms': 21.2.16(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(@angular/platform-browser@21.2.16(@angular/animations@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))(rxjs@7.8.2)
+      '@angular/platform-browser': 21.2.16(@angular/animations@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))
+      rxjs: 7.8.2
+      tslib: 2.8.1
+
   '@angular/platform-browser-dynamic@21.2.16(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/compiler@21.2.16)(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(@angular/platform-browser@21.2.16(@angular/animations@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))(@angular/common@21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2))(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2)))':
     dependencies:
       '@angular/common': 21.2.16(@angular/core@21.2.16(@angular/compiler@21.2.16)(rxjs@7.8.2)(zone.js@0.16.2))(rxjs@7.8.2)
@@ -12135,6 +12164,8 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
+  '@fontsource/roboto@5.2.10': {}
+
   '@gar/promise-retry@1.0.3': {}
 
   '@harperfast/extended-iterable@1.0.3':
@@ -13861,10 +13892,6 @@ snapshots:
       '@primeuix/utils': 0.6.4
 
   '@primeuix/styles@2.0.3':
-    dependencies:
-      '@primeuix/styled': 0.7.4
-
-  '@primeuix/themes@2.0.3':
     dependencies:
       '@primeuix/styled': 0.7.4
 
@@ -18117,6 +18144,8 @@ snapshots:
   makeerror@1.0.12:
     dependencies:
       tmpl: 1.0.5
+
+  material-symbols@0.45.7: {}
 
   math-intrinsics@1.1.0: {}
 

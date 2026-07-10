@@ -1,0 +1,16 @@
+// App-level status colors (success / warn / info) that follow the OS
+// light/dark preference alongside the Material system tokens. Error states
+// use the built-in --mat-sys-error* tokens instead.
+:root {
+  --app-success: light-dark(#047857, #6ee7b7);
+  --app-success-container: light-dark(#ecfdf5, #07281f);
+  --app-success-outline: light-dark(#a7f3d0, #14532d);
+
+  --app-warn: light-dark(#b45309, #fcd34d);
+  --app-warn-container: light-dark(#fffbeb, #2b2109);
+  --app-warn-outline: light-dark(#fde68a, #713f12);
+
+  --app-info: light-dark(#0369a1, #7dd3fc);
+  --app-info-container: light-dark(#f0f9ff, #082a3a);
+  --app-info-outline: light-dark(#bae6fd, #0c4a6e);
+}

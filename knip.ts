@@ -9,6 +9,7 @@ const config: KnipConfig = {
     'apps/frontend/src/test-setup.ts',
     'apps/frontend/src/types.d.ts',
     'apps/frontend/src/styles.css',
+    'apps/frontend/src/styles.scss',
     // Swapped in via the production fileReplacements in project.json
     'apps/frontend/src/environments/environment.prod.ts',
     // Wired into the esbuild builder via project.json plugins option
@@ -42,6 +43,9 @@ const config: KnipConfig = {
     './login/login.component',
   ],
   ignoreDependencies: [
+    // Fonts loaded via the project.json styles array, never imported from code
+    '@fontsource/roboto',
+    'material-symbols',
     // Toolchain required by Nx Angular executors and `nx migrate`; never imported
     '@angular/cli',
     '@nx/workspace',

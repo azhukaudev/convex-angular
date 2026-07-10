@@ -20,7 +20,17 @@
             "input": "apps/frontend/public"
           }
         ],
-        "styles": ["apps/frontend/src/styles.css"],
+        "styles": [
+          "node_modules/@fontsource/roboto/400.css",
+          "node_modules/@fontsource/roboto/500.css",
+          "node_modules/@fontsource/roboto/700.css",
+          "node_modules/material-symbols/outlined.css",
+          "apps/frontend/src/styles.css",
+          "apps/frontend/src/styles.scss"
+        ],
+        "stylePreprocessorOptions": {
+          "includePaths": ["apps/frontend/src/styles"]
+        },
         "plugins": ["apps/frontend/plugins/env-var-plugin.js"]
       },
       "configurations": {
