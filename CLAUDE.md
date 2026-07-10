@@ -84,7 +84,9 @@ Patterns that repeat across the codebase and should be preserved when adding hel
 
 ### The demo app (`apps/frontend`)
 
-Standalone-component Angular app. `app.config.ts` sets up router, PrimeNG (Aura theme, `.dark` dark-mode selector), and animations. Routes live in `app.routes.ts` and `app/routes/*.routes.ts`; demo pages under `app/pages/`. UI uses PrimeNG + Tailwind (`tailwindcss-primeui`).
+Standalone-component Angular app. `app.config.ts` sets up router and animations; `app.ts` configures the Material icon registry (Material Symbols as the default font set, plus an inline GitHub SVG icon). Routes live in `app.routes.ts` and `app/routes/*.routes.ts`; demo pages under `app/pages/`.
+
+UI uses Angular Material 3 + SCSS. The theme lives in `src/styles.scss` (`mat.theme` with the azure palette); dark mode follows the OS preference via `color-scheme: light dark` — there is no manual toggle. Shared styling lives in `src/styles/`: `_layout.scss` (mixins like `page-container`, `panel`, `panel-tone`, `eyebrow`, `code-block` — import with `@use 'layout' as *;`, resolved via `stylePreprocessorOptions.includePaths`) and `_tokens.scss` (`--app-success/warn/info-*` status colors, `light-dark()`-aware). Custom colors must use `var(--mat-sys-*)` or `--app-*` tokens, never hard-coded hex outside `_tokens.scss`. Each page has its own `.scss` with semantic class names (no utility classes). Shared UI components live in `app/pages/shared/` (`cva-page-header`, `cva-todo-item`, `cva-message`). Fonts (`@fontsource/roboto`, `material-symbols`) are self-hosted and wired through the `styles` array in `project.json`, hence their `ignoreDependencies` entries in `knip.ts`.
 
 The demo's auth provider is `app/auth/demo-auth.service.ts`, a `ConvexAuthProvider` backed by `@convex-dev/better-auth`. The Convex backend registers the better-auth component in `src/convex/convex.config.ts`.
 
@@ -94,6 +96,6 @@ The demo's auth provider is `app/auth/demo-auth.service.ts`, a `ConvexAuthProvid
 
 - TypeScript path alias: `convex-angular` resolves to `packages/convex-angular/src/index.ts` (tsconfig.base.json) so the app imports the library as if it were the published package.
 - Tests are Jest via `jest-preset-angular`; specs live next to source as `*.spec.ts`. Both projects use the shared `jest.preset.js`.
-- Prettier: single quotes, `printWidth` 120, trailing commas. Imports are auto-sorted (`@ianvs/prettier-plugin-sort-imports`): builtins → third-party → `@convex-angular/*` → relative. Tailwind classes sorted by the Tailwind plugin.
+- Prettier: single quotes, `printWidth` 120, trailing commas. Imports are auto-sorted (`@ianvs/prettier-plugin-sort-imports`): builtins → third-party → `@convex-angular/*` → relative.
 - Public API surface is documented with TSDoc `@public`/`@internal` tags; keep new exports annotated and re-exported from `index.ts`.
 - Releases use Nx release (`nx.json` `release`), versioned from git tags; the library version lives in `packages/convex-angular/package.json`.
