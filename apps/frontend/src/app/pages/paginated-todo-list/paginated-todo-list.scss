@@ -1,0 +1,86 @@
+@use 'layout' as *;
+
+.page {
+  @include page-container(36rem);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.controls__page-size {
+  width: 8rem;
+}
+
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.add-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.add-form__field {
+  flex: 1;
+}
+
+.spinner-row {
+  display: flex;
+  justify-content: center;
+  padding-block: 2rem;
+}
+
+.todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.todo-list__empty {
+  @include muted;
+
+  padding-block: 1rem;
+  text-align: center;
+}
+
+.load-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding-block: 1rem;
+}
+
+.load-more__status {
+  @include muted;
+
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: var(--mat-sys-body-small);
+}
+
+.load-more__hint {
+  @include muted;
+
+  font: var(--mat-sys-body-small);
+}
+
+.load-more__done {
+  color: var(--app-success);
+  font-weight: 500;
+}
+
+.load-more__error {
+  color: var(--mat-sys-error);
+  font: var(--mat-sys-body-small);
+}
