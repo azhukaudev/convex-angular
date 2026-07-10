@@ -21,9 +21,6 @@ import { MatIconModule } from '@angular/material/icon';
   `,
   styleUrl: 'message.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export class Message {
   readonly severity = input.required<'error' | 'warn'>();

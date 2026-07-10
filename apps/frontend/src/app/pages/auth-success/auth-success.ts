@@ -22,9 +22,6 @@ import { DemoAuthService } from '../../auth/demo-auth.service';
   templateUrl: 'auth-success.html',
   styleUrl: 'auth-success.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export default class AuthSuccess {
   private readonly router = inject(Router);

@@ -27,9 +27,6 @@ import { TodoMutationsBase } from '../shared/todo-mutations-base';
   templateUrl: 'todo-list.html',
   styleUrl: 'todo-list.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export default class TodoList extends TodoMutationsBase {
   readonly count = model(20);

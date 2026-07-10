@@ -1,6 +1,10 @@
 @use '@angular/material' as mat;
 @use 'layout' as *;
 
+:host {
+  display: block;
+}
+
 .page {
   @include page-container(28rem);
 

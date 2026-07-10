@@ -53,7 +53,7 @@
         </div>
       } @else if (todos.canLoadMore()) {
         <button matButton="tonal" (click)="handleLoadMore()">
-          <mat-icon>arrow_downward</mat-icon>Load More ({{ pageSize() }})
+          <mat-icon>arrow_downward</mat-icon>Load More ({{ effectivePageSize() }})
         </button>
         <span class="load-more__hint">{{ todos.results().length }} items loaded</span>
       } @else if (todos.isExhausted()) {

@@ -19,9 +19,6 @@ type ConnectionLogEntry = {
   templateUrl: 'connection-state-demo.html',
   styleUrl: 'connection-state-demo.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export default class ConnectionStateDemo {
   private readonly destroyRef = inject(DestroyRef);

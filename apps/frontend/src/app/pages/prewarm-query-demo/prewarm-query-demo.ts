@@ -12,6 +12,7 @@ import { injectPrewarmQuery, injectQuery, skipToken } from 'convex-angular';
 
 import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
+import { clampNumber } from '../shared/clamp-number';
 import { PageHeader } from '../shared/page-header/page-header';
 
 type OpenMode = 'normal' | 'prewarm';
@@ -51,9 +52,6 @@ type DemoHistoryEntry = {
   templateUrl: 'prewarm-query-demo.html',
   styleUrl: 'prewarm-query-demo.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export default class PrewarmQueryDemo {
   private readonly route = inject(ActivatedRoute);
@@ -63,7 +61,10 @@ export default class PrewarmQueryDemo {
   private nextRunToken = 0;
   private pendingNavigationTimer: ReturnType<typeof setTimeout> | null = null;
 
-  readonly prewarmLeadMs = model(350);
+  // Holds null while the field is cleared; the navigation timer uses the
+  // clamped value.
+  readonly prewarmLeadMs = model<number | null>(350);
+  readonly effectivePrewarmLeadMs = computed(() => clampNumber(this.prewarmLeadMs(), 0, 3000, 350));
 
   readonly todos = injectQuery(api.todos.listTodos, () => ({ count: 8 }));
   readonly prewarmTodo = injectPrewarmQuery(api.todos.getTodoById, {
@@ -253,7 +254,7 @@ export default class PrewarmQueryDemo {
         currentRun?.token === token ? { ...currentRun, navigationStartedAt: performance.now() } : currentRun,
       );
       void this.navigateToTodo(id, 'prewarm');
-    }, this.prewarmLeadMs());
+    }, this.effectivePrewarmLeadMs());
   }
 
   clearSelection(): void {

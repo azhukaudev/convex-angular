@@ -1,5 +1,9 @@
 @use 'layout' as *;
 
+:host {
+  display: block;
+}
+
 .message {
   display: flex;
   align-items: center;

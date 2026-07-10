@@ -9,10 +9,8 @@ const GITHUB_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"
   imports: [RouterOutlet],
   selector: 'cva-root',
   templateUrl: 'app.html',
+  styles: ':host { display: block; }',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export class App {
   constructor() {

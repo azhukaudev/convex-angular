@@ -33,9 +33,6 @@ type AuthMode = 'sign-in' | 'sign-up';
   templateUrl: 'auth-login.html',
   styleUrl: 'auth-login.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export default class AuthLogin {
   private readonly route = inject(ActivatedRoute);

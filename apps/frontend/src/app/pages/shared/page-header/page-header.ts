@@ -17,9 +17,6 @@ export type PageHeaderLink = {
   templateUrl: 'page-header.html',
   styleUrl: 'page-header.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export class PageHeader {
   readonly pageTitle = input.required<string>();

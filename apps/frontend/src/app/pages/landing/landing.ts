@@ -10,9 +10,6 @@ import { RouterLink } from '@angular/router';
   templateUrl: 'landing.html',
   styleUrl: 'landing.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export default class Landing {
   readonly features = [

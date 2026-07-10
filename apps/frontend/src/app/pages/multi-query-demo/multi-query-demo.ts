@@ -9,6 +9,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { injectQueries, skipToken } from 'convex-angular';
 
 import { api } from '../../../convex/_generated/api';
+import { clampNumber } from '../shared/clamp-number';
 import { PageHeader } from '../shared/page-header/page-header';
 
 @Component({
@@ -26,23 +27,24 @@ import { PageHeader } from '../shared/page-header/page-header';
   templateUrl: 'multi-query-demo.html',
   styleUrl: 'multi-query-demo.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    class: 'block',
-  },
 })
 export default class MultiQueryDemo {
   readonly showPreview = model(true);
   readonly showFullList = model(true);
   readonly showCurrentUser = model(false);
-  readonly previewCount = model(3);
-  readonly fullCount = model(8);
+  // Hold null while a count field is cleared; the query args use the
+  // clamped values so Convex arg validation never sees null.
+  readonly previewCount = model<number | null>(3);
+  readonly fullCount = model<number | null>(8);
+  readonly effectivePreviewCount = computed(() => clampNumber(this.previewCount(), 1, 20, 3));
+  readonly effectiveFullCount = computed(() => clampNumber(this.fullCount(), 1, 50, 8));
 
   readonly queries = injectQueries(() => ({
     ...(this.showPreview()
       ? {
           preview: {
             query: api.todos.listTodos,
-            args: { count: this.previewCount() },
+            args: { count: this.effectivePreviewCount() },
           },
         }
       : {}),
@@ -50,7 +52,7 @@ export default class MultiQueryDemo {
       ? {
           fullList: {
             query: api.todos.listTodos,
-            args: { count: this.fullCount() },
+            args: { count: this.effectiveFullCount() },
           },
         }
       : {}),

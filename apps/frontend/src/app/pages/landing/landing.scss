@@ -1,5 +1,9 @@
 @use 'layout' as *;
 
+:host {
+  display: block;
+}
+
 .page {
   @include page-container(56rem);
 
