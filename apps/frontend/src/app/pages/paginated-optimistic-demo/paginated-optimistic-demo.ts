@@ -1,6 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, effect, model, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import {
   injectMutation,
   injectPaginatedQuery,
@@ -10,22 +16,30 @@ import {
   optimisticallyUpdateValueInPaginatedQuery,
 } from 'convex-angular';
 import { FunctionArgs } from 'convex/server';
-import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
-import { InputNumberModule } from 'primeng/inputnumber';
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
+import { PageHeader } from '../shared/page-header/page-header';
 
 type DemoLane = 'alpha' | 'beta';
 type DemoItem = Doc<'optimisticDemoItems'>;
 type CreateItemArgs = FunctionArgs<typeof api.optimisticPaginationDemo.createItem>;
 
 @Component({
-  imports: [RouterLink, FormsModule, ButtonModule, CardModule, InputNumberModule, ProgressSpinnerModule],
+  imports: [
+    FormsModule,
+    MatButtonModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+    MatSelectModule,
+    PageHeader,
+  ],
   selector: 'cva-paginated-optimistic-demo',
   templateUrl: 'paginated-optimistic-demo.html',
+  styleUrl: 'paginated-optimistic-demo.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block',
