@@ -9,6 +9,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTabsModule } from '@angular/material/tabs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { injectBetterAuth } from 'convex-angular/better-auth';
 
 import { DemoAuthService } from '../../auth/demo-auth.service';
 import { Message } from '../shared/message/message';
@@ -39,6 +40,7 @@ export default class AuthLogin {
   private readonly router = inject(Router);
   private readonly fb = inject(NonNullableFormBuilder);
   readonly authService = inject(DemoAuthService);
+  readonly auth = injectBetterAuth();
   readonly mode = signal<AuthMode>('sign-in');
   readonly hidePassword = signal(true);
 

@@ -1,17 +1,17 @@
 import { signal } from '@angular/core';
-import { convertToParamMap } from '@angular/router';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
+import { BetterAuthClientLike, provideBetterAuth } from 'convex-angular/better-auth';
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+
+import { DemoAuthService } from '../../auth/demo-auth.service';
+import AuthLogin from './auth-login';
 
 jest.mock('../../auth/demo-auth.service', () => {
   class MockDemoAuthService {}
 
   return { DemoAuthService: MockDemoAuthService };
 });
-
-import { DemoAuthService } from '../../auth/demo-auth.service';
-
-import AuthLogin from './auth-login';
 
 class ResizeObserverStub {
   disconnect(): undefined {
@@ -27,14 +27,19 @@ class ResizeObserverStub {
   }
 }
 
+function fakeBetterAuthClient(): BetterAuthClientLike {
+  return {
+    getSession: async () => ({ data: null, error: { status: 401 } }),
+    convex: { token: async () => ({ data: null, error: { status: 401 } }) },
+  };
+}
+
 describe('AuthLogin', () => {
   let fixture: ComponentFixture<AuthLogin>;
   let component: AuthLogin;
   let router: { navigateByUrl: jest.Mock };
   let authService: {
-    error: ReturnType<typeof signal<Error | undefined>>;
     formErrorMessage: ReturnType<typeof signal<string | null>>;
-    isLoading: ReturnType<typeof signal<boolean>>;
     signIn: jest.Mock<Promise<boolean>, [string, string]>;
     signUp: jest.Mock<Promise<boolean>, [string, string, string]>;
     clearFormError: jest.Mock;
@@ -63,9 +68,7 @@ describe('AuthLogin', () => {
       navigateByUrl: jest.fn().mockResolvedValue(true),
     };
     authService = {
-      error: signal<Error | undefined>(undefined),
       formErrorMessage: signal<string | null>(null),
-      isLoading: signal(false),
       signIn: jest.fn().mockResolvedValue(true),
       signUp: jest.fn().mockResolvedValue(true),
       clearFormError: jest.fn(),
@@ -77,6 +80,8 @@ describe('AuthLogin', () => {
         { provide: Router, useValue: router },
         { provide: ActivatedRoute, useValue: createActivatedRoute(returnUrl) },
         { provide: DemoAuthService, useValue: authService },
+        provideConvexTesting(new MockConvexClient()),
+        provideBetterAuth(fakeBetterAuthClient),
       ],
     }).compileComponents();
 

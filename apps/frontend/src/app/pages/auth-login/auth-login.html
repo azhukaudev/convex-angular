@@ -80,12 +80,12 @@
       <cva-message severity="error" [text]="authService.formErrorMessage()!" />
     }
 
-    @if (authService.error()) {
-      <cva-message severity="warn" [text]="authService.error()!.message" />
+    @if (auth.error()) {
+      <cva-message severity="warn" [text]="auth.error()!.message" />
     }
 
-    <button matButton="filled" type="submit" [disabled]="authForm.invalid || authService.isLoading()">
-      @if (authService.isLoading()) {
+    <button matButton="filled" type="submit" [disabled]="authForm.invalid || auth.isLoading()">
+      @if (auth.isLoading()) {
         <mat-spinner class="submit-spinner" [diameter]="18" />
       } @else {
         <mat-icon>{{ isSignUp ? 'person_add' : 'login' }}</mat-icon>
