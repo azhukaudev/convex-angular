@@ -1,9 +1,10 @@
-import { DatePipe, JsonPipe, NgClass } from '@angular/common';
+import { DatePipe, JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { MatCardModule } from '@angular/material/card';
 import { injectConvexConnectionState } from 'convex-angular';
 import { ConnectionState } from 'convex/browser';
-import { CardModule } from 'primeng/card';
+
+import { PageHeader } from '../shared/page-header/page-header';
 
 type ConnectionLogEntry = {
   signature: string;
@@ -13,9 +14,10 @@ type ConnectionLogEntry = {
 };
 
 @Component({
-  imports: [DatePipe, JsonPipe, NgClass, RouterLink, CardModule],
+  imports: [DatePipe, JsonPipe, MatCardModule, PageHeader],
   selector: 'cva-connection-state-demo',
   templateUrl: 'connection-state-demo.html',
+  styleUrl: 'connection-state-demo.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block',
