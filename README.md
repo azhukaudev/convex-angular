@@ -32,6 +32,7 @@ The Angular client for Convex.
   - [Convex Auth (@convex-dev/auth)](#convex-auth-convex-devauth)
   - [Auth Directives](#auth-directives)
   - [Route Guards](#route-guards)
+  - [Reusing the initial auth token](#reusing-the-initial-auth-token) — `initialAuthTokenReuse`
 - [🖥️ Server-side rendering](#️-server-side-rendering)
   - [Authenticated SSR](#authenticated-ssr)
   - [SSR behavior by helper](#ssr-behavior-by-helper)
@@ -650,6 +651,7 @@ export class ClerkAuthService implements ClerkAuthProvider {
 
   readonly isLoaded = computed(() => this.clerk.loaded());
   readonly isSignedIn = computed(() => !!this.clerk.user());
+  readonly sessionId = computed(() => this.clerk.session()?.id);
   readonly orgId = computed(() => this.clerk.organization()?.id);
   readonly orgRole = computed(() => this.clerk.organization()?.membership?.role);
 
@@ -670,8 +672,12 @@ export const appConfig: ApplicationConfig = {
 `provideClerkAuth()` already includes `provideConvexAuth()`, so do not add both.
 If your Clerk service exposes upstream failures, forward them via the optional
 `error` signal so `injectAuth().error()` can surface them. Clerk integrations
-can also expose reactive auth context like `orgId`/`orgRole`; `provideClerkAuth()`
-uses that state to refresh the token when organization context changes.
+can also expose reactive auth context like `sessionId` and `orgId`/`orgRole`;
+`provideClerkAuth()` uses that state to re-run auth setup when the Clerk session
+is replaced (for example after signing out and back in) or when organization
+context changes. Expose `sessionId` — without it a replaced session can leave
+Convex fetching tokens for the dead session, so auth looks loaded but stays
+unauthenticated until the app reloads.
 Return `null` only when the user is signed out or no token is available. Let
 real token-fetch failures throw so `injectAuth().error()` can surface them.
 
@@ -959,6 +965,28 @@ export const routes: Routes = [
   },
 ];
 ```
+
+### Reusing the initial auth token
+
+By default the Convex client sends its cached auth token to the server and then
+immediately fetches a fresh one. That second token triggers another
+`Authenticate` message, which makes the server re-execute every authenticated
+query on startup. The `initialAuthTokenReuse` client option keeps the cached
+token instead (a refresh is scheduled before it expires), so authenticated apps
+skip that duplicate re-execution and load faster:
+
+```typescript
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideConvex('https://<your-convex-deployment>.convex.cloud', {
+      initialAuthTokenReuse: true,
+    }),
+  ],
+};
+```
+
+> The option is marked experimental upstream and may change in a future Convex
+> release.
 
 ## 🖥️ Server-side rendering
 

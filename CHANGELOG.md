@@ -11,9 +11,18 @@
 - Add `isRefetching()` and `isPlaceholderData()` signals to `injectQuery(...)` so a lightweight "refreshing" affordance can replace a full skeleton during resubscribes.
 - Change `injectPrewarmQuery().prewarm(...)` to return `Promise<boolean>` that resolves `true` once the warm subscription receives its first result, and `false` when it fails, expires, or runs during server-side rendering. Still fire-and-forget when ignored.
 
+### ⚠️ Breaking Changes
+
+- Raise the `convex` peer dependency floor to `>=1.42.1` so the `initialAuthTokenReuse` client option is always available (and typed) through `provideConvex(...)`.
+
+### 🐛 Bug Fixes
+
+- Add an optional `sessionId` signal to `ClerkAuthProvider` and include it in the values that re-trigger Convex auth setup. Without it, signing out and back in replaces the Clerk session while Convex keeps fetching tokens for the dead session, leaving auth loaded but unauthenticated until the app reloads. Ports the upstream fix from `convex/react-clerk` (get-convex/convex-js#156); expose `sessionId` from your Clerk service to benefit.
+
 ### 📖 Documentation
 
 - Document claims-based guards, `convexUnauthGuard`, `canMatch` usage, `placeholderData`/`isRefetching`, and the `prewarm(...)` promise in both READMEs.
+- Document the `initialAuthTokenReuse` client option: reusing the cached auth token on startup avoids a second `Authenticate` message that makes the server re-execute all authenticated queries.
 
 ## [1.8.0](https://github.com/azhukaudev/convex-angular/compare/v1.6.0...v1.8.0) (2026-06-10)
 

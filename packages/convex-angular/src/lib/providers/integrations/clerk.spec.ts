@@ -17,6 +17,7 @@ describe('provideClerkAuth', () => {
 
   let isLoaded: ReturnType<typeof signal<boolean>>;
   let isSignedIn: ReturnType<typeof signal<boolean | undefined>>;
+  let sessionId: ReturnType<typeof signal<string | null | undefined>>;
   let orgId: ReturnType<typeof signal<string | null | undefined>>;
   let orgRole: ReturnType<typeof signal<string | null | undefined>>;
   let error: ReturnType<typeof signal<Error | undefined>>;
@@ -26,6 +27,7 @@ describe('provideClerkAuth', () => {
     return {
       isLoaded,
       isSignedIn,
+      sessionId,
       orgId,
       orgRole,
       error,
@@ -46,6 +48,7 @@ describe('provideClerkAuth', () => {
   beforeEach(() => {
     isLoaded = signal(true);
     isSignedIn = signal<boolean | undefined>(false);
+    sessionId = signal<string | null | undefined>(null);
     orgId = signal<string | null | undefined>(null);
     orgRole = signal<string | null | undefined>(null);
     error = signal<Error | undefined>(undefined);
@@ -95,20 +98,35 @@ describe('provideClerkAuth', () => {
     expect(provider.isAuthenticated()).toBe(true);
   });
 
-  it('exposes reauthVersion from org signals', () => {
+  it('exposes reauthVersion from session and org signals', () => {
     configureTestingModule();
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    expect(provider.reauthVersion?.()).toEqual([null, null]);
+    expect(provider.reauthVersion?.()).toEqual([null, null, null]);
 
     orgId.set('org_123');
     orgRole.set('admin');
 
-    expect(provider.reauthVersion?.()).toEqual(['org_123', 'admin']);
+    expect(provider.reauthVersion?.()).toEqual([null, 'org_123', 'admin']);
   });
 
-  it('falls back to undefined reauth values when org signals are missing', () => {
+  it('changes reauthVersion when the Clerk session is replaced', () => {
+    sessionId.set('sess_1');
+    configureTestingModule();
+
+    const provider = TestBed.inject(CONVEX_AUTH);
+    const initialVersion = provider.reauthVersion?.();
+
+    // Sign out and back in: Clerk replaces the session while org context
+    // stays the same. Convex must re-run auth setup or it keeps fetching
+    // tokens for the dead session.
+    sessionId.set('sess_2');
+
+    expect(provider.reauthVersion?.()).not.toEqual(initialVersion);
+  });
+
+  it('falls back to undefined reauth values when session and org signals are missing', () => {
     configureTestingModule({
       isLoaded,
       isSignedIn,
@@ -118,7 +136,7 @@ describe('provideClerkAuth', () => {
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    expect(provider.reauthVersion?.()).toEqual([undefined, undefined]);
+    expect(provider.reauthVersion?.()).toEqual([undefined, undefined, undefined]);
   });
 
   it('passes through the upstream error signal', () => {

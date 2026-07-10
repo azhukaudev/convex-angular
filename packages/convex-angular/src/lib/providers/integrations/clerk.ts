@@ -24,6 +24,7 @@ import { provideConvexAuth } from '../inject-auth';
  *
  *   readonly isLoaded = computed(() => this.clerk.loaded());
  *   readonly isSignedIn = computed(() => !!this.clerk.user());
+ *   readonly sessionId = computed(() => this.clerk.session()?.id);
  *
  *   async getToken(options?: { template?: string; skipCache?: boolean }) {
  *     return this.clerk.session?.getToken(options) ?? null;
@@ -53,10 +54,17 @@ export interface ClerkAuthProvider {
    * @param options.skipCache - If true, bypass the token cache and get a fresh token
    * @returns Promise resolving to the JWT token, or null if not available
    */
-  getToken(options?: {
-    template?: string;
-    skipCache?: boolean;
-  }): Promise<string | null>;
+  getToken(options?: { template?: string; skipCache?: boolean }): Promise<string | null>;
+
+  /**
+   * Optional: Current Clerk session ID.
+   * When this changes (e.g. signing out and back in replaces the session),
+   * Convex will re-run auth setup with a token for the new session.
+   *
+   * Without it, a replaced session can leave Convex fetching tokens for the
+   * dead session — auth looks loaded but stays unauthenticated until reload.
+   */
+  sessionId?: Signal<string | null | undefined>;
 
   /**
    * Optional: Current organization ID.
@@ -110,6 +118,7 @@ export const CLERK_AUTH = new InjectionToken<ClerkAuthProvider>('CLERK_AUTH');
  *
  *   readonly isLoaded = computed(() => this.clerk.loaded());
  *   readonly isSignedIn = computed(() => !!this.clerk.user());
+ *   readonly sessionId = computed(() => this.clerk.session()?.id);
  *   readonly orgId = computed(() => this.clerk.organization()?.id);
  *   readonly orgRole = computed(() => this.clerk.organization()?.membership?.role);
  *
@@ -144,9 +153,7 @@ export function provideClerkAuth(): EnvironmentProviders {
       useFactory: (): ConvexAuthProvider => {
         const clerk = inject(CLERK_AUTH);
 
-        const fetchAccessToken = async (args: {
-          forceRefreshToken: boolean;
-        }) =>
+        const fetchAccessToken = async (args: { forceRefreshToken: boolean }) =>
           clerk.getToken({
             template: 'convex',
             skipCache: args.forceRefreshToken,
@@ -155,7 +162,7 @@ export function provideClerkAuth(): EnvironmentProviders {
         return {
           isLoading: computed(() => !clerk.isLoaded()),
           isAuthenticated: computed(() => clerk.isSignedIn() ?? false),
-          reauthVersion: computed(() => [clerk.orgId?.(), clerk.orgRole?.()]),
+          reauthVersion: computed(() => [clerk.sessionId?.(), clerk.orgId?.(), clerk.orgRole?.()]),
           error: clerk.error,
           fetchAccessToken,
         };
