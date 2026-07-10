@@ -64,7 +64,9 @@
   gap: 1.5rem;
 
   @media (min-width: 768px) {
-    grid-template-columns: repeat(2, 1fr);
+    // minmax(0, …) keeps the wide <pre> code samples from inflating the
+    // columns past the page container (grid min-content blowout).
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

@@ -13,6 +13,12 @@ html {
   );
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
   background: var(--mat-sys-surface);

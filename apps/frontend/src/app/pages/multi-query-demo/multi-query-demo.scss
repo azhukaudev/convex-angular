@@ -191,7 +191,9 @@
   gap: 1.5rem;
 
   @media (min-width: 1280px) {
-    grid-template-columns: repeat(3, 1fr);
+    // minmax(0, …) keeps the JSON <pre> dumps from inflating the columns
+    // past the page container (grid min-content blowout).
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
