@@ -1,0 +1,98 @@
+@use 'layout' as *;
+
+.page {
+  @include page-container(56rem);
+
+  gap: 3rem;
+  padding-block: 3rem;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  text-align: center;
+
+  h1 {
+    margin: 0;
+    font: var(--mat-sys-display-small);
+  }
+}
+
+.hero__tagline {
+  @include muted;
+
+  margin: 0;
+  font: var(--mat-sys-title-large);
+}
+
+.hero__install {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container);
+  padding: 0.5rem 1rem;
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.875rem;
+}
+
+.hero__prompt {
+  @include muted;
+}
+
+.hero__actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+
+  h2 {
+    margin: 0;
+    text-align: center;
+    font: var(--mat-sys-headline-small);
+  }
+}
+
+.card-grid {
+  display: grid;
+  gap: 1.5rem;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.feature-title {
+  color: var(--mat-sys-primary);
+}
+
+.code-block {
+  @include code-block;
+
+  margin: 1rem 0 0;
+}
+
+.example-body {
+  @include muted;
+
+  margin: 0;
+  font: var(--mat-sys-body-small);
+}
+
+.footer {
+  @include muted;
+
+  margin-top: auto;
+  text-align: center;
+  font: var(--mat-sys-body-small);
+
+  a {
+    @include inline-link;
+  }
+}

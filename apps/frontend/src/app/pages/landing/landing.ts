@@ -1,12 +1,14 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
-import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
 
 @Component({
-  imports: [RouterLink, ButtonModule, CardModule],
+  imports: [RouterLink, MatButtonModule, MatCardModule, MatIconModule],
   selector: 'cva-landing',
   templateUrl: 'landing.html',
+  styleUrl: 'landing.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block',
@@ -132,6 +134,51 @@ openTodo(todoId: string) {
       }),
   }
 );`,
+    },
+  ];
+
+  readonly examples = [
+    {
+      title: 'Basic Example',
+      subtitle: 'Todo list using injectQuery, injectMutation, and injectAction',
+      body: 'Demonstrates fetching data, adding/completing/deleting todos, and running bulk actions.',
+      path: '/examples/basic',
+    },
+    {
+      title: 'Paginated Example',
+      subtitle: 'Todo list using injectPaginatedQuery with load more',
+      body: 'Demonstrates paginated queries, loading more items, and resetting pagination.',
+      path: '/examples/paginated',
+    },
+    {
+      title: 'Authentication Example',
+      subtitle: 'Better Auth + Convex session verification with injectAuth',
+      body: 'Demonstrates provideConvexAuth, injectAuth, convexAuthGuard, and a protected Convex query using a real Better Auth email/password flow.',
+      path: '/auth/login',
+    },
+    {
+      title: 'Multi-query Example',
+      subtitle: 'Dynamic keyed queries with injectQueries and skipToken',
+      body: 'Demonstrates multiple live queries, removed keys, skipped keys, and aggregate loading across one keyed query object.',
+      path: '/examples/multi-query',
+    },
+    {
+      title: 'Connection State Example',
+      subtitle: 'Live transport diagnostics with injectConvexConnectionState',
+      body: 'Demonstrates connection retries, inflight request tracking, transport status, and a live transition log.',
+      path: '/examples/connection-state',
+    },
+    {
+      title: 'Prewarm Query Example',
+      subtitle: 'Compare cold loads against injectPrewarmQuery',
+      body: 'Demonstrates prewarming a detail query before navigation, with timing data to compare cold and warmed opens.',
+      path: '/examples/prewarm-query',
+    },
+    {
+      title: 'Paginated Optimistic Example',
+      subtitle: 'Dedicated demo for paginated optimistic update helpers',
+      body: 'Demonstrates insertAtTop, insertAtPosition, insertAtBottomIfLoaded, and in-place optimistic row updates on a paginated dataset.',
+      path: '/examples/paginated-optimistic',
     },
   ];
 }
