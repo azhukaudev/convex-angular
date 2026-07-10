@@ -143,6 +143,11 @@ function createConvexAuthState(): ConvexAuthState {
   let currentGeneration = 0;
 
   const clearAuthIfNeeded = () => {
+    // A disabled client never opens a socket, so there is no auth to clear —
+    // and its `client` getter throws. Mirrors the setAuth branch below.
+    if (convex.disabled) {
+      return;
+    }
     try {
       if (convex.client.hasAuth()) {
         convex.client.clearAuth();

@@ -512,6 +512,47 @@ describe('injectAuth', () => {
 
     expect(mockClearAuth).not.toHaveBeenCalled();
   }));
+
+  describe('disabled client (SSR)', () => {
+    beforeEach(() => {
+      mockConvexClient = {
+        disabled: true,
+        get client(): never {
+          throw new Error('ConvexClient is disabled');
+        },
+      } as unknown as jest.Mocked<ConvexClient>;
+    });
+
+    it('does not record an internal error while the provider is loading', fakeAsync(() => {
+      providerLoading.set(true);
+      configureTestingModule();
+
+      const fixture = createAuthFixture();
+
+      expect(fixture.componentInstance.auth.error()).toBeUndefined();
+    }));
+
+    it('does not record an internal error once the provider settles unauthenticated', fakeAsync(() => {
+      providerLoading.set(false);
+      providerAuthenticated.set(false);
+      configureTestingModule();
+
+      const fixture = createAuthFixture();
+
+      expect(fixture.componentInstance.auth.error()).toBeUndefined();
+      expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+    }));
+
+    it('does not record an internal error when the auth state is destroyed', fakeAsync(() => {
+      configureTestingModule();
+      const fixture = createAuthFixture();
+      const auth = fixture.componentInstance.auth;
+
+      TestBed.resetTestingModule();
+
+      expect(auth.error()).toBeUndefined();
+    }));
+  });
 });
 
 describe('provideConvexAuthFromExisting', () => {
