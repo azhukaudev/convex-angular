@@ -28,6 +28,7 @@ The Angular client for Convex.
   - [Using injectAuth](#using-injectauth)
   - [Clerk Integration](#clerk-integration)
   - [Auth0 Integration](#auth0-integration)
+  - [Better Auth Integration](#better-auth-integration)
   - [Custom Auth Providers](#custom-auth-providers)
   - [Convex Auth (@convex-dev/auth)](#convex-auth-convex-devauth)
   - [Auth Directives](#auth-directives)
@@ -43,7 +44,7 @@ The Angular client for Convex.
 ## ✨ Features
 
 - 🔌 Core providers: `provideConvex`, `injectQuery`, `injectQueries`, `injectPrewarmQuery`, `injectMutation`, `injectAction`, `injectPaginatedQuery`, `injectConvex`, and `injectConvexConnectionState`
-- 🔐 Authentication: Built-in support for Clerk, Auth0, and custom auth providers via `injectAuth`
+- 🔐 Authentication: Built-in support for Clerk, Auth0, Better Auth, and custom providers via `injectAuth`
 - 🛡️ Route Guards: Protect routes with `convexAuthGuard`, `convexUnauthGuard`, and claims-based guards via `createConvexAuthGuard` — all usable in `canActivate` and `canMatch`
 - 🧭 Route Resolvers: Preload query data before navigation with `convexQueryResolver`
 - 🎯 Auth Directives: `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`, `*cvaAuthRefreshing`
@@ -725,6 +726,77 @@ Unlike the Clerk integration, Auth0 has no automatic re-authentication when
 organization context changes. If your app switches Auth0 organizations while
 the user stays signed in, implement `ConvexAuthProvider` directly (see below)
 and bump its `reauthVersion` signal on org changes to force a fresh token.
+
+### Better Auth Integration
+
+The `convex-angular/better-auth` secondary entry point provides built-in
+session tracking and Convex token exchange for [Better Auth](https://www.better-auth.com/),
+with **no dependency on better-auth packages**: the library types your client
+structurally (`BetterAuthClientLike`), so you own the `better-auth` /
+`@convex-dev/better-auth` versions and their upgrades never break this
+integration.
+
+```typescript
+// auth-client.ts — one shared client instance for flows and the library
+
+// app.config.ts
+import { ApplicationConfig } from '@angular/core';
+import { convexClient, crossDomainClient } from '@convex-dev/better-auth/client/plugins';
+import { createAuthClient } from 'better-auth/client';
+import { provideConvex } from 'convex-angular';
+import { provideBetterAuth } from 'convex-angular/better-auth';
+
+import { authClient } from './auth-client';
+
+export const authClient = createAuthClient({
+  baseURL: environment.convexSiteUrl,
+  plugins: [convexClient(), crossDomainClient()],
+});
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideConvex(environment.convexUrl), provideBetterAuth(() => authClient)],
+};
+```
+
+`provideBetterAuth(...)` already includes `provideConvexAuth()`, so do not add
+it separately. Session state and the Convex token exchange (caching, inflight
+dedup, `forceRefreshToken` bypass, invalidation when the session id changes)
+are handled for you; read them with `injectBetterAuth()`:
+
+```typescript
+import { Component } from '@angular/core';
+import { injectBetterAuth } from 'convex-angular/better-auth';
+
+@Component({
+  selector: 'app-account',
+  template: `
+    @if (betterAuth.isAuthenticated()) {
+      <p>Signed in as {{ betterAuth.session()?.user?.['email'] }}</p>
+    }
+  `,
+})
+export class AccountComponent {
+  readonly betterAuth = injectBetterAuth();
+}
+```
+
+Sign-in/up/out flows stay on your own client instance (`authClient` above) —
+`provideBetterAuth()` exposes no wrappers for them. After a flow completes,
+resync the session:
+
+```typescript
+await authClient.signIn.email({ email, password });
+await this.betterAuth.refreshSession();
+
+// after signOut:
+await authClient.signOut();
+this.betterAuth.clearSession();
+```
+
+Better Auth is browser-only in this integration: on the server platform
+`injectBetterAuth()` reports `isLoading: false` and unauthenticated, and never
+constructs your client. Pair it with `provideConvex(...)`'s `ssr.authToken`
+for authenticated server-side rendering.
 
 ### Custom Auth Providers
 

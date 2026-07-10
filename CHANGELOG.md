@@ -1,5 +1,11 @@
 # convex-angular
 
+## Unreleased
+
+### ✨ Features
+
+- Add a `convex-angular/better-auth` entry point with `provideBetterAuth()` and `injectBetterAuth()`: built-in Better Auth integration (session tracking, Convex token exchange with caching/refresh/dedup) with no dependency on better-auth packages — the client is consumer-provided and typed structurally.
+
 ## [1.9.0](https://github.com/azhukaudev/convex-angular/compare/v1.8.0...v1.9.0) (2026-07-10)
 
 ### ✨ Features
