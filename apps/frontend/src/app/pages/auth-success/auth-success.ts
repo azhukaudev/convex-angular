@@ -1,17 +1,26 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Router, RouterLink } from '@angular/router';
 import { CvaAuthRefreshingDirective, injectAuth, injectQuery } from 'convex-angular';
-import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { api } from '../../../convex/_generated/api';
 import { DemoAuthService } from '../../auth/demo-auth.service';
 
 @Component({
-  imports: [RouterLink, ButtonModule, CardModule, ProgressSpinnerModule, CvaAuthRefreshingDirective],
+  imports: [
+    RouterLink,
+    MatButtonModule,
+    MatCardModule,
+    MatIconModule,
+    MatProgressSpinnerModule,
+    CvaAuthRefreshingDirective,
+  ],
   selector: 'cva-auth-success',
   templateUrl: 'auth-success.html',
+  styleUrl: 'auth-success.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block',

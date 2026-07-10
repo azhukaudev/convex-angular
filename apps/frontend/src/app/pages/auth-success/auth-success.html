@@ -1,103 +1,68 @@
-<div
-  class="mx-auto flex min-h-svh max-w-2xl flex-col justify-center gap-8 px-4 py-12"
->
-  <p-card>
-    <div class="flex flex-col items-center gap-6 text-center">
-      <div
-        class="flex h-20 w-20 items-center justify-center rounded-full bg-green-100"
-      >
-        <i class="pi pi-check text-4xl text-green-600"></i>
+<div class="page">
+  <mat-card appearance="outlined">
+    <mat-card-content class="success-card">
+      <div class="success-badge">
+        <mat-icon>check</mat-icon>
       </div>
 
       <div>
-        <h1 class="text-2xl font-bold">Authentication Successful!</h1>
-        <p class="mt-2 text-gray-600">
+        <h1>Authentication Successful!</h1>
+        <p class="success-card__note">
           Convex verified your Better Auth session. This page is protected by
-          <code class="rounded bg-gray-100 px-1 text-sm">convexAuthGuard</code>.
+          <code>convexAuthGuard</code>.
         </p>
       </div>
 
-      <div
-        *cvaAuthRefreshing
-        class="flex w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-700"
-      >
-        <i class="pi pi-spin pi-spinner"></i>
+      <div *cvaAuthRefreshing class="refresh-banner">
+        <mat-spinner [diameter]="16" />
         <span>Reconnecting your session…</span>
       </div>
 
       @if (currentUser.isLoading()) {
-        <p-progress-spinner
-          aria-label="loading current user"
-          class="size-10"
-          strokeWidth="8"
-        />
+        <mat-spinner [diameter]="40" aria-label="loading current user" />
       } @else if (currentUser.error()) {
-        <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-left">
-          <p class="font-semibold text-red-700">Authenticated query failed</p>
-          <p class="mt-1 text-sm text-red-600">
-            {{ currentUser.error()!.message }}
-          </p>
+        <div class="error-panel">
+          <p class="panel-title">Authenticated query failed</p>
+          <p>{{ currentUser.error()!.message }}</p>
         </div>
       } @else if (currentUser.data()) {
-        <div
-          class="w-full rounded-xl bg-slate-950 p-5 text-left text-slate-100"
-        >
-          <p class="text-xs tracking-[0.28em] text-slate-400 uppercase">
-            Authenticated Convex Query
-          </p>
-          <dl class="mt-4 grid gap-3 text-sm">
-            <div class="grid gap-1">
-              <dt class="text-slate-400">Name</dt>
-              <dd class="font-medium">{{ currentUser.data()!.name }}</dd>
+        <div class="user-panel">
+          <p class="user-panel__eyebrow">Authenticated Convex Query</p>
+          <dl class="detail-list">
+            <div>
+              <dt>Name</dt>
+              <dd>{{ currentUser.data()!.name }}</dd>
             </div>
-            <div class="grid gap-1">
-              <dt class="text-slate-400">Email</dt>
-              <dd class="font-medium">{{ currentUser.data()!.email }}</dd>
+            <div>
+              <dt>Email</dt>
+              <dd>{{ currentUser.data()!.email }}</dd>
             </div>
-            <div class="grid gap-1">
-              <dt class="text-slate-400">Convex Subject</dt>
-              <dd class="font-mono text-xs break-all">
-                {{ currentUser.data()!.subject }}
-              </dd>
+            <div>
+              <dt>Convex Subject</dt>
+              <dd class="mono">{{ currentUser.data()!.subject }}</dd>
             </div>
-            <div class="grid gap-1">
-              <dt class="text-slate-400">Session Id</dt>
-              <dd class="font-mono text-xs break-all">
-                {{ currentUser.data()!.sessionId }}
-              </dd>
+            <div>
+              <dt>Session Id</dt>
+              <dd class="mono">{{ currentUser.data()!.sessionId }}</dd>
             </div>
-            <div class="grid gap-1">
-              <dt class="text-slate-400">Auth Status</dt>
-              <dd class="font-medium">{{ auth.status() }}</dd>
+            <div>
+              <dt>Auth Status</dt>
+              <dd>{{ auth.status() }}</dd>
             </div>
           </dl>
         </div>
       } @else {
-        <div
-          class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-left"
-        >
-          <p class="font-semibold text-amber-700">
-            No authenticated user found
-          </p>
-          <p class="mt-1 text-sm text-amber-600">
-            The route guard passed, but the backend did not return a
-            session-backed user.
-          </p>
+        <div class="warn-panel">
+          <p class="panel-title">No authenticated user found</p>
+          <p>The route guard passed, but the backend did not return a session-backed user.</p>
         </div>
       }
 
-      <p-button
-        (onClick)="onLogout()"
-        label="Sign Out"
-        icon="pi pi-sign-out"
-        severity="secondary"
-      />
-    </div>
-  </p-card>
+      <button matButton="tonal" (click)="onLogout()"><mat-icon>logout</mat-icon>Sign Out</button>
+    </mat-card-content>
+  </mat-card>
 
-  <div class="text-center">
-    <a routerLink="/" class="text-primary text-sm hover:underline">
-      ← Back to Home
-    </a>
+  <div class="back-link">
+    <a routerLink="/">← Back to Home</a>
   </div>
 </div>
