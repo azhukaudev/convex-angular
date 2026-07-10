@@ -8,12 +8,6 @@
   @include page-container(72rem);
 }
 
-.eyebrow {
-  @include eyebrow;
-
-  margin: 0;
-}
-
 .intro-layout {
   display: grid;
   gap: 1.5rem;
@@ -55,36 +49,13 @@
   }
 }
 
-.spinner-row {
-  display: flex;
-  justify-content: center;
-  padding-block: 2rem;
-}
-
-.error-panel {
-  @include error-panel;
-
-  font: var(--mat-sys-body-small);
-}
-
-.warn-panel {
-  @include panel-tone(warn);
-
-  font: var(--mat-sys-body-small);
-
-  a {
-    color: inherit;
-    font-weight: 600;
-  }
+.warn-panel a {
+  color: inherit;
+  font-weight: 600;
 }
 
 .idle-panel {
-  @include panel;
-  @include muted;
-
-  background: var(--mat-sys-surface-container);
   padding: 1.5rem;
-  font: var(--mat-sys-body-small);
 }
 
 .loading-panel {
@@ -198,10 +169,6 @@
     color: currentColor;
     opacity: 0.6;
   }
-}
-
-.mono {
-  @include mono;
 }
 
 .detail-actions {

@@ -110,3 +110,70 @@
     )
   );
 }
+
+// Standard class vocabulary shared by the demo pages — emitted once,
+// globally, from styles.scss. Page stylesheets re-declare only where they
+// genuinely diverge (tone, spacing); component-scoped rules always win over
+// these globals thanks to the encapsulation attribute.
+@mixin demo-page-scaffold {
+  .eyebrow {
+    @include eyebrow;
+
+    margin: 0;
+  }
+
+  .mono {
+    @include mono;
+  }
+
+  .spinner-row {
+    display: flex;
+    justify-content: center;
+    padding-block: 2rem;
+  }
+
+  .error-panel {
+    @include error-panel;
+
+    font: var(--mat-sys-body-small);
+  }
+
+  .warn-panel {
+    @include panel-tone(warn);
+
+    font: var(--mat-sys-body-small);
+  }
+
+  .idle-panel {
+    @include panel;
+    @include muted;
+
+    background: var(--mat-sys-surface-container);
+    font: var(--mat-sys-body-small);
+  }
+
+  .code-block {
+    @include code-block;
+
+    margin: 0;
+  }
+
+  .try-panel {
+    @include panel-tone(info);
+
+    font: var(--mat-sys-body-small);
+
+    ol {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      margin: 0.5rem 0 0;
+      padding-left: 1rem;
+    }
+  }
+
+  .try-panel__title {
+    margin: 0;
+    font-weight: 600;
+  }
+}

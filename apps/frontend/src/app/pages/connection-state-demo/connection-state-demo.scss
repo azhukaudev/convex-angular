@@ -8,12 +8,6 @@
   @include page-container(72rem);
 }
 
-.eyebrow {
-  @include eyebrow;
-
-  margin: 0;
-}
-
 .muted {
   @include muted;
 
@@ -73,26 +67,9 @@
 }
 
 .try-panel {
-  @include panel-tone(info);
-
-  font: var(--mat-sys-body-small);
-
   @media (min-width: 768px) {
     max-width: 24rem;
   }
-
-  ol {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    margin: 0.5rem 0 0;
-    padding-left: 1rem;
-  }
-}
-
-.try-panel__title {
-  margin: 0;
-  font-weight: 600;
 }
 
 .stat-grid {
@@ -190,10 +167,4 @@
   @include panel;
 
   padding: 0.5rem 0.75rem;
-}
-
-.code-block {
-  @include code-block;
-
-  margin: 0;
 }

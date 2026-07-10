@@ -8,12 +8,6 @@
   @include page-container(72rem);
 }
 
-.eyebrow {
-  @include eyebrow;
-
-  margin: 0;
-}
-
 .summary-grid,
 .controls-grid {
   display: grid;
@@ -75,21 +69,6 @@
 
 .try-panel {
   @include panel-tone(warn);
-
-  font: var(--mat-sys-body-small);
-
-  ol {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    margin: 0.5rem 0 0;
-    padding-left: 1rem;
-  }
-}
-
-.try-panel__title {
-  margin: 0;
-  font-weight: 600;
 }
 
 .result-grid {
@@ -126,8 +105,6 @@
 }
 
 .error-panel {
-  @include error-panel;
-
   padding: 0.75rem;
 }
 
@@ -171,8 +148,6 @@
 }
 
 .warn-panel {
-  @include panel-tone(warn);
-
   padding: 0.75rem;
 }
 
@@ -184,10 +159,6 @@
   @include panel;
 
   padding: 0.75rem;
-}
-
-.mono {
-  @include mono;
 }
 
 .dump-grid {
@@ -202,7 +173,5 @@
 }
 
 .code-block {
-  @include code-block;
-
   margin: 0.75rem 0 0;
 }

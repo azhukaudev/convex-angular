@@ -8,12 +8,6 @@
   @include page-container(72rem);
 }
 
-.eyebrow {
-  @include eyebrow;
-
-  margin: 0;
-}
-
 .intro-layout {
   display: grid;
   gap: 1.5rem;
@@ -35,25 +29,6 @@
   p {
     margin: 0;
   }
-}
-
-.try-panel {
-  @include panel-tone(info);
-
-  font: var(--mat-sys-body-small);
-
-  ol {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    margin: 0.5rem 0 0;
-    padding-left: 1rem;
-  }
-}
-
-.try-panel__title {
-  margin: 0;
-  font-weight: 600;
 }
 
 .demo-layout {
@@ -117,23 +92,7 @@
 }
 
 .spinner-row {
-  display: flex;
-  justify-content: center;
   padding-block: 2.5rem;
-}
-
-.error-panel {
-  @include error-panel;
-
-  font: var(--mat-sys-body-small);
-}
-
-.idle-panel {
-  @include panel;
-  @include muted;
-
-  background: var(--mat-sys-surface-container);
-  font: var(--mat-sys-body-small);
 }
 
 .item-rows {

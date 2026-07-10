@@ -1,4 +1,5 @@
 @use '@angular/material' as mat;
+@use './styles/layout';
 @use './styles/tokens';
 
 html {
@@ -29,3 +30,5 @@ body {
 .app-main {
   min-height: 100svh;
 }
+
+@include layout.demo-page-scaffold;

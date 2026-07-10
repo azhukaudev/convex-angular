@@ -56,20 +56,10 @@
   font: var(--mat-sys-body-small);
 }
 
-.error-panel {
-  @include error-panel;
-
-  width: 100%;
-  text-align: left;
-  font: var(--mat-sys-body-small);
-}
-
+.error-panel,
 .warn-panel {
-  @include panel-tone(warn);
-
   width: 100%;
   text-align: left;
-  font: var(--mat-sys-body-small);
 }
 
 .panel-title {
@@ -99,10 +89,6 @@
     color: currentColor;
     opacity: 0.6;
   }
-}
-
-.mono {
-  @include mono;
 }
 
 .back-link {
