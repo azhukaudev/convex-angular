@@ -1,136 +1,98 @@
-<div
-  class="mx-auto flex min-h-svh max-w-md flex-col justify-center gap-6 px-4 py-12"
->
-  <p-card class="border-surface-200 overflow-hidden border shadow-sm">
-    <p-tabs
-      [value]="mode()"
-      (valueChange)="onTabChange($event)"
-      [lazy]="true"
-      class="block"
-    >
-      <p-tablist class="mb-6">
-        <p-tab value="sign-in">Sign In</p-tab>
-        <p-tab value="sign-up">Sign Up</p-tab>
-      </p-tablist>
+<div class="page">
+  <mat-card appearance="outlined">
+    <mat-card-content>
+      <mat-tab-group [selectedIndex]="mode() === 'sign-up' ? 1 : 0" (selectedIndexChange)="onTabChange($event)">
+        <mat-tab label="Sign In">
+          <ng-template matTabContent>
+            <div class="tab-intro">
+              <span class="tab-intro__eyebrow">Welcome Back</span>
+              <h1>Sign In</h1>
+              <p class="tab-intro__copy">Sign in with Better Auth and let Convex verify the session token.</p>
+            </div>
 
-      <p-tabpanels>
-        <p-tabpanel value="sign-in">
-          <div class="mb-6 flex flex-col gap-2">
-            <span
-              class="text-primary text-xs font-semibold tracking-[0.28em] uppercase"
-            >
-              Welcome Back
-            </span>
-            <h1 class="text-3xl font-semibold tracking-tight">Sign In</h1>
-            <p class="text-sm leading-6 text-gray-600">
-              Sign in with Better Auth and let Convex verify the session token.
-            </p>
-          </div>
+            <ng-container [ngTemplateOutlet]="authFormTemplate" [ngTemplateOutletContext]="{ isSignUp: false }" />
+          </ng-template>
+        </mat-tab>
 
-          <ng-container
-            [ngTemplateOutlet]="authFormTemplate"
-            [ngTemplateOutletContext]="{ isSignUp: false }"
-          />
-        </p-tabpanel>
+        <mat-tab label="Sign Up">
+          <ng-template matTabContent>
+            <div class="tab-intro">
+              <span class="tab-intro__eyebrow">New Here</span>
+              <h1>Create an Account</h1>
+              <p class="tab-intro__copy">Register with Better Auth and receive a real Convex-backed session.</p>
+            </div>
 
-        <p-tabpanel value="sign-up">
-          <div class="mb-6 flex flex-col gap-2">
-            <span
-              class="text-primary text-xs font-semibold tracking-[0.28em] uppercase"
-            >
-              New Here
-            </span>
-            <h1 class="text-3xl font-semibold tracking-tight">
-              Create an Account
-            </h1>
-            <p class="text-sm leading-6 text-gray-600">
-              Register with Better Auth and receive a real Convex-backed
-              session.
-            </p>
-          </div>
+            <ng-container [ngTemplateOutlet]="authFormTemplate" [ngTemplateOutletContext]="{ isSignUp: true }" />
+          </ng-template>
+        </mat-tab>
+      </mat-tab-group>
+    </mat-card-content>
+  </mat-card>
 
-          <ng-container
-            [ngTemplateOutlet]="authFormTemplate"
-            [ngTemplateOutletContext]="{ isSignUp: true }"
-          />
-        </p-tabpanel>
-      </p-tabpanels>
-    </p-tabs>
-  </p-card>
-
-  <div class="text-center">
-    <a routerLink="/" class="text-primary text-sm hover:underline">
-      ← Back to Home
-    </a>
+  <div class="back-link">
+    <a routerLink="/">← Back to Home</a>
   </div>
 </div>
 
 <ng-template #authFormTemplate let-isSignUp="isSignUp">
-  <form
-    [formGroup]="authForm"
-    (ngSubmit)="onSubmit()"
-    class="flex flex-col gap-4"
-  >
+  <form [formGroup]="authForm" (ngSubmit)="onSubmit()" class="auth-form">
     @if (isSignUp) {
-      <div class="flex flex-col gap-2">
-        <label for="name" class="font-medium">Name</label>
-        <input
-          pInputText
-          id="name"
-          formControlName="name"
-          placeholder="Ada Lovelace"
-          autocomplete="name"
-          class="w-full"
-        />
-      </div>
+      <mat-form-field appearance="outline">
+        <mat-label>Name</mat-label>
+        <input matInput id="name" formControlName="name" placeholder="Ada Lovelace" autocomplete="name" />
+      </mat-form-field>
     }
 
-    <div class="flex flex-col gap-2">
-      <label for="email" class="font-medium">Email</label>
+    <mat-form-field appearance="outline">
+      <mat-label>Email</mat-label>
       <input
-        pInputText
+        matInput
         id="email"
         type="email"
         formControlName="email"
         placeholder="you@example.com"
         autocomplete="email"
-        class="w-full"
       />
-    </div>
+    </mat-form-field>
 
-    <div class="flex flex-col gap-2">
-      <label for="password" class="font-medium">Password</label>
-      <p-password
+    <mat-form-field appearance="outline">
+      <mat-label>Password</mat-label>
+      <input
+        matInput
         id="password"
+        [type]="hidePassword() ? 'password' : 'text'"
         formControlName="password"
-        [feedback]="false"
-        [toggleMask]="true"
         placeholder="At least 8 characters"
         [autocomplete]="isSignUp ? 'new-password' : 'current-password'"
-        styleClass="w-full"
-        inputStyleClass="w-full"
       />
-    </div>
+      <button
+        matIconButton
+        matSuffix
+        type="button"
+        (click)="hidePassword.set(!hidePassword())"
+        [attr.aria-label]="hidePassword() ? 'Show password' : 'Hide password'"
+      >
+        <mat-icon>{{ hidePassword() ? 'visibility' : 'visibility_off' }}</mat-icon>
+      </button>
+    </mat-form-field>
 
     @if (authService.formErrorMessage()) {
-      <p-message severity="error" [text]="authService.formErrorMessage()!" />
+      <cva-message severity="error" [text]="authService.formErrorMessage()!" />
     }
 
     @if (authService.error()) {
-      <p-message severity="warn" [text]="authService.error()!.message" />
+      <cva-message severity="warn" [text]="authService.error()!.message" />
     }
 
-    <p-button
-      type="submit"
-      [label]="submitLabel()"
-      [icon]="isSignUp ? 'pi pi-user-plus' : 'pi pi-sign-in'"
-      styleClass="w-full"
-      [disabled]="authForm.invalid || authService.isLoading()"
-      [loading]="authService.isLoading()"
-    />
+    <button matButton="filled" type="submit" [disabled]="authForm.invalid || authService.isLoading()">
+      @if (authService.isLoading()) {
+        <mat-spinner class="submit-spinner" [diameter]="18" />
+      } @else {
+        <mat-icon>{{ isSignUp ? 'person_add' : 'login' }}</mat-icon>
+      }
+      {{ submitLabel() }}
+    </button>
 
-    <p class="text-center text-sm leading-6 text-gray-500">
-      This demo uses a real Better Auth session and a Convex-protected route.
-    </p>
+    <p class="form-note">This demo uses a real Better Auth session and a Convex-protected route.</p>
   </form>
 </ng-template>

@@ -1,0 +1,24 @@
+@use 'layout' as *;
+
+.message {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font: var(--mat-sys-body-small);
+
+  mat-icon {
+    flex-shrink: 0;
+  }
+}
+
+.message--error {
+  @include error-panel;
+
+  padding: 0.75rem;
+}
+
+.message--warn {
+  @include panel-tone(warn);
+
+  padding: 0.75rem;
+}

@@ -1,15 +1,17 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
+import { MatCardModule } from '@angular/material/card';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTabsModule } from '@angular/material/tabs';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
-import { InputTextModule } from 'primeng/inputtext';
-import { MessageModule } from 'primeng/message';
-import { PasswordModule } from 'primeng/password';
-import { TabsModule } from 'primeng/tabs';
 
 import { DemoAuthService } from '../../auth/demo-auth.service';
+import { Message } from '../shared/message/message';
 
 type AuthMode = 'sign-in' | 'sign-up';
 
@@ -18,15 +20,18 @@ type AuthMode = 'sign-in' | 'sign-up';
     NgTemplateOutlet,
     ReactiveFormsModule,
     RouterLink,
-    ButtonModule,
-    CardModule,
-    InputTextModule,
-    MessageModule,
-    PasswordModule,
-    TabsModule,
+    MatButtonModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+    MatTabsModule,
+    Message,
   ],
   selector: 'cva-auth-login',
   templateUrl: 'auth-login.html',
+  styleUrl: 'auth-login.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block',
@@ -38,6 +43,7 @@ export default class AuthLogin {
   private readonly fb = inject(NonNullableFormBuilder);
   readonly authService = inject(DemoAuthService);
   readonly mode = signal<AuthMode>('sign-in');
+  readonly hidePassword = signal(true);
 
   readonly authForm = this.fb.group({
     name: ['', [Validators.minLength(2)]],
@@ -71,10 +77,8 @@ export default class AuthLogin {
     this.mode.set(mode);
   }
 
-  onTabChange(value: string | number | undefined): void {
-    if (this.isAuthMode(value)) {
-      this.setMode(value);
-    }
+  onTabChange(index: number): void {
+    this.setMode(index === 1 ? 'sign-up' : 'sign-in');
   }
 
   async onSubmit(): Promise<void> {
@@ -92,10 +96,6 @@ export default class AuthLogin {
     if (success) {
       await this.router.navigateByUrl(this.getSuccessUrl());
     }
-  }
-
-  private isAuthMode(value: unknown): value is AuthMode {
-    return value === 'sign-in' || value === 'sign-up';
   }
 
   private getSuccessUrl(): string {

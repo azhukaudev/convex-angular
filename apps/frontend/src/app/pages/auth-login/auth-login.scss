@@ -1,0 +1,62 @@
+@use 'layout' as *;
+
+.page {
+  @include page-container(28rem);
+
+  justify-content: center;
+  gap: 1.5rem;
+  padding-block: 3rem;
+}
+
+.tab-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-block: 1.5rem;
+
+  h1 {
+    margin: 0;
+    font: var(--mat-sys-headline-medium);
+  }
+}
+
+.tab-intro__eyebrow {
+  @include eyebrow;
+
+  color: var(--mat-sys-primary);
+}
+
+.tab-intro__copy {
+  @include muted;
+
+  margin: 0;
+  font: var(--mat-sys-body-small);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.submit-spinner {
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+
+.form-note {
+  @include muted;
+
+  margin: 0;
+  text-align: center;
+  font: var(--mat-sys-body-small);
+}
+
+.back-link {
+  text-align: center;
+  font: var(--mat-sys-body-small);
+
+  a {
+    @include inline-link;
+  }
+}
