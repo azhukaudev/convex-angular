@@ -8,7 +8,6 @@ const config: KnipConfig = {
     'apps/frontend/src/main.ts',
     'apps/frontend/src/test-setup.ts',
     'apps/frontend/src/types.d.ts',
-    'apps/frontend/src/styles.css',
     'apps/frontend/src/styles.scss',
     // Swapped in via the production fileReplacements in project.json
     'apps/frontend/src/environments/environment.prod.ts',
