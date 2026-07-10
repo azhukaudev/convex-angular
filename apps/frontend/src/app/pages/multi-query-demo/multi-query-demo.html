@@ -46,8 +46,8 @@
             matInput
             id="multiQueryPreviewCount"
             type="number"
-            [(ngModel)]="previewCount"
-            (blur)="previewCount.set(effectivePreviewCount())"
+            [(ngModel)]="previewCount.value"
+            (blur)="previewCount.normalize()"
             [disabled]="!showPreview()"
             min="1"
             max="20"
@@ -63,8 +63,8 @@
             matInput
             id="multiQueryFullCount"
             type="number"
-            [(ngModel)]="fullCount"
-            (blur)="fullCount.set(effectiveFullCount())"
+            [(ngModel)]="fullCount.value"
+            (blur)="fullCount.normalize()"
             [disabled]="!showFullList()"
             min="1"
             max="50"

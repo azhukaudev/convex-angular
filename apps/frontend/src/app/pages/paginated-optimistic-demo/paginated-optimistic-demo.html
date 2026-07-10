@@ -61,8 +61,8 @@
               matInput
               id="optimisticPageSize"
               type="number"
-              [(ngModel)]="pageSize"
-              (blur)="pageSize.set(effectivePageSize())"
+              [(ngModel)]="pageSize.value"
+              (blur)="pageSize.normalize()"
               min="1"
               max="6"
             />

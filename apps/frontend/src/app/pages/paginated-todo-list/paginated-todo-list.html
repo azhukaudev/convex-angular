@@ -12,8 +12,8 @@
         matInput
         id="pageSize"
         type="number"
-        [(ngModel)]="pageSize"
-        (blur)="pageSize.set(effectivePageSize())"
+        [(ngModel)]="pageSize.value"
+        (blur)="pageSize.normalize()"
         min="1"
         max="50"
       />
@@ -61,7 +61,7 @@
         </div>
       } @else if (todos.canLoadMore()) {
         <button matButton="tonal" (click)="handleLoadMore()">
-          <mat-icon>arrow_downward</mat-icon>Load More ({{ effectivePageSize() }})
+          <mat-icon>arrow_downward</mat-icon>Load More ({{ pageSize.effective() }})
         </button>
         <span class="load-more__hint">{{ todos.results().length }} items loaded</span>
       } @else if (todos.isExhausted()) {

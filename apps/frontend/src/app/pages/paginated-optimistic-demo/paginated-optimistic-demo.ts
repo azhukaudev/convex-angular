@@ -19,7 +19,7 @@ import { FunctionArgs } from 'convex/server';
 
 import { api } from '../../../convex/_generated/api';
 import { Doc, Id } from '../../../convex/_generated/dataModel';
-import { clampNumber } from '../shared/clamp-number';
+import { numberField } from '../shared/number-field';
 import { PageHeader } from '../shared/page-header/page-header';
 
 type DemoLane = 'alpha' | 'beta';
@@ -48,9 +48,7 @@ export default class PaginatedOptimisticDemo {
   private operationSequence = 0;
 
   readonly selectedLane = model<DemoLane>('alpha');
-  // Holds null while the field is cleared; consumers use effectivePageSize.
-  readonly pageSize = model<number | null>(3);
-  readonly effectivePageSize = computed(() => clampNumber(this.pageSize(), 1, 6, 3));
+  readonly pageSize = numberField(3, 1, 6);
   readonly lastOperation = signal(
     'Reset a lane, load more pages, then try each helper button to see how the list responds immediately.',
   );
@@ -58,7 +56,7 @@ export default class PaginatedOptimisticDemo {
   readonly items = injectPaginatedQuery(
     api.optimisticPaginationDemo.listItemsPaginated,
     () => ({ lane: this.selectedLane() }),
-    { initialNumItems: this.effectivePageSize },
+    { initialNumItems: this.pageSize.effective },
   );
 
   readonly resetLane = injectMutation(api.optimisticPaginationDemo.resetLane);
@@ -176,7 +174,7 @@ export default class PaginatedOptimisticDemo {
   }
 
   handleLoadMore(): void {
-    this.items.loadMore(this.effectivePageSize());
+    this.items.loadMore(this.pageSize.effective());
   }
 
   handleResetPagination(): void {
