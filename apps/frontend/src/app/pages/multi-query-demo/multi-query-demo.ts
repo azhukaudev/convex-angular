@@ -1,29 +1,30 @@
 import { JsonPipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, model } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { MatCardModule } from '@angular/material/card';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { injectQueries, skipToken } from 'convex-angular';
-import { ButtonModule } from 'primeng/button';
-import { CardModule } from 'primeng/card';
-import { CheckboxModule } from 'primeng/checkbox';
-import { InputNumberModule } from 'primeng/inputnumber';
-import { ProgressSpinnerModule } from 'primeng/progressspinner';
 
 import { api } from '../../../convex/_generated/api';
+import { PageHeader } from '../shared/page-header/page-header';
 
 @Component({
   imports: [
     JsonPipe,
     FormsModule,
-    RouterLink,
-    ButtonModule,
-    CardModule,
-    CheckboxModule,
-    InputNumberModule,
-    ProgressSpinnerModule,
+    MatCardModule,
+    MatCheckboxModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatProgressSpinnerModule,
+    PageHeader,
   ],
   selector: 'cva-multi-query-demo',
   templateUrl: 'multi-query-demo.html',
+  styleUrl: 'multi-query-demo.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block',
