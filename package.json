@@ -2,6 +2,7 @@
   "name": "@convex-angular/source",
   "version": "0.0.0",
   "license": "MIT",
+  "packageManager": "pnpm@11.11.0",
   "scripts": {
     "dev:frontend": "nx serve frontend",
     "dev:backend": "convex dev",
