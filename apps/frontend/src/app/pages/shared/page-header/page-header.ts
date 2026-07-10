@@ -8,8 +8,7 @@ export type PageHeaderLink = {
 
 /**
  * Shared demo-page header: title, optional description, home link, and an
- * optional row of related-example links. Extracted so the nine demo pages do
- * not repeat the same header markup (which would trip check:duplication).
+ * optional row of related-example links.
  */
 @Component({
   imports: [RouterLink],

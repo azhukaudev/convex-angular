@@ -3,7 +3,7 @@
 // Shared layout/pattern mixins for the demo pages. Import with
 // `@use 'layout' as *;` (resolved via stylePreprocessorOptions.includePaths).
 // Keep these mixins — not global utility classes — so styles stay
-// component-scoped (see the migration spec).
+// component-scoped.
 
 @mixin page-container($max-width) {
   display: flex;
@@ -36,7 +36,7 @@
   color: var(--mat-sys-on-error-container);
 }
 
-// Dark "showcase" panel (replaces the bg-slate-950 blocks).
+// Dark "showcase" panel.
 @mixin inverse-panel {
   border-radius: 16px;
   background: var(--mat-sys-inverse-surface);
@@ -80,7 +80,7 @@
   }
 }
 
-// <dl> of label/value pairs (auth-success, multi-query, prewarm, diagnostics).
+// <dl> of label/value pairs.
 @mixin detail-list {
   display: grid;
   gap: 0.75rem;

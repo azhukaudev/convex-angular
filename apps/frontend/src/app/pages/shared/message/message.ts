@@ -2,8 +2,8 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 
 /**
- * Inline status message (replaces PrimeNG's p-message) — Material has no
- * inline message component; snackbars are the wrong shape for form errors.
+ * Inline status message — Material has no inline message component, and
+ * snackbars are the wrong shape for form errors.
  */
 @Component({
   imports: [MatIconModule],
