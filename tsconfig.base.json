@@ -16,7 +16,8 @@
     "baseUrl": ".",
     "paths": {
       "convex-angular": ["packages/convex-angular/src/index.ts"],
-      "convex-angular/testing": ["packages/convex-angular/testing/src/index.ts"]
+      "convex-angular/testing": ["packages/convex-angular/testing/src/index.ts"],
+      "convex-angular/better-auth": ["packages/convex-angular/better-auth/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

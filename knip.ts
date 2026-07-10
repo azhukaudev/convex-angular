@@ -20,6 +20,8 @@ const config: KnipConfig = {
     'packages/convex-angular/src/test-setup.ts',
     // Secondary entry point: convex-angular/testing
     'packages/convex-angular/testing/src/index.ts',
+    // Secondary entry point: convex-angular/better-auth
+    'packages/convex-angular/better-auth/src/index.ts',
     // Specs are entries (discovered by Jest, not imported)
     '{apps,packages}/**/*.spec.ts',
     // Tooling configs
