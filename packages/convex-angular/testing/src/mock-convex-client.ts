@@ -13,9 +13,9 @@ export interface MockQuerySubscription {
   query: unknown;
   /** The args the helper subscribed with. */
   args: Record<string, unknown>;
-  /** Deliver a result to the subscriber, as the live WebSocket would. */
+  /** Deliver a result to the subscriber, as the live WebSocket would; a no-op once the helper has unsubscribed. */
   emit: (result: unknown) => void;
-  /** Deliver an error to the subscriber. */
+  /** Deliver an error to the subscriber; a no-op once the helper has unsubscribed. */
   emitError: (err: Error) => void;
   /** True once the helper has unsubscribed. */
   unsubscribed: boolean;
@@ -32,7 +32,9 @@ export interface MockPaginatedSubscription {
   query: unknown;
   args: Record<string, unknown>;
   initialNumItems: number;
+  /** Deliver a result to the subscriber, as the live WebSocket would; a no-op once the helper has unsubscribed. */
   emit: (result: { results: unknown[]; status: string; loadMore: (n: number) => boolean }) => void;
+  /** Deliver an error to the subscriber; a no-op once the helper has unsubscribed. */
   emitError: (err: Error) => void;
   unsubscribed: boolean;
 }
@@ -200,8 +202,17 @@ export class MockConvexClient {
       query,
       args,
       unsubscribed: false,
-      emit: (result) => onUpdate(result),
-      emitError: (err) => onError?.(err),
+      // Mirrors the real client: nothing is delivered after unsubscribe.
+      emit: (result) => {
+        if (!subscription.unsubscribed) {
+          onUpdate(result);
+        }
+      },
+      emitError: (err) => {
+        if (!subscription.unsubscribed) {
+          onError?.(err);
+        }
+      },
     };
     this.querySubscriptions.push(subscription);
     return () => {
@@ -225,8 +236,17 @@ export class MockConvexClient {
       args,
       initialNumItems: options.initialNumItems,
       unsubscribed: false,
-      emit: (result) => onUpdate(result),
-      emitError: (err) => onError?.(err),
+      // Mirrors the real client: nothing is delivered after unsubscribe.
+      emit: (result) => {
+        if (!subscription.unsubscribed) {
+          onUpdate(result);
+        }
+      },
+      emitError: (err) => {
+        if (!subscription.unsubscribed) {
+          onError?.(err);
+        }
+      },
     };
     this.paginatedSubscriptions.push(subscription);
     return () => {

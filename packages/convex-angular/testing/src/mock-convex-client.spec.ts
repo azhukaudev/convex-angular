@@ -9,12 +9,25 @@ import {
 } from 'convex-angular';
 import { FunctionReference } from 'convex/server';
 
-import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from './mock-convex-client';
+import {
+  MockConvexClient,
+  MockPaginatedSubscription,
+  MockQuerySubscription,
+  provideConvexTesting,
+} from './mock-convex-client';
 
 function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscription {
   const subscription = convex.lastQuerySubscription();
   if (!subscription) {
     throw new Error('Expected a captured query subscription');
+  }
+  return subscription;
+}
+
+function requireLastPaginatedSubscription(convex: MockConvexClient): MockPaginatedSubscription {
+  const subscription = convex.lastPaginatedSubscription();
+  if (!subscription) {
+    throw new Error('Expected a captured paginated subscription');
   }
   return subscription;
 }
@@ -178,4 +191,66 @@ describe('MockConvexClient with real library helpers', () => {
     expect(fixture.componentInstance.connection().isWebSocketConnected).toBe(false);
     expect(() => disabledConvex.client).toThrow('ConvexClient is disabled');
   }));
+
+  describe('unsubscribe fidelity', () => {
+    it('stops delivering query results after unsubscribe, like the real client', () => {
+      const onUpdate = jest.fn();
+      const unsubscribe = convex.onUpdate(mockQuery, {}, onUpdate);
+
+      unsubscribe();
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
+
+      expect(onUpdate).not.toHaveBeenCalled();
+      expect(requireLastQuerySubscription(convex).unsubscribed).toBe(true);
+    });
+
+    it('stops delivering query errors after unsubscribe, like the real client', () => {
+      const onUpdate = jest.fn();
+      const onError = jest.fn();
+      const unsubscribe = convex.onUpdate(mockQuery, {}, onUpdate, onError);
+
+      unsubscribe();
+      requireLastQuerySubscription(convex).emitError(new Error('boom'));
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('stops delivering paginated results after unsubscribe, like the real client', () => {
+      const onUpdate = jest.fn();
+      const unsubscribe = convex.onPaginatedUpdate_experimental(mockQuery, {}, { initialNumItems: 10 }, onUpdate);
+
+      unsubscribe();
+      requireLastPaginatedSubscription(convex).emit({ results: [], status: 'Exhausted', loadMore: () => false });
+
+      expect(onUpdate).not.toHaveBeenCalled();
+      expect(requireLastPaginatedSubscription(convex).unsubscribed).toBe(true);
+    });
+
+    it('stops delivering paginated errors after unsubscribe, like the real client', () => {
+      const onUpdate = jest.fn();
+      const onError = jest.fn();
+      const unsubscribe = convex.onPaginatedUpdate_experimental(
+        mockQuery,
+        {},
+        { initialNumItems: 10 },
+        onUpdate,
+        onError,
+      );
+
+      unsubscribe();
+      requireLastPaginatedSubscription(convex).emitError(new Error('boom'));
+
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('still delivers results before unsubscribe (guards against over-gating)', () => {
+      const onUpdate = jest.fn();
+      const unsubscribe = convex.onUpdate(mockQuery, {}, onUpdate);
+
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
+
+      expect(onUpdate).toHaveBeenCalledWith([{ _id: '1', title: 'Todo' }]);
+      unsubscribe();
+    });
+  });
 });
