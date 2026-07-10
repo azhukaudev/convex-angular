@@ -50,5 +50,7 @@ Thumbs.db
 .claude/worktrees
 .nx/polygraph
 .nx/self-healing
+
 # Local AI working docs
 docs/superpowers/
+plans/
