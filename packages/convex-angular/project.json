@@ -34,11 +34,10 @@
       }
     },
     "test": {
-      "executor": "@nx/jest:jest",
+      "executor": "@nx/vitest:test",
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
-        "jestConfig": "packages/convex-angular/jest.config.ts",
-        "tsConfig": "packages/convex-angular/tsconfig.spec.json"
+        "configFile": "packages/convex-angular/vitest.config.mts"
       }
     },
     "lint": {

@@ -91,3 +91,4 @@ minimumReleaseAgeExclude:
   - '@nx/webpack@23.0.2'
   - '@nx/workspace@23.0.2'
   - nx@23.0.2
+  - '@nx/vitest@23.0.2'

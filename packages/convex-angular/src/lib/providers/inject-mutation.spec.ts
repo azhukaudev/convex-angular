@@ -2,16 +2,13 @@ import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angu
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
+import type { Mocked } from 'vitest';
 
 import { CONVEX } from '../tokens/convex';
 import { MutationReference, injectMutation } from './inject-mutation';
 
 type Assert<T extends true> = T;
-type IsExact<T, Expected> = [T] extends [Expected]
-  ? [Expected] extends [T]
-    ? true
-    : false
-  : false;
+type IsExact<T, Expected> = [T] extends [Expected] ? ([Expected] extends [T] ? true : false) : false;
 
 // Mock mutation function reference
 const mockMutation = (() => {}) as unknown as FunctionReference<
@@ -38,15 +35,15 @@ function createDeferred<T>(): Deferred<T> {
 }
 
 describe('injectMutation', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
+  let mockConvexClient: Mocked<ConvexClient>;
   const ignoreRejection = (promise: Promise<unknown>) => {
     promise.catch(() => undefined);
   };
 
   beforeEach(() => {
     mockConvexClient = {
-      mutation: jest.fn(),
-    } as unknown as jest.Mocked<ConvexClient>;
+      mutation: vi.fn(),
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -86,9 +83,7 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       type MutationData = ReturnType<TestComponent['addTodo']['data']>;
-      const assertMutationDataType: Assert<
-        IsExact<MutationData, { id: string } | undefined>
-      > = true;
+      const assertMutationDataType: Assert<IsExact<MutationData, { id: string } | undefined>> = true;
 
       const typedData: MutationData = fixture.componentInstance.addTodo.data();
 
@@ -164,9 +159,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.data()).toEqual(mockResult);
@@ -188,9 +181,7 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       let result: unknown;
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'test' })
-        .then((r) => (result = r));
+      fixture.componentInstance.addTodo.mutate({ title: 'test' }).then((r) => (result = r));
       tick();
 
       expect(result).toEqual(mockResult);
@@ -215,9 +206,7 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       // First call - error
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.error()).toBeDefined();
@@ -270,9 +259,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.error()).toBe(error);
@@ -293,9 +280,7 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       let rejection: unknown;
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'test' })
-        .catch((error) => (rejection = error));
+      fixture.componentInstance.addTodo.mutate({ title: 'test' }).catch((error) => (rejection = error));
       tick();
 
       const error = fixture.componentInstance.addTodo.error();
@@ -320,9 +305,7 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       let rejection: unknown;
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'test' })
-        .catch((error) => (rejection = error));
+      fixture.componentInstance.addTodo.mutate({ title: 'test' }).catch((error) => (rejection = error));
       tick();
 
       expect(rejection).toBe(failure);
@@ -338,7 +321,7 @@ describe('injectMutation', () => {
     it('should call onSuccess callback with result', fakeAsync(() => {
       const mockResult = { id: '123' };
       mockConvexClient.mutation.mockResolvedValue(mockResult);
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
 
       @Component({
         template: '',
@@ -351,9 +334,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(onSuccess).toHaveBeenCalledWith(mockResult);
@@ -362,7 +343,7 @@ describe('injectMutation', () => {
     it('should call onError callback with error', fakeAsync(() => {
       const error = new Error('Failed');
       mockConvexClient.mutation.mockRejectedValue(error);
-      const onError = jest.fn();
+      const onError = vi.fn();
 
       @Component({
         template: '',
@@ -375,9 +356,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(onError).toHaveBeenCalledWith(error);
@@ -386,7 +365,7 @@ describe('injectMutation', () => {
 
     it('should not call onSuccess on error', fakeAsync(() => {
       mockConvexClient.mutation.mockRejectedValue(new Error('Failed'));
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
 
       @Component({
         template: '',
@@ -399,9 +378,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(onSuccess).not.toHaveBeenCalled();
@@ -409,7 +386,7 @@ describe('injectMutation', () => {
 
     it('should not call onError on success', fakeAsync(() => {
       mockConvexClient.mutation.mockResolvedValue({ id: '123' });
-      const onError = jest.fn();
+      const onError = vi.fn();
 
       @Component({
         template: '',
@@ -422,9 +399,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(onError).not.toHaveBeenCalled();
@@ -434,7 +409,7 @@ describe('injectMutation', () => {
   describe('optimistic updates', () => {
     it('should pass optimisticUpdate option to convex.mutation()', fakeAsync(() => {
       mockConvexClient.mutation.mockResolvedValue({ id: '123' });
-      const optimisticUpdate = jest.fn();
+      const optimisticUpdate = vi.fn();
 
       @Component({
         template: '',
@@ -447,16 +422,10 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
-      expect(mockConvexClient.mutation).toHaveBeenCalledWith(
-        mockMutation,
-        { title: 'test' },
-        { optimisticUpdate },
-      );
+      expect(mockConvexClient.mutation).toHaveBeenCalledWith(mockMutation, { title: 'test' }, { optimisticUpdate });
     }));
   });
 
@@ -475,9 +444,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
@@ -497,9 +464,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
@@ -557,9 +522,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.status()).toBe('success');
@@ -579,9 +542,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.status()).toBe('error');
@@ -639,9 +600,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.isSuccess()).toBe(true);
@@ -661,9 +620,7 @@ describe('injectMutation', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.isSuccess()).toBe(false);
@@ -686,9 +643,7 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       // Run a mutation
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.data()).toBeDefined();
@@ -719,9 +674,7 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       // Run a failing mutation
-      ignoreRejection(
-        fixture.componentInstance.addTodo.mutate({ title: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }));
       tick();
 
       expect(fixture.componentInstance.addTodo.error()).toBeDefined();
@@ -740,9 +693,7 @@ describe('injectMutation', () => {
       const first = createDeferred<{ id: string }>();
       const second = createDeferred<{ id: string }>();
 
-      mockConvexClient.mutation
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
+      mockConvexClient.mutation.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
       @Component({
         template: '',
@@ -757,12 +708,8 @@ describe('injectMutation', () => {
 
       let firstResult: unknown;
       let secondResult: unknown;
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'first' })
-        .then((value) => (firstResult = value));
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'second' })
-        .then((value) => (secondResult = value));
+      fixture.componentInstance.addTodo.mutate({ title: 'first' }).then((value) => (firstResult = value));
+      fixture.componentInstance.addTodo.mutate({ title: 'second' }).then((value) => (secondResult = value));
 
       second.resolve({ id: 'second' });
       tick();
@@ -789,9 +736,7 @@ describe('injectMutation', () => {
       const first = createDeferred<{ id: string }>();
       const second = createDeferred<{ id: string }>();
 
-      mockConvexClient.mutation
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
+      mockConvexClient.mutation.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
       @Component({
         template: '',
@@ -806,12 +751,8 @@ describe('injectMutation', () => {
 
       let firstError: unknown;
       let secondResult: unknown;
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'first' })
-        .catch((error) => (firstError = error));
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'second' })
-        .then((value) => (secondResult = value));
+      fixture.componentInstance.addTodo.mutate({ title: 'first' }).catch((error) => (firstError = error));
+      fixture.componentInstance.addTodo.mutate({ title: 'second' }).then((value) => (secondResult = value));
 
       second.resolve({ id: 'second' });
       tick();
@@ -838,9 +779,7 @@ describe('injectMutation', () => {
       const first = createDeferred<{ id: string }>();
       const second = createDeferred<{ id: string }>();
 
-      mockConvexClient.mutation
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
+      mockConvexClient.mutation.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
       @Component({
         template: '',
@@ -855,12 +794,8 @@ describe('injectMutation', () => {
 
       let firstResult: unknown;
       let secondError: unknown;
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'first' })
-        .then((value) => (firstResult = value));
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'second' })
-        .catch((error) => (secondError = error));
+      fixture.componentInstance.addTodo.mutate({ title: 'first' }).then((value) => (firstResult = value));
+      fixture.componentInstance.addTodo.mutate({ title: 'second' }).catch((error) => (secondError = error));
 
       const latestError = new Error('latest failure');
       second.reject(latestError);
@@ -885,9 +820,7 @@ describe('injectMutation', () => {
       const first = createDeferred<{ id: string }>();
       const second = createDeferred<{ id: string }>();
 
-      mockConvexClient.mutation
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
+      mockConvexClient.mutation.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
       @Component({
         template: '',
@@ -932,9 +865,7 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       let result: unknown;
-      fixture.componentInstance.addTodo
-        .mutate({ title: 'test' })
-        .then((value) => (result = value));
+      fixture.componentInstance.addTodo.mutate({ title: 'test' }).then((value) => (result = value));
 
       expect(fixture.componentInstance.addTodo.isLoading()).toBe(true);
 
@@ -957,7 +888,7 @@ describe('injectMutation', () => {
 
     it('should ignore a pending success after the owning component is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ id: string }>();
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
       mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
 
       @Component({
@@ -996,7 +927,7 @@ describe('injectMutation', () => {
 
     it('should ignore a pending failure after the owning component is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ id: string }>();
-      const onError = jest.fn();
+      const onError = vi.fn();
       mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
 
       @Component({
@@ -1011,7 +942,9 @@ describe('injectMutation', () => {
       fixture.detectChanges();
 
       let rejection: unknown;
-      ignoreRejection(fixture.componentInstance.addTodo.mutate({ title: 'test' }).catch((error) => (rejection = error)));
+      ignoreRejection(
+        fixture.componentInstance.addTodo.mutate({ title: 'test' }).catch((error) => (rejection = error)),
+      );
 
       expect(fixture.componentInstance.addTodo.isLoading()).toBe(true);
 
@@ -1053,7 +986,7 @@ describe('injectMutation', () => {
 
     it('should ignore a pending success after the provided injector is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ id: string }>();
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
       mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);
@@ -1085,7 +1018,7 @@ describe('injectMutation', () => {
 
     it('should ignore a pending failure after the provided injector is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ id: string }>();
-      const onError = jest.fn();
+      const onError = vi.fn();
       mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);

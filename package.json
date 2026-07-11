@@ -44,6 +44,8 @@
     "zone.js": "0.16.2"
   },
   "devDependencies": {
+    "@analogjs/vite-plugin-angular": "~2.1.2",
+    "@analogjs/vitest-angular": "~2.1.2",
     "@angular-devkit/build-angular": "21.2.19",
     "@angular-devkit/core": "21.2.19",
     "@angular-devkit/schematics": "21.2.19",
@@ -58,8 +60,10 @@
     "@nx/eslint-plugin": "23.0.2",
     "@nx/jest": "23.0.2",
     "@nx/js": "23.0.2",
+    "@nx/vitest": "23.0.2",
     "@nx/web": "23.0.2",
     "@nx/workspace": "23.0.2",
+    "@oxc-project/runtime": "^0.115.0",
     "@schematics/angular": "21.2.19",
     "@swc-node/register": "1.11.1",
     "@swc/core": "1.15.41",
@@ -67,6 +71,7 @@
     "@types/jest": "30.0.0",
     "@types/node": "24.13.1",
     "@typescript-eslint/utils": "8.61.0",
+    "@vitest/coverage-v8": "~4.1.0",
     "angular-eslint": "21.4.0",
     "eslint": "9.39.4",
     "eslint-config-prettier": "10.1.8",
@@ -74,6 +79,7 @@
     "jest-environment-jsdom": "30.4.1",
     "jest-preset-angular": "16.2.0",
     "jscpd": "5.0.6",
+    "jsdom": "^27.1.0",
     "jsonc-eslint-parser": "3.1.0",
     "knip": "6.16.1",
     "lefthook": "2.1.9",
@@ -85,7 +91,9 @@
     "tslib": "2.8.1",
     "typescript": "5.9.3",
     "typescript-eslint": "8.61.0",
-    "verdaccio": "6.7.2"
+    "verdaccio": "6.7.2",
+    "vite": "^8.0.0",
+    "vitest": "~4.1.0"
   },
   "nx": {
     "includedScripts": []

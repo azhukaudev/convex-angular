@@ -27,6 +27,7 @@ const config: KnipConfig = {
     // Tooling configs
     'jest.preset.js',
     '{apps,packages}/*/jest.config.ts',
+    '{apps,packages}/*/vitest.config.mts',
     '{apps,packages}/*/eslint.config.mjs',
   ],
   project: ['{apps,packages}/**/*.{ts,js,mjs}', '*.{ts,js,mjs}'],
@@ -50,12 +51,17 @@ const config: KnipConfig = {
     // Toolchain required by Nx Angular executors and `nx migrate`; never imported
     '@angular/cli',
     '@nx/workspace',
+    // Resolved at runtime by the @nx/vitest executor / vitest config, never imported
+    '@nx/vitest',
     // IDE Angular template support; never imported
     '@angular/language-service',
     // Loads TS configs (jest.config.ts) at runtime for Nx/Jest
     'ts-node',
     // Transformer underneath jest-preset-angular (peer dependency)
     'ts-jest',
+    // Emitted as runtime helper imports by @analogjs/vite-plugin-angular's
+    // es2016 downleveling (oxc); never imported from source
+    '@oxc-project/runtime',
     // Flat-config ESLint toolchain: pulled transitively by @nx/eslint-plugin
     // presets and referenced only as rule-name strings; versions are managed
     // by `nx migrate` and must stay installed for the presets to resolve
