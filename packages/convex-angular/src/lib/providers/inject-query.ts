@@ -241,6 +241,10 @@ export function injectQuery<Query extends QueryReference>(
     // Track current subscription for cleanup
     let unsubscribe: (() => void) | undefined;
     let activeGeneration = 0;
+    // Remembers the last subscription's identity (refetch version + args) so
+    // an equivalent-args re-run of the effect below can be skipped instead of
+    // tearing down and re-opening the live subscription.
+    let lastSubscriptionKey: string | undefined;
     const cleanupSubscription = () => {
       const currentUnsubscribe = unsubscribe;
       if (!currentUnsubscribe) {
@@ -253,15 +257,14 @@ export function injectQuery<Query extends QueryReference>(
     // Effect to reactively subscribe when args change
     effect(() => {
       const args = argsFn();
-      refetchVersion(); // Track for manual refetch
-      const generation = activeGeneration + 1;
-      activeGeneration = generation;
-
-      // Cleanup previous subscription
-      cleanupSubscription();
+      const currentRefetchVersion = refetchVersion(); // Track for manual refetch
 
       // If skipToken, reset state and don't subscribe
       if (args === skipToken) {
+        lastSubscriptionKey = undefined;
+        const generation = activeGeneration + 1;
+        activeGeneration = generation;
+        cleanupSubscription();
         data.set(undefined);
         error.set(undefined);
         isLoading.set(false);
@@ -270,6 +273,21 @@ export function injectQuery<Query extends QueryReference>(
         return;
       }
 
+      const argsKey = serializeQueryArgs(args);
+      const subscriptionKey = `${currentRefetchVersion}:${argsKey}`;
+      if (subscriptionKey === lastSubscriptionKey) {
+        // Reactive inputs changed but the query identity didn't: keep the
+        // live subscription instead of tearing it down and re-opening it.
+        return;
+      }
+      lastSubscriptionKey = subscriptionKey;
+
+      const generation = activeGeneration + 1;
+      activeGeneration = generation;
+
+      // Cleanup previous subscription
+      cleanupSubscription();
+
       // Not skipped - try to get cached data and start subscription
       isSkipped.set(false);
       isLoading.set(true);
@@ -277,7 +295,6 @@ export function injectQuery<Query extends QueryReference>(
       // current args below when still needed.
       const wasPlaceholder = untracked(isPlaceholderData);
       isPlaceholderData.set(false);
-      const argsKey = serializeQueryArgs(args);
 
       const settle = (result: FunctionReturnType<Query>) => {
         if (generation !== activeGeneration) {

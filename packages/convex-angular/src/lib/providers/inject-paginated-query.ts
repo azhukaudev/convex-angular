@@ -311,6 +311,10 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     let currentLoadMore: ((numItems: number) => boolean) | undefined;
     let unsubscribe: (() => void) | undefined;
     let activeGeneration = 0;
+    // Remembers the last subscription's identity (reset version + first-page
+    // args) so an equivalent-args re-run of the effect below can be skipped
+    // instead of tearing down and re-opening the live subscription.
+    let lastSubscriptionKey: string | undefined;
     const cleanupSubscription = () => {
       const currentUnsubscribe = unsubscribe;
       if (!currentUnsubscribe) {
@@ -446,15 +450,14 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
       // Track dependencies
       const args = argsFn();
       const initialNumItems = isSignal(options.initialNumItems) ? options.initialNumItems() : options.initialNumItems;
-      resetVersion();
-      const generation = activeGeneration + 1;
-      activeGeneration = generation;
-
-      // Cleanup previous subscription
-      cleanupSubscription();
+      const currentResetVersion = resetVersion();
 
       // If skipToken, reset state and don't subscribe
       if (args === skipToken) {
+        lastSubscriptionKey = undefined;
+        const generation = activeGeneration + 1;
+        activeGeneration = generation;
+        cleanupSubscription();
         results.set([]);
         error.set(undefined);
         isLoadingFirstPage.set(false);
@@ -473,6 +476,21 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
         paginationOpts: { numItems: initialNumItems, cursor: null },
       } as FunctionArgs<Query>;
       const argsKey = serializeQueryArgs(firstPageArgs);
+
+      const subscriptionKey = `${currentResetVersion}:${argsKey}`;
+      if (subscriptionKey === lastSubscriptionKey) {
+        // Reactive inputs changed but the query identity (including page
+        // size) didn't: keep the live subscription instead of tearing it
+        // down and re-opening it.
+        return;
+      }
+      lastSubscriptionKey = subscriptionKey;
+
+      const generation = activeGeneration + 1;
+      activeGeneration = generation;
+
+      // Cleanup previous subscription
+      cleanupSubscription();
 
       // Server-side rendering: the WebSocket client is disabled, so fetch the
       // first page once over HTTP. The loader registers a pending task (SSR

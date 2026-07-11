@@ -741,6 +741,87 @@ describe('injectQuery', () => {
     }));
   });
 
+  describe('equivalent args dedup', () => {
+    it('should not resubscribe when reactive args serialize identically', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sig = signal(20);
+        readonly todos = injectQuery(mockQuery, () => ({ count: Math.min(this.sig(), 10) }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+
+      // Changes to a value that serializes to the same args
+      fixture.componentInstance.sig.set(30);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+    }));
+
+    it('should still resubscribe via refetch() when args serialize identically', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sig = signal(20);
+        readonly todos = injectQuery(mockQuery, () => ({ count: Math.min(this.sig(), 10) }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      fixture.componentInstance.sig.set(30);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+
+      fixture.componentInstance.todos.refetch();
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+    }));
+
+    it('should resubscribe after a skipToken transition even when args return to the same value', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(false);
+        readonly todos = injectQuery(mockQuery, () => (this.shouldSkip() ? skipToken : { count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+
+      fixture.componentInstance.shouldSkip.set(true);
+      fixture.detectChanges();
+      tick();
+
+      fixture.componentInstance.shouldSkip.set(false);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+    }));
+  });
+
   describe('cleanup', () => {
     it('should unsubscribe on component destroy', fakeAsync(() => {
       @Component({

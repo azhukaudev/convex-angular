@@ -670,6 +670,93 @@ describe('injectPaginatedQuery', () => {
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
   }));
 
+  describe('equivalent args dedup', () => {
+    it('should not resubscribe when reactive args serialize identically', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sig = signal(20);
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({ count: Math.min(this.sig(), 10) }), {
+          initialNumItems: 10,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+
+      // Changes to a value that serializes to the same first-page args
+      fixture.componentInstance.sig.set(30);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+      expect(mockUnsubscribe).not.toHaveBeenCalled();
+    }));
+
+    it('should still resubscribe via reset() when args serialize identically', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sig = signal(20);
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({ count: Math.min(this.sig(), 10) }), {
+          initialNumItems: 10,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      fixture.componentInstance.sig.set(30);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+
+      fixture.componentInstance.todos.reset();
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+    }));
+
+    it('should resubscribe after a skipToken transition even when args return to the same value', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(false);
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => (this.shouldSkip() ? skipToken : {}), {
+          initialNumItems: 10,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+
+      fixture.componentInstance.shouldSkip.set(true);
+      fixture.detectChanges();
+      tick();
+
+      fixture.componentInstance.shouldSkip.set(false);
+      fixture.detectChanges();
+      tick();
+
+      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+    }));
+  });
+
   describe('skipToken', () => {
     it('should not subscribe when skipToken is returned', fakeAsync(() => {
       @Component({
