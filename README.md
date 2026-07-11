@@ -1126,6 +1126,21 @@ fetches unauthenticated. To disable server-side fetching entirely (helpers stay
 `pending` in the server HTML and load live after hydration), pass
 `ssr: { fetchOnServer: false }`.
 
+> **Cache safety**: authenticated results are embedded in the rendered HTML via
+> `TransferState`, along with everything else on the page. If that response is ever
+> stored in a shared cache (a CDN, a reverse proxy, a misconfigured `Cache-Control`),
+> one user's private data can be served to another. Any response produced while
+> `ssr.authToken` resolves a token **must** be served with `Cache-Control: private`
+> (or `no-store`).
+>
+> If you cannot guarantee that, set `ssr: { transferAuthenticatedResults: false }`.
+> The server still renders authenticated data into the HTML for that request, but it
+> is not duplicated into the transfer blob — the hydrated client re-fetches the data
+> live instead of seeding from `TransferState`, trading a brief post-hydration loading
+> state for keeping private data out of the transfer payload. The flag has no effect
+> on unauthenticated fetches (no `authToken` configured, or the factory resolves
+> `null`/`undefined`), which always transfer normally.
+
 ### SSR behavior by helper
 
 | Helper                            | On the server                                                                                                                          |

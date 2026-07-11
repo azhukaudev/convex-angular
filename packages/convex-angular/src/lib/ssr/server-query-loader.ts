@@ -28,7 +28,7 @@ export class ConvexServerQueryLoader {
   // requests. Entries are intentionally kept after settling — every consumer
   // of a query during the render shares one result (or one error).
   private readonly inflight = new Map<string, Promise<Value | undefined>>();
-  private authApplied: Promise<void> | undefined;
+  private authApplied: Promise<boolean> | undefined;
 
   /**
    * Whether server-side fetching is enabled (`ssr.fetchOnServer !== false`).
@@ -59,9 +59,12 @@ export class ConvexServerQueryLoader {
     const removeTask = this.pendingTasks.add();
     const fetchPromise = (async () => {
       try {
-        await this.applyAuth();
+        const authApplied = await this.applyAuth();
         const result = await this.httpClient.query(query, args);
-        this.transferState.set(makeQueryStateKey(queryName, argsKey), wrapQueryResult(result));
+        const suppressTransfer = authApplied && this.config.ssr.transferAuthenticatedResults === false;
+        if (!suppressTransfer) {
+          this.transferState.set(makeQueryStateKey(queryName, argsKey), wrapQueryResult(result));
+        }
         return result;
       } finally {
         removeTask();
@@ -75,12 +78,20 @@ export class ConvexServerQueryLoader {
     return fetchPromise as Promise<FunctionReturnType<Query>>;
   }
 
-  private applyAuth(): Promise<void> {
+  /**
+   * Resolves the configured auth token (once per render) and applies it to
+   * the HTTP client. Returns whether a token was actually applied, so
+   * callers can gate behavior that should only kick in for authenticated
+   * fetches.
+   */
+  private applyAuth(): Promise<boolean> {
     this.authApplied ??= (async () => {
       const token = await this.config.ssr.authToken?.();
       if (token) {
         this.httpClient.setAuth(token);
+        return true;
       }
+      return false;
     })();
     return this.authApplied;
   }

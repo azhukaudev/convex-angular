@@ -6,6 +6,7 @@
 
 - Add a `convex-angular/better-auth` entry point with `provideBetterAuth()` and `injectBetterAuth()`: built-in Better Auth integration (session tracking, Convex token exchange with caching/refresh/dedup) with no dependency on better-auth packages — the client is consumer-provided and typed structurally.
 - Add an optional `ClerkAuthProvider.sessionAudience` signal: when the session token's `aud` claim is `'convex'`, `provideClerkAuth()` uses Clerk's native Convex integration instead of requesting the `'convex'` JWT template.
+- Add `ssr.transferAuthenticatedResults` (default `true`) to `provideConvex(...)`: set to `false` to keep authenticated SSR query results out of `TransferState`/the rendered HTML, trading a brief post-hydration loading state for avoiding shared-cache exposure of per-user data.
 
 ### ⚠️ Breaking Changes
 

@@ -96,6 +96,52 @@ describe('ConvexServerQueryLoader', () => {
     expect(mockSetAuth).not.toHaveBeenCalled();
   });
 
+  it('should not transfer authenticated results when transferAuthenticatedResults is false', async () => {
+    const authToken = jest.fn().mockResolvedValue('jwt-token');
+    const loader = setup({ authToken, transferAuthenticatedResults: false });
+
+    const result = await loader.fetch(mockQuery, { count: 10 }, '{"count":10}');
+
+    expect(result).toEqual([{ _id: '1' }]);
+    expect(mockHttpQuery).toHaveBeenCalledWith(mockQuery, { count: 10 });
+
+    const transferState = TestBed.inject(TransferState);
+    const key = makeQueryStateKey('todos:list', '{"count":10}');
+    expect(transferState.hasKey(key)).toBe(false);
+  });
+
+  it('should transfer results when transferAuthenticatedResults is false but no token is resolved', async () => {
+    const authToken = jest.fn().mockResolvedValue(null);
+    const loader = setup({ authToken, transferAuthenticatedResults: false });
+
+    await loader.fetch(mockQuery, { count: 10 }, '{"count":10}');
+
+    const transferState = TestBed.inject(TransferState);
+    const key = makeQueryStateKey('todos:list', '{"count":10}');
+    expect(transferState.get(key, null)).toEqual({ d: [{ _id: '1' }] });
+  });
+
+  it('should transfer results when transferAuthenticatedResults is false and no authToken is configured', async () => {
+    const loader = setup({ transferAuthenticatedResults: false });
+
+    await loader.fetch(mockQuery, { count: 10 }, '{"count":10}');
+
+    const transferState = TestBed.inject(TransferState);
+    const key = makeQueryStateKey('todos:list', '{"count":10}');
+    expect(transferState.get(key, null)).toEqual({ d: [{ _id: '1' }] });
+  });
+
+  it('should transfer authenticated results by default when transferAuthenticatedResults is omitted', async () => {
+    const authToken = jest.fn().mockResolvedValue('jwt-token');
+    const loader = setup({ authToken });
+
+    await loader.fetch(mockQuery, { count: 10 }, '{"count":10}');
+
+    const transferState = TestBed.inject(TransferState);
+    const key = makeQueryStateKey('todos:list', '{"count":10}');
+    expect(transferState.get(key, null)).toEqual({ d: [{ _id: '1' }] });
+  });
+
   it('should propagate fetch errors and transfer nothing', async () => {
     mockHttpQuery.mockRejectedValue(new Error('boom'));
     const loader = setup();
