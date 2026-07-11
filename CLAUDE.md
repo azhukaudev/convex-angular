@@ -18,7 +18,7 @@ Use pnpm. Nx targets can be run either via the package.json scripts or `nx <targ
 - `pnpm check:duplication` — copy-paste detection over library + app sources (`jscpd`, config in `.jscpd.json`). Run it after adding or restructuring code; it exits non-zero when duplicated lines exceed the threshold (a ratchet set just above the current baseline). If your change trips it, extract a shared helper instead of raising the threshold; only raise the threshold deliberately, with justification. Spec files are excluded (mock scaffolding is intentionally repeated); the report's clone list tells you exactly which fragments to consolidate.
 - `pnpm check:deadcode` — unused files, exports, and dependencies (`knip`, config in `knip.ts`). The baseline is zero findings; keep it that way. Run it after adding/removing files, exports, or dependencies. If it flags your change, delete the dead code or remove the export from `index.ts` rather than suppressing; every entry in `knip.ts`'s ignore lists carries a comment justifying it — follow that pattern if a new exception is genuinely needed (e.g. a dependency used only by a builder at runtime).
 - `pnpm typecheck` — type-check the library sources with no emit (`tsc -p packages/convex-angular/tsconfig.lib.json`).
-- `pnpm typecheck:spec` — type-check `*.spec.ts` files (`tsconfig.spec.json`). The Jest runner transpiles specs with `isolatedModules` and does **not** type-check them, so a passing test suite can still hide spec type errors. This command surfaces a pre-existing backlog, so confirm your _changed_ specs are clean rather than expecting a fully green run.
+- `pnpm typecheck:spec` — type-check `*.spec.ts` files (`tsconfig.spec.json`). The Jest runner transpiles specs with `isolatedModules` and does **not** type-check them, so a passing test suite can still hide spec type errors. The suite is green and must stay that way — CI runs it unconditionally on every push and PR, so a regression here fails the build, not just a local nice-to-have.
 - `pnpm lint` — ESLint across all projects (`nx run-many -t lint`). Warnings are tolerated; errors block. `nx lint convex-angular --fix` auto-fixes.
 - `pnpm format` / `pnpm format:check` — Prettier write / check over the repo. Note: the pre-commit hook only formats _staged_ files, so a repo-wide `format:check` reports pre-existing drift in files untouched since the last config change — fix only the files you changed.
 - `pnpm verify:quick` — fast gate for localized changes: `typecheck` → `lint` → `check:duplication` → `check:deadcode`. Run a targeted test yourself (see below).
@@ -26,6 +26,8 @@ Use pnpm. Nx targets can be run either via the package.json scripts or `nx <targ
 - `pnpm update` — `nx migrate latest`
 
 Git hooks (`lefthook`, config in `lefthook.yml`, installed via the `prepare` script): pre-commit auto-formats staged files with prettier (re-staging fixes) and runs `check:duplication` + `check:deadcode` in parallel (~2s); pre-push runs `nx run-many -t lint,test,build` (cheap when the Nx cache is warm). A hook failure means the commit/push was rejected — fix the findings and retry; never bypass with `LEFTHOOK=0` except mid-rebase on already-reviewed commits.
+
+CI (`.github/workflows/ci.yml`) runs on every push to `main` and on every PR: `pnpm install --frozen-lockfile`, then `pnpm verify:full`, then `pnpm typecheck:spec` — both must pass. Node is pinned via `.nvmrc` (`setup-node` reads it); pnpm is pinned via the `packageManager` field (`pnpm/action-setup` reads it). Treat both gates as required, not advisory — there is no "changed files only" carve-out in CI.
 
 Targeted operations:
 
@@ -56,7 +58,7 @@ Rules that hold across the flow:
 
 ### The library (`packages/convex-angular`)
 
-Everything is exported through `src/index.ts`. The public API is a set of standalone `inject*` functions plus `provide*` environment providers — there are no NgModules. Source prefix is `cva`.
+Three entry points ship: the primary `convex-angular` (`src/index.ts`), and two secondary entry points, `convex-angular/testing` and `convex-angular/better-auth`. The public API is a set of standalone `inject*` functions plus `provide*` environment providers — there are no NgModules. Source prefix is `cva`.
 
 Key layers under `src/lib/`:
 
@@ -66,6 +68,11 @@ Key layers under `src/lib/`:
 - `guards/auth-guards.ts` — `convexAuthGuard` route guard, configurable via `CONVEX_AUTH_GUARD_CONFIG`.
 - `directives/auth-helpers.ts` — structural directives `*cvaAuthenticated`, `*cvaUnauthenticated`, `*cvaAuthLoading`.
 - `skip-token.ts` — `skipToken` sentinel for conditionally skipping queries.
+
+Secondary entry points (separate `package.json` sub-paths, published alongside the primary entry point):
+
+- `convex-angular/testing` — `MockConvexClient` and `provideConvexTesting()` for testing app code that depends on the library without a real Convex backend.
+- `convex-angular/better-auth` — `provideBetterAuth()` / `injectBetterAuth()` for the Better Auth integration; types the client structurally via `BetterAuthClientLike` (no dependency on `better-auth` packages); browser-only, SSR-inert (see Auth flow below).
 
 Patterns that repeat across the codebase and should be preserved when adding helpers:
 
@@ -80,15 +87,15 @@ Patterns that repeat across the codebase and should be preserved when adding hel
 `provideConvexAuth()` wires any `ConvexAuthProvider` into Convex's auth sync. `inject-auth.ts` runs an effect that watches the provider's `isLoading`/`isAuthenticated`/optional `reauthVersion`, and calls `convex.setAuth(fetchToken, onChange)` or `convex.client.clearAuth()` accordingly. `injectAuth().isAuthenticated()` is true only when **both** the provider reports authenticated **and** Convex confirms the token (`backendAuthenticated`). `fetchAccessToken` returning `null` is a normal signed-out outcome, not an error; errors are surfaced through the combined `error()` signal (provider vs internal errors are sequence-ordered).
 
 - `provideConvexAuthFromExisting(Type)` is the default custom path: registers `CONVEX_AUTH` with `useExisting` (not `useClass` — avoids duplicate instances) and includes `provideConvexAuth()`.
-- `provideClerkAuth()` / `provideAuth0Auth()` already include `provideConvexAuth()`; never register both.
+- `provideClerkAuth()` / `provideAuth0Auth()` / `provideBetterAuth()` (from `convex-angular/better-auth`) already include `provideConvexAuth()`; never register it separately.
 
 ### The demo app (`apps/frontend`)
 
-Standalone-component Angular app. `app.config.ts` sets up router and animations; `app.ts` configures the Material icon registry (Material Symbols as the default font set, plus an inline GitHub SVG icon). Routes live in `app.routes.ts` and `app/routes/*.routes.ts`; demo pages under `app/pages/`.
+Standalone-component Angular app. `app.config.ts` sets up the router, zone change detection, and browser global error listeners; `app.ts` configures the Material icon registry (Material Symbols as the default font set, plus an inline GitHub SVG icon). Routes live in `app.routes.ts` and `app/routes/*.routes.ts`; demo pages under `app/pages/`.
 
 UI uses Angular Material 3 + SCSS. The theme lives in `src/styles.scss` (`mat.theme` with the azure palette); dark mode follows the OS preference via `color-scheme: light dark` — there is no manual toggle. Shared styling lives in `src/styles/`: `_layout.scss` (mixins like `page-container`, `panel`, `panel-tone`, `eyebrow`, `code-block` — import with `@use 'layout' as *;`, resolved via `stylePreprocessorOptions.includePaths`) and `_tokens.scss` (`--app-success/warn/info-*` status colors, `light-dark()`-aware). The `demo-page-scaffold` mixin emits a standard class vocabulary (`.eyebrow`, `.error-panel`, `.warn-panel`, `.try-panel`, …) once globally from `styles.scss`; page stylesheets re-declare a class only where they diverge, and their component-scoped rules always win. Custom colors must use `var(--mat-sys-*)` or `--app-*` tokens, never hard-coded hex outside `_tokens.scss`. Each page has its own `.scss` with semantic class names (no utility classes). Shared UI components live in `app/pages/shared/` (`cva-page-header`, `cva-todo-item`, `cva-message`). Fonts (`@fontsource/roboto`, `material-symbols`) are self-hosted and wired through the `styles` array in `project.json`, hence their `ignoreDependencies` entries in `knip.ts`.
 
-The demo's auth provider is `app/auth/demo-auth.service.ts`, a `ConvexAuthProvider` backed by `@convex-dev/better-auth`. The Convex backend registers the better-auth component in `src/convex/convex.config.ts`.
+`app/auth/demo-auth.service.ts` (`DemoAuthService`) wraps the app-level Better Auth flows — sign-in/up/out on the shared client from `app/auth/auth-client.ts`, form-error surfacing, success-URL handling — and delegates session/token state to `injectBetterAuth()` from `convex-angular/better-auth`. Auth is registered via `provideBetterAuth(demoAuthClientFactory)` in `app/routes/auth.routes.ts` (`login` and `success` routes). The Convex backend registers the better-auth component in `src/convex/convex.config.ts`.
 
 **Environment variables**: the build injects `NG_APP_*` vars (see `apps/frontend/plugins/env-var-plugin.js`) into `environment.ts` at build time. Copy `.env.sample` to `.env.local` and set `CONVEX_DEPLOYMENT`, `NG_APP_CONVEX_URL`, `NG_APP_CONVEX_SITE_URL`, `NG_APP_SITE_URL`, `BETTER_AUTH_SECRET`, `SITE_URL`. The auth demo requires `NG_APP_CONVEX_SITE_URL` (the Convex `.site` origin).
 

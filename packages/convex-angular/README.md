@@ -741,20 +741,25 @@ integration.
 
 ```typescript
 // auth-client.ts — one shared client instance for flows and the library
-
-// app.config.ts
-import { ApplicationConfig } from '@angular/core';
 import { convexClient, crossDomainClient } from '@convex-dev/better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/client';
-import { provideConvex } from 'convex-angular';
-import { provideBetterAuth } from 'convex-angular/better-auth';
 
-import { authClient } from './auth-client';
+import { environment } from './environments/environment';
 
 export const authClient = createAuthClient({
   baseURL: environment.convexSiteUrl,
   plugins: [convexClient(), crossDomainClient()],
 });
+```
+
+```typescript
+// app.config.ts
+import { ApplicationConfig } from '@angular/core';
+import { provideConvex } from 'convex-angular';
+import { provideBetterAuth } from 'convex-angular/better-auth';
+
+import { authClient } from './auth-client';
+import { environment } from './environments/environment';
 
 export const appConfig: ApplicationConfig = {
   providers: [provideConvex(environment.convexUrl), provideBetterAuth(() => authClient)],
