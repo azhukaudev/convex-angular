@@ -79,6 +79,13 @@ export interface ClerkAuthProvider {
   orgRole?: Signal<string | null | undefined>;
 
   /**
+   * Optional: the session token's `aud` claim. When it is 'convex' the
+   * adapter uses Clerk's native Convex integration (no JWT template);
+   * otherwise it requests the 'convex' JWT template.
+   */
+  sessionAudience?: Signal<string | null | undefined>;
+
+  /**
    * Optional provider-owned error signal.
    */
   error?: Signal<Error | undefined>;
@@ -153,11 +160,23 @@ export function provideClerkAuth(): EnvironmentProviders {
       useFactory: (): ConvexAuthProvider => {
         const clerk = inject(CLERK_AUTH);
 
-        const fetchAccessToken = async (args: { forceRefreshToken: boolean }) =>
-          clerk.getToken({
-            template: 'convex',
-            skipCache: args.forceRefreshToken,
-          });
+        const fetchAccessToken = async (args: { forceRefreshToken: boolean }) => {
+          // Mirrors convex-react's Clerk adapter: a failed token fetch is the
+          // signed-out outcome, not an auth error.
+          try {
+            if (clerk.sessionAudience?.() === 'convex') {
+              // Using Clerk's native Convex integration: no JWT template.
+              return await clerk.getToken({ skipCache: args.forceRefreshToken });
+            }
+
+            return await clerk.getToken({
+              template: 'convex',
+              skipCache: args.forceRefreshToken,
+            });
+          } catch {
+            return null;
+          }
+        };
 
         return {
           isLoading: computed(() => !clerk.isLoaded()),

@@ -26,9 +26,11 @@ import { provideConvexAuth } from '../inject-auth';
  *   readonly isAuthenticated = toSignal(this.auth0.isAuthenticated$, { initialValue: false });
  *
  *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
- *     return this.auth0.getAccessTokenSilently({
+ *     const response = await this.auth0.getAccessTokenSilently({
+ *       detailedResponse: true,
  *       cacheMode: options?.cacheMode,
  *     });
+ *     return response.id_token;
  *   }
  * }
  * ```
@@ -51,11 +53,9 @@ export interface Auth0AuthProvider {
    * Function to get an access token from Auth0.
    *
    * @param options.cacheMode - 'on' to use cache, 'off' to bypass cache
-   * @returns Promise resolving to the access token
+   * @returns Promise resolving to the OIDC id token (the token Convex validates), or null when signed out
    */
-  getAccessTokenSilently(options?: {
-    cacheMode?: 'on' | 'off';
-  }): Promise<string>;
+  getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }): Promise<string | null>;
 
   /**
    * Optional provider-owned error signal.
@@ -99,11 +99,13 @@ export const AUTH0_AUTH = new InjectionToken<Auth0AuthProvider>('AUTH0_AUTH');
  *   readonly isAuthenticated = toSignal(this.auth0.isAuthenticated$, { initialValue: false });
  *
  *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
- *     return firstValueFrom(
+ *     const response = await firstValueFrom(
  *       this.auth0.getAccessTokenSilently({
+ *         detailedResponse: true,
  *         cacheMode: options?.cacheMode,
  *       })
  *     );
+ *     return response.id_token;
  *   }
  * }
  *
@@ -137,10 +139,18 @@ export function provideAuth0Auth(): EnvironmentProviders {
           isLoading: computed(() => auth0.isLoading()),
           isAuthenticated: computed(() => auth0.isAuthenticated()),
           error: auth0.error,
-          fetchAccessToken: (args) =>
-            auth0.getAccessTokenSilently({
-              cacheMode: args.forceRefreshToken ? 'off' : 'on',
-            }),
+          fetchAccessToken: async (args) => {
+            // Mirrors convex-react's adapters: a token-fetch failure (e.g. an
+            // expired SSO session throwing login_required) is the signed-out
+            // outcome, not an auth error.
+            try {
+              return await auth0.getAccessTokenSilently({
+                cacheMode: args.forceRefreshToken ? 'off' : 'on',
+              });
+            } catch {
+              return null;
+            }
+          },
         };
       },
     },

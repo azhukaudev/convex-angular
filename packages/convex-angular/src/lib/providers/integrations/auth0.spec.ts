@@ -116,18 +116,20 @@ describe('provideAuth0Auth', () => {
     expect(getAccessTokenSilently).toHaveBeenCalledWith({ cacheMode: 'off' });
   });
 
-  it('rethrows when Auth0 token fetching fails', async () => {
-    getAccessTokenSilently.mockRejectedValue(new Error('boom'));
+  it('resolves null instead of rejecting when Auth0 token fetching fails', async () => {
+    // Mirrors convex-react's Auth0 adapter: an expired SSO session throwing
+    // login_required is the signed-out outcome, not an auth error.
+    getAccessTokenSilently.mockRejectedValue(new Error('login_required'));
     configureTestingModule();
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    await expect(provider.fetchAccessToken({ forceRefreshToken: true })).rejects.toThrow('boom');
+    await expect(provider.fetchAccessToken({ forceRefreshToken: true })).resolves.toBeNull();
   });
 
-  it('surfaces Auth0 token fetch failures through injectAuth().error()', fakeAsync(() => {
+  it('treats a failed Auth0 token fetch as a clean signed-out state, not an error', fakeAsync(() => {
     isAuthenticated.set(true);
-    getAccessTokenSilently.mockRejectedValue(new Error('boom'));
+    getAccessTokenSilently.mockRejectedValue(new Error('login_required'));
     configureTestingModule();
 
     @Component({
@@ -151,11 +153,7 @@ describe('provideAuth0Auth', () => {
 
     expect(token).toBeNull();
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
-    expect(fixture.componentInstance.auth.error()).toEqual(
-      expect.objectContaining({
-        message: '[convex-angular auth] Token fetch failed: boom',
-      }),
-    );
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
   }));
 
   it('bundles provideConvexAuth so injectAuth works without separate setup', fakeAsync(() => {

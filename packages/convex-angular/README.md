@@ -705,7 +705,10 @@ export class Auth0AuthService implements Auth0AuthProvider {
   });
 
   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
-    return firstValueFrom(this.auth0.getAccessTokenSilently({ cacheMode: options?.cacheMode }));
+    const response = await firstValueFrom(
+      this.auth0.getAccessTokenSilently({ detailedResponse: true, cacheMode: options?.cacheMode }),
+    );
+    return response.id_token;
   }
 }
 

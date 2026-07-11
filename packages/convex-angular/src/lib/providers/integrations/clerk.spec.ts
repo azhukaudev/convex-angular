@@ -20,6 +20,7 @@ describe('provideClerkAuth', () => {
   let sessionId: ReturnType<typeof signal<string | null | undefined>>;
   let orgId: ReturnType<typeof signal<string | null | undefined>>;
   let orgRole: ReturnType<typeof signal<string | null | undefined>>;
+  let sessionAudience: ReturnType<typeof signal<string | null | undefined>>;
   let error: ReturnType<typeof signal<Error | undefined>>;
   let getToken: jest.Mock<Promise<string | null>, [{ template?: string; skipCache?: boolean }?]>;
 
@@ -30,6 +31,7 @@ describe('provideClerkAuth', () => {
       sessionId,
       orgId,
       orgRole,
+      sessionAudience,
       error,
       getToken,
     };
@@ -51,6 +53,7 @@ describe('provideClerkAuth', () => {
     sessionId = signal<string | null | undefined>(null);
     orgId = signal<string | null | undefined>(null);
     orgRole = signal<string | null | undefined>(null);
+    sessionAudience = signal<string | null | undefined>(undefined);
     error = signal<Error | undefined>(undefined);
     getToken = jest.fn().mockResolvedValue('token');
     setAuthFetcher = undefined;
@@ -178,18 +181,43 @@ describe('provideClerkAuth', () => {
     });
   });
 
-  it('rethrows when Clerk token fetching fails', async () => {
-    getToken.mockRejectedValue(new Error('boom'));
+  it('requests the JWT template when sessionAudience is absent', async () => {
+    configureTestingModule();
+
+    const provider = TestBed.inject(CONVEX_AUTH);
+    await provider.fetchAccessToken({ forceRefreshToken: false });
+
+    expect(getToken).toHaveBeenCalledWith({
+      template: 'convex',
+      skipCache: false,
+    });
+  });
+
+  it('uses Clerk native Convex integration (no template) when sessionAudience is convex', async () => {
+    sessionAudience.set('convex');
+    configureTestingModule();
+
+    const provider = TestBed.inject(CONVEX_AUTH);
+    await provider.fetchAccessToken({ forceRefreshToken: true });
+
+    expect(getToken).toHaveBeenCalledWith({ skipCache: true });
+    expect(getToken).not.toHaveBeenCalledWith(expect.objectContaining({ template: expect.anything() }));
+  });
+
+  it('resolves null instead of rejecting when Clerk token fetching fails', async () => {
+    // Mirrors convex-react's Clerk adapter: a failed token fetch is the
+    // signed-out outcome, not an auth error.
+    getToken.mockRejectedValue(new Error('Clerk token fetch failed'));
     configureTestingModule();
 
     const provider = TestBed.inject(CONVEX_AUTH);
 
-    await expect(provider.fetchAccessToken({ forceRefreshToken: true })).rejects.toThrow('boom');
+    await expect(provider.fetchAccessToken({ forceRefreshToken: true })).resolves.toBeNull();
   });
 
-  it('surfaces Clerk token fetch failures through injectAuth().error()', fakeAsync(() => {
+  it('treats a failed Clerk token fetch as a clean signed-out state, not an error', fakeAsync(() => {
     isSignedIn.set(true);
-    getToken.mockRejectedValue(new Error('boom'));
+    getToken.mockRejectedValue(new Error('Clerk token fetch failed'));
     configureTestingModule();
 
     @Component({
@@ -213,11 +241,7 @@ describe('provideClerkAuth', () => {
 
     expect(token).toBeNull();
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
-    expect(fixture.componentInstance.auth.error()).toEqual(
-      expect.objectContaining({
-        message: '[convex-angular auth] Token fetch failed: boom',
-      }),
-    );
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
   }));
 
   it('bundles provideConvexAuth so injectAuth works without separate setup', fakeAsync(() => {
