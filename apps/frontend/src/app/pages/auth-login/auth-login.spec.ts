@@ -3,11 +3,12 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { BetterAuthClientLike, provideBetterAuth } from 'convex-angular/better-auth';
 import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import type { Mock } from 'vitest';
 
 import { DemoAuthService } from '../../auth/demo-auth.service';
 import AuthLogin from './auth-login';
 
-jest.mock('../../auth/demo-auth.service', () => {
+vi.mock('../../auth/demo-auth.service', () => {
   class MockDemoAuthService {}
 
   return { DemoAuthService: MockDemoAuthService };
@@ -37,12 +38,12 @@ function fakeBetterAuthClient(): BetterAuthClientLike {
 describe('AuthLogin', () => {
   let fixture: ComponentFixture<AuthLogin>;
   let component: AuthLogin;
-  let router: { navigateByUrl: jest.Mock };
+  let router: { navigateByUrl: Mock };
   let authService: {
     formErrorMessage: ReturnType<typeof signal<string | null>>;
-    signIn: jest.Mock<Promise<boolean>, [string, string]>;
-    signUp: jest.Mock<Promise<boolean>, [string, string, string]>;
-    clearFormError: jest.Mock;
+    signIn: Mock<(email: string, password: string) => Promise<boolean>>;
+    signUp: Mock<(email: string, password: string, name: string) => Promise<boolean>>;
+    clearFormError: Mock;
   };
 
   beforeAll(() => {
@@ -65,13 +66,13 @@ describe('AuthLogin', () => {
 
   async function setup(returnUrl: string | null = null): Promise<void> {
     router = {
-      navigateByUrl: jest.fn().mockResolvedValue(true),
+      navigateByUrl: vi.fn().mockResolvedValue(true),
     };
     authService = {
       formErrorMessage: signal<string | null>(null),
-      signIn: jest.fn().mockResolvedValue(true),
-      signUp: jest.fn().mockResolvedValue(true),
-      clearFormError: jest.fn(),
+      signIn: vi.fn().mockResolvedValue(true),
+      signUp: vi.fn().mockResolvedValue(true),
+      clearFormError: vi.fn(),
     };
 
     await TestBed.configureTestingModule({

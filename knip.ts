@@ -59,6 +59,12 @@ const config: KnipConfig = {
     'ts-node',
     // Transformer underneath jest-preset-angular (peer dependency)
     'ts-jest',
+    // TEMPORARY (jest→vitest migration): last import removed with the frontend's
+    // jest test-setup; the package itself is deleted in the dependency-removal task
+    'jest-preset-angular',
+    // TEMPORARY (jest→vitest migration): was only consumed via jest-preset-angular's
+    // zone setup; deleted in the dependency-removal task
+    '@angular/platform-browser-dynamic',
     // Emitted as runtime helper imports by @analogjs/vite-plugin-angular's
     // es2016 downleveling (oxc); never imported from source
     '@oxc-project/runtime',
