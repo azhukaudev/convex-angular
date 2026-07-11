@@ -2,6 +2,7 @@ import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angu
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
+import type { Mock, Mocked } from 'vitest';
 
 import { CONVEX } from '../tokens/convex';
 import { PrewarmQueryReference, injectPrewarmQuery } from './inject-prewarm-query';
@@ -14,8 +15,8 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
 > as PrewarmQueryReference;
 
 describe('injectPrewarmQuery', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let unsubscribeFns: jest.Mock[];
+  let mockConvexClient: Mocked<ConvexClient>;
+  let unsubscribeFns: Mock[];
   let updateCallbacks: Array<(result: unknown) => void>;
   let errorCallbacks: Array<(err: Error) => void>;
 
@@ -25,15 +26,15 @@ describe('injectPrewarmQuery', () => {
     errorCallbacks = [];
 
     mockConvexClient = {
-      onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
+      onUpdate: vi.fn((_query, _args, onUpdate, onError) => {
         updateCallbacks.push(onUpdate);
         errorCallbacks.push(onError);
 
-        const unsubscribe = jest.fn();
+        const unsubscribe = vi.fn();
         unsubscribeFns.push(unsubscribe);
         return unsubscribe;
       }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -113,7 +114,7 @@ describe('injectPrewarmQuery', () => {
   }));
 
   it('forwards subscription errors to onError', () => {
-    const onError = jest.fn();
+    const onError = vi.fn();
 
     @Component({
       template: '',
@@ -279,8 +280,8 @@ describe('injectPrewarmQuery', () => {
         get disabled() {
           return true;
         },
-        onUpdate: jest.fn(),
-      } as unknown as jest.Mocked<ConvexClient>;
+        onUpdate: vi.fn(),
+      } as unknown as Mocked<ConvexClient>;
 
       TestBed.configureTestingModule({
         providers: [{ provide: CONVEX, useValue: mockConvexClient }],

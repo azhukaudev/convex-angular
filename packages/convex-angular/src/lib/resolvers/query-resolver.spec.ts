@@ -3,6 +3,7 @@ import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
+import type { Mock, Mocked } from 'vitest';
 
 import { QueryReference } from '../providers/inject-query';
 import { skipToken } from '../skip-token';
@@ -10,9 +11,9 @@ import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { CONVEX } from '../tokens/convex';
 import { convexQueryResolver } from './query-resolver';
 
-jest.mock('convex/server', () => ({
-  ...jest.requireActual('convex/server'),
-  getFunctionName: jest.fn().mockReturnValue('users:getProfile'),
+vi.mock('convex/server', async () => ({
+  ...(await vi.importActual<typeof import('convex/server')>('convex/server')),
+  getFunctionName: vi.fn().mockReturnValue('users:getProfile'),
 }));
 
 const mockQuery = (() => {}) as unknown as FunctionReference<
@@ -26,24 +27,24 @@ const route = {} as ActivatedRouteSnapshot;
 const state = {} as RouterStateSnapshot;
 
 describe('convexQueryResolver', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockUnsubscribe: jest.Mock;
+  let mockConvexClient: Mocked<ConvexClient>;
+  let mockUnsubscribe: Mock;
   let onUpdateCallback: ((result: unknown) => void) | undefined;
   let onErrorCallback: ((err: Error) => void) | undefined;
 
   beforeEach(() => {
-    mockUnsubscribe = jest.fn();
+    mockUnsubscribe = vi.fn();
     onUpdateCallback = undefined;
     onErrorCallback = undefined;
 
     mockConvexClient = {
       disabled: false,
-      onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
+      onUpdate: vi.fn((_query, _args, onUpdate, onError) => {
         onUpdateCallback = onUpdate;
         onErrorCallback = onError;
         return mockUnsubscribe;
       }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -185,7 +186,7 @@ describe('convexQueryResolver', () => {
             get disabled() {
               return true;
             },
-            onUpdate: jest.fn(),
+            onUpdate: vi.fn(),
           } as unknown as ConvexClient,
         },
       ],
@@ -201,7 +202,7 @@ describe('convexQueryResolver', () => {
   }));
 
   describe('SSR (server platform)', () => {
-    let mockLoader: { enabled: boolean; fetch: jest.Mock };
+    let mockLoader: { enabled: boolean; fetch: Mock };
 
     function setupServer(withLoader = true) {
       TestBed.resetTestingModule();
@@ -214,7 +215,7 @@ describe('convexQueryResolver', () => {
               get disabled() {
                 return true;
               },
-              onUpdate: jest.fn(),
+              onUpdate: vi.fn(),
             } as unknown as ConvexClient,
           },
           ...(withLoader ? [{ provide: ConvexServerQueryLoader, useValue: mockLoader }] : []),
@@ -225,7 +226,7 @@ describe('convexQueryResolver', () => {
     beforeEach(() => {
       mockLoader = {
         enabled: true,
-        fetch: jest.fn().mockResolvedValue({ name: 'Server Ada' }),
+        fetch: vi.fn().mockResolvedValue({ name: 'Server Ada' }),
       };
     });
 

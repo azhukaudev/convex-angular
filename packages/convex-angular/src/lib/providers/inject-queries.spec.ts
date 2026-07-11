@@ -9,6 +9,7 @@ import {
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, getFunctionName } from 'convex/server';
+import type { Mock, Mocked } from 'vitest';
 
 import { skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
@@ -21,9 +22,9 @@ type IsExact<T, Expected> = [T] extends [Expected] ? ([Expected] extends [T] ? t
 
 const queryNames = new Map<FunctionReference<'query'>, string>();
 
-jest.mock('convex/server', () => ({
-  ...jest.requireActual('convex/server'),
-  getFunctionName: jest.fn((query: FunctionReference<'query'>) => queryNames.get(query)),
+vi.mock('convex/server', async () => ({
+  ...(await vi.importActual<typeof import('convex/server')>('convex/server')),
+  getFunctionName: vi.fn((query: FunctionReference<'query'>) => queryNames.get(query)),
 }));
 
 const mockUserQuery = (() => {}) as unknown as FunctionReference<
@@ -50,9 +51,9 @@ queryNames.set(mockTodosQuery, 'todos:list');
 queryNames.set(mockStatsQuery, 'stats:get');
 
 describe('injectQueries', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockLocalQueryResult: jest.Mock;
-  let unsubscribeByKey: Map<string, jest.Mock>;
+  let mockConvexClient: Mocked<ConvexClient>;
+  let mockLocalQueryResult: Mock;
+  let unsubscribeByKey: Map<string, Mock>;
   let onUpdateByKey: Map<string, (result: unknown) => void>;
   let onErrorByKey: Map<string, (error: Error) => void>;
   let localResultsByKey: Map<string, unknown>;
@@ -65,7 +66,7 @@ describe('injectQueries', () => {
     onErrorByKey = new Map();
     localResultsByKey = new Map();
 
-    mockLocalQueryResult = jest.fn((queryName: string, args: Record<string, unknown>) =>
+    mockLocalQueryResult = vi.fn((queryName: string, args: Record<string, unknown>) =>
       localResultsByKey.get(keyFor(queryName, args)),
     );
 
@@ -73,10 +74,10 @@ describe('injectQueries', () => {
       client: {
         localQueryResult: mockLocalQueryResult,
       },
-      onUpdate: jest.fn((query, args, onUpdate, onError) => {
-        const queryName = (getFunctionName as jest.Mock)(query) as string;
+      onUpdate: vi.fn((query, args, onUpdate, onError) => {
+        const queryName = (getFunctionName as Mock)(query) as string;
         const key = keyFor(queryName, args as Record<string, unknown>);
-        const unsubscribe = jest.fn();
+        const unsubscribe = vi.fn();
 
         unsubscribeByKey.set(key, unsubscribe);
         onUpdateByKey.set(key, onUpdate);
@@ -84,7 +85,7 @@ describe('injectQueries', () => {
 
         return unsubscribe;
       }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -411,7 +412,7 @@ describe('injectQueries', () => {
 
   describe('per-key callbacks', () => {
     it('invokes onSuccess with the key and data for each query', fakeAsync(() => {
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
 
       @Component({
         template: '',
@@ -439,7 +440,7 @@ describe('injectQueries', () => {
     }));
 
     it('invokes onError with the key and error', fakeAsync(() => {
-      const onError = jest.fn();
+      const onError = vi.fn();
 
       @Component({
         template: '',
@@ -500,7 +501,7 @@ describe('injectQueries', () => {
   });
 
   describe('SSR (server platform)', () => {
-    let mockLoader: { enabled: boolean; fetch: jest.Mock };
+    let mockLoader: { enabled: boolean; fetch: Mock };
     let serverConvexClient: ConvexClient;
 
     beforeEach(() => {
@@ -508,7 +509,7 @@ describe('injectQueries', () => {
 
       mockLoader = {
         enabled: true,
-        fetch: jest.fn((query: FunctionReference<'query'>) => {
+        fetch: vi.fn((query: FunctionReference<'query'>) => {
           const queryName = queryNames.get(query);
           if (queryName === 'users:get') {
             return Promise.resolve({ name: 'Server user' });
@@ -524,7 +525,7 @@ describe('injectQueries', () => {
         get client() {
           throw new Error('ConvexClient is disabled');
         },
-        onUpdate: jest.fn(),
+        onUpdate: vi.fn(),
       } as unknown as ConvexClient;
 
       TestBed.configureTestingModule({

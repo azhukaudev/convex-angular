@@ -32,9 +32,9 @@ function requireLastPaginatedSubscription(convex: MockConvexClient): MockPaginat
   return subscription;
 }
 
-jest.mock('convex/server', () => ({
-  ...jest.requireActual('convex/server'),
-  getFunctionName: jest.fn().mockReturnValue('todos:list'),
+vi.mock('convex/server', async () => ({
+  ...(await vi.importActual<typeof import('convex/server')>('convex/server')),
+  getFunctionName: vi.fn().mockReturnValue('todos:list'),
 }));
 
 const mockQuery = (() => {}) as unknown as FunctionReference<
@@ -194,7 +194,7 @@ describe('MockConvexClient with real library helpers', () => {
 
   describe('unsubscribe fidelity', () => {
     it('stops delivering query results after unsubscribe, like the real client', () => {
-      const onUpdate = jest.fn();
+      const onUpdate = vi.fn();
       const unsubscribe = convex.onUpdate(mockQuery, {}, onUpdate);
 
       unsubscribe();
@@ -205,8 +205,8 @@ describe('MockConvexClient with real library helpers', () => {
     });
 
     it('stops delivering query errors after unsubscribe, like the real client', () => {
-      const onUpdate = jest.fn();
-      const onError = jest.fn();
+      const onUpdate = vi.fn();
+      const onError = vi.fn();
       const unsubscribe = convex.onUpdate(mockQuery, {}, onUpdate, onError);
 
       unsubscribe();
@@ -216,7 +216,7 @@ describe('MockConvexClient with real library helpers', () => {
     });
 
     it('stops delivering paginated results after unsubscribe, like the real client', () => {
-      const onUpdate = jest.fn();
+      const onUpdate = vi.fn();
       const unsubscribe = convex.onPaginatedUpdate_experimental(mockQuery, {}, { initialNumItems: 10 }, onUpdate);
 
       unsubscribe();
@@ -227,8 +227,8 @@ describe('MockConvexClient with real library helpers', () => {
     });
 
     it('stops delivering paginated errors after unsubscribe, like the real client', () => {
-      const onUpdate = jest.fn();
-      const onError = jest.fn();
+      const onUpdate = vi.fn();
+      const onError = vi.fn();
       const unsubscribe = convex.onPaginatedUpdate_experimental(
         mockQuery,
         {},
@@ -244,7 +244,7 @@ describe('MockConvexClient with real library helpers', () => {
     });
 
     it('still delivers results before unsubscribe (guards against over-gating)', () => {
-      const onUpdate = jest.fn();
+      const onUpdate = vi.fn();
       const unsubscribe = convex.onUpdate(mockQuery, {}, onUpdate);
 
       requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);

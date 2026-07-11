@@ -2,6 +2,7 @@ import { Component, EnvironmentProviders, Provider, signal } from '@angular/core
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { Router, Routes, provideRouter } from '@angular/router';
 import { ConvexClient } from 'convex/browser';
+import type { Mock, Mocked } from 'vitest';
 
 import { provideConvexAuth } from '../providers/inject-auth';
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
@@ -15,24 +16,24 @@ import {
 } from './auth-guards';
 
 describe('Auth Guards', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockSetAuth: jest.Mock;
-  let mockClearAuth: jest.Mock;
-  let mockHasAuth: jest.Mock;
-  let mockGetAuth: jest.Mock;
+  let mockConvexClient: Mocked<ConvexClient>;
+  let mockSetAuth: Mock;
+  let mockClearAuth: Mock;
+  let mockHasAuth: Mock;
+  let mockGetAuth: Mock;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
   let setAuthOnRefreshChange: ((isRefreshing: boolean) => void) | undefined;
   let isLoading: ReturnType<typeof signal<boolean>>;
   let isAuthenticated: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
-    mockSetAuth = jest.fn((_fetchToken, onChange, onRefreshChange) => {
+    mockSetAuth = vi.fn((_fetchToken, onChange, onRefreshChange) => {
       setAuthOnChange = onChange;
       setAuthOnRefreshChange = onRefreshChange;
     });
-    mockClearAuth = jest.fn();
-    mockHasAuth = jest.fn().mockReturnValue(false);
-    mockGetAuth = jest.fn().mockReturnValue(undefined);
+    mockClearAuth = vi.fn();
+    mockHasAuth = vi.fn().mockReturnValue(false);
+    mockGetAuth = vi.fn().mockReturnValue(undefined);
 
     mockConvexClient = {
       disabled: false,
@@ -42,7 +43,7 @@ describe('Auth Guards', () => {
         clearAuth: mockClearAuth,
         hasAuth: mockHasAuth,
       },
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
 
     isLoading = signal(false);
     isAuthenticated = signal(false);
@@ -289,7 +290,7 @@ describe('Auth Guards', () => {
     }));
 
     it('passes the current token and claims to allow', fakeAsync(() => {
-      const allow = jest.fn().mockReturnValue(true);
+      const allow = vi.fn().mockReturnValue(true);
       mockGetAuth.mockReturnValue({ token: 'jwt-token', decoded: { role: 'admin' } });
       isAuthenticated.set(true);
 
@@ -336,7 +337,7 @@ describe('Auth Guards', () => {
     }));
 
     it('waits for a token refresh to settle before running allow', fakeAsync(() => {
-      const allow = jest.fn(({ claims }) => claims['role'] === 'admin');
+      const allow = vi.fn(({ claims }) => claims['role'] === 'admin');
       isAuthenticated.set(true);
 
       const router = setupGuardTestBed(adminRoutes({ allow }));

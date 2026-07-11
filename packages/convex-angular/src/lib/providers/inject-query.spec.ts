@@ -2,6 +2,7 @@ import { Component, EnvironmentInjector, createEnvironmentInjector, signal } fro
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
+import type { Mock, Mocked } from 'vitest';
 
 import { skipToken } from '../skip-token';
 import { CONVEX } from '../tokens/convex';
@@ -11,9 +12,9 @@ type Assert<T extends true> = T;
 type IsExact<T, Expected> = [T] extends [Expected] ? ([Expected] extends [T] ? true : false) : false;
 
 // Mock getFunctionName to avoid needing a real FunctionReference
-jest.mock('convex/server', () => ({
-  ...jest.requireActual('convex/server'),
-  getFunctionName: jest.fn().mockReturnValue('todos:listTodos'),
+vi.mock('convex/server', async () => ({
+  ...(await vi.importActual<typeof import('convex/server')>('convex/server')),
+  getFunctionName: vi.fn().mockReturnValue('todos:listTodos'),
 }));
 
 // Mock query function reference
@@ -25,9 +26,9 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
 > as QueryReference;
 
 describe('injectQuery', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockUnsubscribe: jest.Mock;
-  let mockLocalQueryResult: jest.Mock;
+  let mockConvexClient: Mocked<ConvexClient>;
+  let mockUnsubscribe: Mock;
+  let mockLocalQueryResult: Mock;
   let subscriptions: Array<{
     onUpdate: (result: any) => void;
     onError: (err: Error) => void;
@@ -36,21 +37,21 @@ describe('injectQuery', () => {
   let onErrorCallback: (err: Error) => void;
 
   beforeEach(() => {
-    mockUnsubscribe = jest.fn();
-    mockLocalQueryResult = jest.fn().mockReturnValue(undefined);
+    mockUnsubscribe = vi.fn();
+    mockLocalQueryResult = vi.fn().mockReturnValue(undefined);
     subscriptions = [];
 
     mockConvexClient = {
       client: {
         localQueryResult: mockLocalQueryResult,
       },
-      onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
+      onUpdate: vi.fn((_query, _args, onUpdate, onError) => {
         subscriptions.push({ onUpdate, onError });
         onUpdateCallback = onUpdate;
         onErrorCallback = onError;
         return mockUnsubscribe;
       }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -1214,7 +1215,7 @@ describe('injectQuery', () => {
 
   describe('options callbacks', () => {
     it('should call onSuccess callback when data is received', fakeAsync(() => {
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
 
       @Component({
         template: '',
@@ -1237,7 +1238,7 @@ describe('injectQuery', () => {
     }));
 
     it('should call onSuccess callback on every update', fakeAsync(() => {
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
 
       @Component({
         template: '',
@@ -1263,7 +1264,7 @@ describe('injectQuery', () => {
     }));
 
     it('should call onError callback when error occurs', fakeAsync(() => {
-      const onError = jest.fn();
+      const onError = vi.fn();
 
       @Component({
         template: '',

@@ -1,23 +1,20 @@
-import {
-  Component,
-  EnvironmentInjector,
-  createEnvironmentInjector,
-} from '@angular/core';
+import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
+import type { Mocked } from 'vitest';
 
 import { CONVEX, provideConvex } from '../tokens/convex';
 import { injectConvex } from './inject-convex';
 
 describe('injectConvex', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
+  let mockConvexClient: Mocked<ConvexClient>;
 
   beforeEach(() => {
     mockConvexClient = {
-      query: jest.fn(),
-      mutation: jest.fn(),
-      action: jest.fn(),
-    } as unknown as jest.Mocked<ConvexClient>;
+      query: vi.fn(),
+      mutation: vi.fn(),
+      action: vi.fn(),
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -74,9 +71,7 @@ describe('injectConvex', () => {
       readonly convex = injectConvex();
     }
 
-    expect(() => TestBed.createComponent(TestComponent)).toThrow(
-      /Could not find `CONVEX`/,
-    );
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(/Could not find `CONVEX`/);
   });
 
   it('should resolve the ConvexClient outside an injection context with injectRef', () => {
@@ -97,10 +92,7 @@ describe('provideConvex configuration', () => {
 
   it('should throw when provideConvex is registered multiple times in one injector', () => {
     TestBed.configureTestingModule({
-      providers: [
-        provideConvex('https://first.convex.cloud'),
-        provideConvex('https://second.convex.cloud'),
-      ],
+      providers: [provideConvex('https://first.convex.cloud'), provideConvex('https://second.convex.cloud')],
     });
 
     @Component({
@@ -111,9 +103,7 @@ describe('provideConvex configuration', () => {
       readonly convex = injectConvex();
     }
 
-    expect(() => TestBed.createComponent(TestComponent)).toThrow(
-      /registered more than once in the same injector/,
-    );
+    expect(() => TestBed.createComponent(TestComponent)).toThrow(/registered more than once in the same injector/);
   });
 
   it('should throw when provideConvex is registered in a child injector', () => {
@@ -123,11 +113,8 @@ describe('provideConvex configuration', () => {
 
     const rootInjector = TestBed.inject(EnvironmentInjector);
 
-    expect(() =>
-      createEnvironmentInjector(
-        [provideConvex('https://child.convex.cloud')],
-        rootInjector,
-      ),
-    ).toThrow(/must be configured only in your root application providers/);
+    expect(() => createEnvironmentInjector([provideConvex('https://child.convex.cloud')], rootInjector)).toThrow(
+      /must be configured only in your root application providers/,
+    );
   });
 });

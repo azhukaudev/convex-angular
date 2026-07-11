@@ -1,6 +1,7 @@
 import { Component, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
+import type { Mock, Mocked } from 'vitest';
 
 import { provideConvexAuth } from '../providers/inject-auth';
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
@@ -13,22 +14,22 @@ import {
 } from './auth-helpers';
 
 describe('Auth Helper Directives', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockSetAuth: jest.Mock;
-  let mockClearAuth: jest.Mock;
-  let mockHasAuth: jest.Mock;
+  let mockConvexClient: Mocked<ConvexClient>;
+  let mockSetAuth: Mock;
+  let mockClearAuth: Mock;
+  let mockHasAuth: Mock;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
   let setAuthOnRefreshChange: ((isRefreshing: boolean) => void) | undefined;
   let isLoading: ReturnType<typeof signal<boolean>>;
   let isAuthenticated: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
-    mockSetAuth = jest.fn((_fetchToken, onChange, onRefreshChange) => {
+    mockSetAuth = vi.fn((_fetchToken, onChange, onRefreshChange) => {
       setAuthOnChange = onChange;
       setAuthOnRefreshChange = onRefreshChange;
     });
-    mockClearAuth = jest.fn();
-    mockHasAuth = jest.fn().mockReturnValue(false);
+    mockClearAuth = vi.fn();
+    mockHasAuth = vi.fn().mockReturnValue(false);
 
     mockConvexClient = {
       disabled: false,
@@ -37,7 +38,7 @@ describe('Auth Helper Directives', () => {
         clearAuth: mockClearAuth,
         hasAuth: mockHasAuth,
       },
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
 
     isLoading = signal(true);
     isAuthenticated = signal(false);
@@ -80,9 +81,7 @@ describe('Auth Helper Directives', () => {
       fixture.detectChanges();
       tick();
 
-      expect(fixture.nativeElement.textContent).not.toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).not.toContain('Authenticated content');
     }));
 
     it('should not render when not authenticated', fakeAsync(() => {
@@ -101,9 +100,7 @@ describe('Auth Helper Directives', () => {
       fixture.detectChanges();
       tick();
 
-      expect(fixture.nativeElement.textContent).not.toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).not.toContain('Authenticated content');
     }));
 
     it('should render when authenticated', fakeAsync(() => {
@@ -126,9 +123,7 @@ describe('Auth Helper Directives', () => {
       setAuthOnChange?.(true);
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.textContent).toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).toContain('Authenticated content');
     }));
 
     it('should hide when authentication is lost', fakeAsync(() => {
@@ -150,18 +145,14 @@ describe('Auth Helper Directives', () => {
       // Convex confirms authentication
       setAuthOnChange?.(true);
       fixture.detectChanges();
-      expect(fixture.nativeElement.textContent).toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).toContain('Authenticated content');
 
       // User logs out
       isAuthenticated.set(false);
       fixture.detectChanges();
       tick();
 
-      expect(fixture.nativeElement.textContent).not.toContain(
-        'Authenticated content',
-      );
+      expect(fixture.nativeElement.textContent).not.toContain('Authenticated content');
     }));
   });
 
@@ -408,11 +399,7 @@ describe('Auth Helper Directives', () => {
           <div *cvaUnauthenticated>Please sign in</div>
         `,
         standalone: true,
-        imports: [
-          CvaAuthLoadingDirective,
-          CvaAuthenticatedDirective,
-          CvaUnauthenticatedDirective,
-        ],
+        imports: [CvaAuthLoadingDirective, CvaAuthenticatedDirective, CvaUnauthenticatedDirective],
       })
       class TestComponent {}
 

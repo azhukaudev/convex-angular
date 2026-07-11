@@ -2,14 +2,15 @@ import { Component, EnvironmentInjector, createEnvironmentInjector, signal } fro
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, PaginationResult } from 'convex/server';
+import type { Mock, Mocked } from 'vitest';
 
 import { skipToken } from '../skip-token';
 import { CONVEX } from '../tokens/convex';
 import { PaginatedQueryReference, injectPaginatedQuery } from './inject-paginated-query';
 
-jest.mock('convex/server', () => ({
-  ...jest.requireActual('convex/server'),
-  getFunctionName: jest.fn().mockReturnValue('todos:listTodosPaginated'),
+vi.mock('convex/server', async () => ({
+  ...(await vi.importActual<typeof import('convex/server')>('convex/server')),
+  getFunctionName: vi.fn().mockReturnValue('todos:listTodosPaginated'),
 }));
 
 // Mock paginated query function reference
@@ -21,8 +22,8 @@ const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
 > as PaginatedQueryReference;
 
 describe('injectPaginatedQuery', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockUnsubscribe: jest.Mock;
+  let mockConvexClient: Mocked<ConvexClient>;
+  let mockUnsubscribe: Mock;
   let subscriptions: Array<{
     onUpdate: (result: any) => void;
     onError: (err: Error) => void;
@@ -31,17 +32,17 @@ describe('injectPaginatedQuery', () => {
   let onErrorCallback: (err: Error) => void;
 
   beforeEach(() => {
-    mockUnsubscribe = jest.fn();
+    mockUnsubscribe = vi.fn();
     subscriptions = [];
 
     mockConvexClient = {
-      onPaginatedUpdate_experimental: jest.fn((_query, _args, _options, onUpdate, onError) => {
+      onPaginatedUpdate_experimental: vi.fn((_query, _args, _options, onUpdate, onError) => {
         subscriptions.push({ onUpdate, onError });
         onUpdateCallback = onUpdate;
         onErrorCallback = onError;
         return mockUnsubscribe;
       }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -144,7 +145,7 @@ describe('injectPaginatedQuery', () => {
     onUpdateCallback({
       results: [{ _id: '1', name: 'Todo 1' }],
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
     });
     fixture.detectChanges();
 
@@ -171,7 +172,7 @@ describe('injectPaginatedQuery', () => {
     onUpdateCallback({
       results: [],
       status: 'LoadingFirstPage',
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
     });
     fixture.detectChanges();
 
@@ -204,7 +205,7 @@ describe('injectPaginatedQuery', () => {
     onUpdateCallback({
       results: mockItems,
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
     });
     fixture.detectChanges();
 
@@ -235,7 +236,7 @@ describe('injectPaginatedQuery', () => {
     onUpdateCallback({
       results: mockItems,
       status: 'LoadingMore',
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
     });
     fixture.detectChanges();
 
@@ -269,7 +270,7 @@ describe('injectPaginatedQuery', () => {
     onUpdateCallback({
       results: mockItems,
       status: 'Exhausted',
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
     });
     fixture.detectChanges();
 
@@ -281,7 +282,7 @@ describe('injectPaginatedQuery', () => {
   }));
 
   it('should call loadMore on the underlying client', fakeAsync(() => {
-    const mockLoadMore = jest.fn().mockReturnValue(true);
+    const mockLoadMore = vi.fn().mockReturnValue(true);
 
     @Component({
       template: '',
@@ -380,7 +381,7 @@ describe('injectPaginatedQuery', () => {
     onUpdateCallback({
       results: mockItems,
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
     });
     fixture.detectChanges();
 
@@ -418,7 +419,7 @@ describe('injectPaginatedQuery', () => {
     onUpdateCallback({
       results: [{ _id: '1', name: 'Todo 1' }],
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
     });
     fixture.detectChanges();
 
@@ -534,8 +535,8 @@ describe('injectPaginatedQuery', () => {
   }));
 
   it('should ignore stale updates and stale loadMore handlers when args change', fakeAsync(() => {
-    const staleLoadMore = jest.fn().mockReturnValue(true);
-    const latestLoadMore = jest.fn().mockReturnValue(true);
+    const staleLoadMore = vi.fn().mockReturnValue(true);
+    const latestLoadMore = vi.fn().mockReturnValue(true);
 
     @Component({
       template: '',
@@ -609,7 +610,7 @@ describe('injectPaginatedQuery', () => {
     secondSubscription.onUpdate({
       results: latestResults,
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
     });
     firstSubscription.onError(new Error('stale failure'));
 
@@ -663,7 +664,7 @@ describe('injectPaginatedQuery', () => {
     onUpdateCallback({
       results: [{ _id: '1', name: 'Todo 1' }],
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: vi.fn(),
     });
     fixture.detectChanges();
 
@@ -877,7 +878,7 @@ describe('injectPaginatedQuery', () => {
       onUpdateCallback({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: vi.fn(),
       });
       fixture.detectChanges();
 
@@ -983,7 +984,7 @@ describe('injectPaginatedQuery', () => {
       firstSubscription.onUpdate({
         results: [{ _id: '1', name: 'Stale todo' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: vi.fn(),
       });
       firstSubscription.onError(new Error('stale failure'));
 
@@ -1077,7 +1078,7 @@ describe('injectPaginatedQuery', () => {
       onUpdateCallback({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: vi.fn(),
       });
       fixture.detectChanges();
 
@@ -1102,7 +1103,7 @@ describe('injectPaginatedQuery', () => {
       onUpdateCallback({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'Exhausted',
-        loadMore: jest.fn(),
+        loadMore: vi.fn(),
       });
       fixture.detectChanges();
 
@@ -1184,7 +1185,7 @@ describe('injectPaginatedQuery', () => {
       onUpdateCallback({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: vi.fn(),
       });
       fixture.detectChanges();
 
@@ -1231,7 +1232,7 @@ describe('injectPaginatedQuery', () => {
 
   describe('options callbacks', () => {
     it('should call onSuccess callback when data is received', fakeAsync(() => {
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
 
       @Component({
         template: '',
@@ -1252,7 +1253,7 @@ describe('injectPaginatedQuery', () => {
       onUpdateCallback({
         results: mockResults,
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: vi.fn(),
       });
       fixture.detectChanges();
 
@@ -1260,7 +1261,7 @@ describe('injectPaginatedQuery', () => {
     }));
 
     it('should not call onSuccess during LoadingFirstPage status', fakeAsync(() => {
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
 
       @Component({
         template: '',
@@ -1280,7 +1281,7 @@ describe('injectPaginatedQuery', () => {
       onUpdateCallback({
         results: [],
         status: 'LoadingFirstPage',
-        loadMore: jest.fn(),
+        loadMore: vi.fn(),
       });
       fixture.detectChanges();
 
@@ -1288,7 +1289,7 @@ describe('injectPaginatedQuery', () => {
     }));
 
     it('should call onError callback when error occurs', fakeAsync(() => {
-      const onError = jest.fn();
+      const onError = vi.fn();
 
       @Component({
         template: '',
@@ -1331,7 +1332,7 @@ describe('injectPaginatedQuery', () => {
       onUpdateCallback({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: vi.fn(),
       });
       onErrorCallback(new Error('Query failed'));
 
@@ -1361,7 +1362,7 @@ describe('injectPaginatedQuery', () => {
       onUpdateCallback({
         results: result,
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: vi.fn(),
       });
 
       expect(todos.results()).toEqual(result);

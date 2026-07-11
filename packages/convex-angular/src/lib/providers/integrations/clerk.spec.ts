@@ -1,6 +1,7 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
+import type { Mock, Mocked } from 'vitest';
 
 import { CONVEX_AUTH } from '../../tokens/auth';
 import { CONVEX } from '../../tokens/convex';
@@ -8,10 +9,10 @@ import { injectAuth, provideConvexAuth } from '../inject-auth';
 import { CLERK_AUTH, ClerkAuthProvider, provideClerkAuth } from './clerk';
 
 describe('provideClerkAuth', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockSetAuth: jest.Mock;
-  let mockClearAuth: jest.Mock;
-  let mockHasAuth: jest.Mock;
+  let mockConvexClient: Mocked<ConvexClient>;
+  let mockSetAuth: Mock;
+  let mockClearAuth: Mock;
+  let mockHasAuth: Mock;
   let setAuthFetcher: ((args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>) | undefined;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
 
@@ -22,7 +23,7 @@ describe('provideClerkAuth', () => {
   let orgRole: ReturnType<typeof signal<string | null | undefined>>;
   let sessionAudience: ReturnType<typeof signal<string | null | undefined>>;
   let error: ReturnType<typeof signal<Error | undefined>>;
-  let getToken: jest.Mock<Promise<string | null>, [{ template?: string; skipCache?: boolean }?]>;
+  let getToken: Mock<(opts?: { template?: string; skipCache?: boolean }) => Promise<string | null>>;
 
   function createClerkProvider(): ClerkAuthProvider {
     return {
@@ -55,16 +56,16 @@ describe('provideClerkAuth', () => {
     orgRole = signal<string | null | undefined>(null);
     sessionAudience = signal<string | null | undefined>(undefined);
     error = signal<Error | undefined>(undefined);
-    getToken = jest.fn().mockResolvedValue('token');
+    getToken = vi.fn().mockResolvedValue('token');
     setAuthFetcher = undefined;
     setAuthOnChange = undefined;
 
-    mockSetAuth = jest.fn((fetchToken, onChange) => {
+    mockSetAuth = vi.fn((fetchToken, onChange) => {
       setAuthFetcher = fetchToken;
       setAuthOnChange = onChange;
     });
-    mockClearAuth = jest.fn();
-    mockHasAuth = jest.fn().mockReturnValue(false);
+    mockClearAuth = vi.fn();
+    mockHasAuth = vi.fn().mockReturnValue(false);
 
     mockConvexClient = {
       disabled: false,
@@ -73,7 +74,7 @@ describe('provideClerkAuth', () => {
         clearAuth: mockClearAuth,
         hasAuth: mockHasAuth,
       },
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
   });
 
   afterEach(() => {

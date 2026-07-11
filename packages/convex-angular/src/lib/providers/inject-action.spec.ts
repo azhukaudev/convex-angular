@@ -2,16 +2,13 @@ import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angu
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
+import type { Mocked } from 'vitest';
 
 import { CONVEX } from '../tokens/convex';
 import { ActionReference, injectAction } from './inject-action';
 
 type Assert<T extends true> = T;
-type IsExact<T, Expected> = [T] extends [Expected]
-  ? [Expected] extends [T]
-    ? true
-    : false
-  : false;
+type IsExact<T, Expected> = [T] extends [Expected] ? ([Expected] extends [T] ? true : false) : false;
 
 // Mock action function reference
 const mockAction = (() => {}) as unknown as FunctionReference<
@@ -38,15 +35,15 @@ function createDeferred<T>(): Deferred<T> {
 }
 
 describe('injectAction', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
+  let mockConvexClient: Mocked<ConvexClient>;
   const ignoreRejection = (promise: Promise<unknown>) => {
     promise.catch(() => undefined);
   };
 
   beforeEach(() => {
     mockConvexClient = {
-      action: jest.fn(),
-    } as unknown as jest.Mocked<ConvexClient>;
+      action: vi.fn(),
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -86,9 +83,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       type ActionData = ReturnType<TestComponent['sendEmail']['data']>;
-      const assertActionDataType: Assert<
-        IsExact<ActionData, { success: boolean } | undefined>
-      > = true;
+      const assertActionDataType: Assert<IsExact<ActionData, { success: boolean } | undefined>> = true;
 
       const typedData: ActionData = fixture.componentInstance.sendEmail.data();
 
@@ -164,9 +159,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.data()).toEqual(mockResult);
@@ -188,9 +181,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       let result: unknown;
-      fixture.componentInstance.sendEmail
-        .run({ message: 'test' })
-        .then((r) => (result = r));
+      fixture.componentInstance.sendEmail.run({ message: 'test' }).then((r) => (result = r));
       tick();
 
       expect(result).toEqual(mockResult);
@@ -215,9 +206,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       // First call - error
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.error()).toBeDefined();
@@ -268,9 +257,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.error()).toBe(error);
@@ -291,9 +278,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       let rejection: unknown;
-      fixture.componentInstance.sendEmail
-        .run({ message: 'test' })
-        .catch((error) => (rejection = error));
+      fixture.componentInstance.sendEmail.run({ message: 'test' }).catch((error) => (rejection = error));
       tick();
 
       const error = fixture.componentInstance.sendEmail.error();
@@ -318,9 +303,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       let rejection: unknown;
-      fixture.componentInstance.sendEmail
-        .run({ message: 'test' })
-        .catch((error) => (rejection = error));
+      fixture.componentInstance.sendEmail.run({ message: 'test' }).catch((error) => (rejection = error));
       tick();
 
       expect(rejection).toBe(failure);
@@ -336,7 +319,7 @@ describe('injectAction', () => {
     it('should call onSuccess callback with result', fakeAsync(() => {
       const mockResult = { success: true };
       mockConvexClient.action.mockResolvedValue(mockResult);
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
 
       @Component({
         template: '',
@@ -349,9 +332,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(onSuccess).toHaveBeenCalledWith(mockResult);
@@ -360,7 +341,7 @@ describe('injectAction', () => {
     it('should call onError callback with error', fakeAsync(() => {
       const error = new Error('Failed');
       mockConvexClient.action.mockRejectedValue(error);
-      const onError = jest.fn();
+      const onError = vi.fn();
 
       @Component({
         template: '',
@@ -373,9 +354,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(onError).toHaveBeenCalledWith(error);
@@ -384,7 +363,7 @@ describe('injectAction', () => {
 
     it('should not call onSuccess on error', fakeAsync(() => {
       mockConvexClient.action.mockRejectedValue(new Error('Failed'));
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
 
       @Component({
         template: '',
@@ -397,9 +376,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(onSuccess).not.toHaveBeenCalled();
@@ -407,7 +384,7 @@ describe('injectAction', () => {
 
     it('should not call onError on success', fakeAsync(() => {
       mockConvexClient.action.mockResolvedValue({ success: true });
-      const onError = jest.fn();
+      const onError = vi.fn();
 
       @Component({
         template: '',
@@ -420,9 +397,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(onError).not.toHaveBeenCalled();
@@ -444,9 +419,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
@@ -466,9 +439,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
@@ -526,9 +497,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.status()).toBe('success');
@@ -548,9 +517,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.status()).toBe('error');
@@ -608,9 +575,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(true);
@@ -630,9 +595,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(false);
@@ -655,9 +618,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       // Run an action
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.data()).toBeDefined();
@@ -688,9 +649,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       // Run a failing action
-      ignoreRejection(
-        fixture.componentInstance.sendEmail.run({ message: 'test' }),
-      );
+      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
       tick();
 
       expect(fixture.componentInstance.sendEmail.error()).toBeDefined();
@@ -709,9 +668,7 @@ describe('injectAction', () => {
       const first = createDeferred<{ success: boolean }>();
       const second = createDeferred<{ success: boolean }>();
 
-      mockConvexClient.action
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
+      mockConvexClient.action.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
       @Component({
         template: '',
@@ -726,12 +683,8 @@ describe('injectAction', () => {
 
       let firstResult: unknown;
       let secondResult: unknown;
-      fixture.componentInstance.sendEmail
-        .run({ message: 'first' })
-        .then((value) => (firstResult = value));
-      fixture.componentInstance.sendEmail
-        .run({ message: 'second' })
-        .then((value) => (secondResult = value));
+      fixture.componentInstance.sendEmail.run({ message: 'first' }).then((value) => (firstResult = value));
+      fixture.componentInstance.sendEmail.run({ message: 'second' }).then((value) => (secondResult = value));
 
       second.resolve({ success: true });
       tick();
@@ -757,9 +710,7 @@ describe('injectAction', () => {
       const first = createDeferred<{ success: boolean }>();
       const second = createDeferred<{ success: boolean }>();
 
-      mockConvexClient.action
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
+      mockConvexClient.action.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
       @Component({
         template: '',
@@ -774,12 +725,8 @@ describe('injectAction', () => {
 
       let firstError: unknown;
       let secondResult: unknown;
-      fixture.componentInstance.sendEmail
-        .run({ message: 'first' })
-        .catch((error) => (firstError = error));
-      fixture.componentInstance.sendEmail
-        .run({ message: 'second' })
-        .then((value) => (secondResult = value));
+      fixture.componentInstance.sendEmail.run({ message: 'first' }).catch((error) => (firstError = error));
+      fixture.componentInstance.sendEmail.run({ message: 'second' }).then((value) => (secondResult = value));
 
       second.resolve({ success: true });
       tick();
@@ -806,9 +753,7 @@ describe('injectAction', () => {
       const first = createDeferred<{ success: boolean }>();
       const second = createDeferred<{ success: boolean }>();
 
-      mockConvexClient.action
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
+      mockConvexClient.action.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
       @Component({
         template: '',
@@ -823,12 +768,8 @@ describe('injectAction', () => {
 
       let firstResult: unknown;
       let secondError: unknown;
-      fixture.componentInstance.sendEmail
-        .run({ message: 'first' })
-        .then((value) => (firstResult = value));
-      fixture.componentInstance.sendEmail
-        .run({ message: 'second' })
-        .catch((error) => (secondError = error));
+      fixture.componentInstance.sendEmail.run({ message: 'first' }).then((value) => (firstResult = value));
+      fixture.componentInstance.sendEmail.run({ message: 'second' }).catch((error) => (secondError = error));
 
       const latestError = new Error('latest failure');
       second.reject(latestError);
@@ -853,9 +794,7 @@ describe('injectAction', () => {
       const first = createDeferred<{ success: boolean }>();
       const second = createDeferred<{ success: boolean }>();
 
-      mockConvexClient.action
-        .mockReturnValueOnce(first.promise)
-        .mockReturnValueOnce(second.promise);
+      mockConvexClient.action.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
 
       @Component({
         template: '',
@@ -900,9 +839,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       let result: unknown;
-      fixture.componentInstance.sendEmail
-        .run({ message: 'test' })
-        .then((value) => (result = value));
+      fixture.componentInstance.sendEmail.run({ message: 'test' }).then((value) => (result = value));
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(true);
 
@@ -925,7 +862,7 @@ describe('injectAction', () => {
 
     it('should ignore a pending success after the owning component is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ success: boolean }>();
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
       mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       @Component({
@@ -964,7 +901,7 @@ describe('injectAction', () => {
 
     it('should ignore a pending failure after the owning component is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ success: boolean }>();
-      const onError = jest.fn();
+      const onError = vi.fn();
       mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       @Component({
@@ -979,7 +916,9 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       let rejection: unknown;
-      ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }).catch((error) => (rejection = error)));
+      ignoreRejection(
+        fixture.componentInstance.sendEmail.run({ message: 'test' }).catch((error) => (rejection = error)),
+      );
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(true);
 
@@ -1019,7 +958,7 @@ describe('injectAction', () => {
 
     it('should ignore a pending success after the provided injector is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ success: boolean }>();
-      const onSuccess = jest.fn();
+      const onSuccess = vi.fn();
       mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);
@@ -1051,7 +990,7 @@ describe('injectAction', () => {
 
     it('should ignore a pending failure after the provided injector is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ success: boolean }>();
-      const onError = jest.fn();
+      const onError = vi.fn();
       mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);

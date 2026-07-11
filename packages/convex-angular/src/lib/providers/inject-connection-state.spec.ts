@@ -1,13 +1,14 @@
 import { Component, EnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ConnectionState, ConvexClient } from 'convex/browser';
+import type { Mock, Mocked } from 'vitest';
 
 import { CONVEX } from '../tokens/convex';
 import { injectConvexConnectionState } from './inject-connection-state';
 
 describe('injectConvexConnectionState', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockUnsubscribe: jest.Mock;
+  let mockConvexClient: Mocked<ConvexClient>;
+  let mockUnsubscribe: Mock;
   let currentConnectionState: ConnectionState;
   let connectionStateSubscriber: ((state: ConnectionState) => void) | undefined;
 
@@ -23,15 +24,15 @@ describe('injectConvexConnectionState', () => {
       inflightActions: 0,
     };
 
-    mockUnsubscribe = jest.fn();
+    mockUnsubscribe = vi.fn();
 
     mockConvexClient = {
-      connectionState: jest.fn(() => currentConnectionState),
-      subscribeToConnectionState: jest.fn((subscriber) => {
+      connectionState: vi.fn(() => currentConnectionState),
+      subscribeToConnectionState: vi.fn((subscriber) => {
         connectionStateSubscriber = subscriber;
         return mockUnsubscribe;
       }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -120,13 +121,13 @@ describe('injectConvexConnectionState', () => {
         get disabled() {
           return true;
         },
-        connectionState: jest.fn(() => {
+        connectionState: vi.fn(() => {
           throw new Error('ConvexClient is disabled');
         }),
-        subscribeToConnectionState: jest.fn(() => {
+        subscribeToConnectionState: vi.fn(() => {
           throw new Error('ConvexClient is disabled');
         }),
-      } as unknown as jest.Mocked<ConvexClient>;
+      } as unknown as Mocked<ConvexClient>;
 
       TestBed.configureTestingModule({
         providers: [{ provide: CONVEX, useValue: mockConvexClient }],

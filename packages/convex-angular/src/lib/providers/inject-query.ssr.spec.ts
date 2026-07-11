@@ -2,6 +2,7 @@ import { Component, PLATFORM_ID, TransferState, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
+import type { Mock, Mocked } from 'vitest';
 
 import { skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
@@ -10,9 +11,9 @@ import { CONVEX } from '../tokens/convex';
 import { QueryReference, injectQuery } from './inject-query';
 
 // Mock getFunctionName to avoid needing a real FunctionReference
-jest.mock('convex/server', () => ({
-  ...jest.requireActual('convex/server'),
-  getFunctionName: jest.fn().mockReturnValue('todos:listTodos'),
+vi.mock('convex/server', async () => ({
+  ...(await vi.importActual<typeof import('convex/server')>('convex/server')),
+  getFunctionName: vi.fn().mockReturnValue('todos:listTodos'),
 }));
 
 const mockQuery = (() => {}) as unknown as FunctionReference<
@@ -23,7 +24,7 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
 > as QueryReference;
 
 describe('injectQuery SSR (server platform)', () => {
-  let mockLoader: { enabled: boolean; fetch: jest.Mock };
+  let mockLoader: { enabled: boolean; fetch: Mock };
   let serverConvexClient: ConvexClient;
 
   function setupServer(options: { withLoader?: boolean } = {}) {
@@ -34,7 +35,7 @@ describe('injectQuery SSR (server platform)', () => {
       get client() {
         throw new Error('ConvexClient is disabled');
       },
-      onUpdate: jest.fn(),
+      onUpdate: vi.fn(),
     } as unknown as ConvexClient;
 
     TestBed.configureTestingModule({
@@ -49,7 +50,7 @@ describe('injectQuery SSR (server platform)', () => {
   beforeEach(() => {
     mockLoader = {
       enabled: true,
-      fetch: jest.fn().mockResolvedValue([{ _id: '1', title: 'Server todo' }]),
+      fetch: vi.fn().mockResolvedValue([{ _id: '1', title: 'Server todo' }]),
     };
   });
 
@@ -60,7 +61,7 @@ describe('injectQuery SSR (server platform)', () => {
   it('should fetch over the loader and reach success without subscribing', fakeAsync(() => {
     setupServer();
 
-    const onSuccess = jest.fn();
+    const onSuccess = vi.fn();
 
     @Component({
       template: '',
@@ -87,7 +88,7 @@ describe('injectQuery SSR (server platform)', () => {
     setupServer();
     const fetchError = new Error('server fetch failed');
     mockLoader.fetch.mockRejectedValue(fetchError);
-    const onError = jest.fn();
+    const onError = vi.fn();
 
     @Component({
       template: '',
@@ -204,8 +205,8 @@ describe('injectQuery SSR (server platform)', () => {
 });
 
 describe('injectQuery hydration seeding (browser)', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockLocalQueryResult: jest.Mock;
+  let mockConvexClient: Mocked<ConvexClient>;
+  let mockLocalQueryResult: Mock;
   let onUpdateCallback: (result: unknown) => void;
 
   function seedTransferState(argsKey: string, value: unknown) {
@@ -214,17 +215,17 @@ describe('injectQuery hydration seeding (browser)', () => {
   }
 
   beforeEach(() => {
-    mockLocalQueryResult = jest.fn().mockReturnValue(undefined);
+    mockLocalQueryResult = vi.fn().mockReturnValue(undefined);
 
     mockConvexClient = {
       client: {
         localQueryResult: mockLocalQueryResult,
       },
-      onUpdate: jest.fn((_query, _args, onUpdate) => {
+      onUpdate: vi.fn((_query, _args, onUpdate) => {
         onUpdateCallback = onUpdate;
-        return jest.fn();
+        return vi.fn();
       }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    } as unknown as Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }, ConvexHydrationState],
