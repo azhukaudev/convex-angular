@@ -105,4 +105,4 @@ UI uses Angular Material 3 + SCSS. The theme lives in `src/styles.scss` (`mat.th
 - Tests are Jest via `jest-preset-angular`; specs live next to source as `*.spec.ts`. Both projects use the shared `jest.preset.js`.
 - Prettier: single quotes, `printWidth` 120, trailing commas. Imports are auto-sorted (`@ianvs/prettier-plugin-sort-imports`): builtins → third-party → `@convex-angular/*` → relative.
 - Public API surface is documented with TSDoc `@public`/`@internal` tags; keep new exports annotated and re-exported from `index.ts`.
-- Releases use Nx release (`nx.json` `release`), versioned from git tags; the library version lives in `packages/convex-angular/package.json`.
+- Releases use Nx release (`nx.json` `release`), versioned from git tags; the library version lives in `packages/convex-angular/package.json`. Pushing a `v*` tag triggers `.github/workflows/release.yml` (verify → build → tag/version consistency check → `npm publish --provenance`); `workflow_dispatch` runs the same pipeline as a dry run.
