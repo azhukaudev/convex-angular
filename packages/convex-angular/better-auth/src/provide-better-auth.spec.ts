@@ -81,4 +81,12 @@ describe('provideBetterAuth', () => {
 
     expect(() => TestBed.inject(CONVEX_AUTH)).toThrow(/registered more than once/);
   });
+
+  it('injectBetterAuth() throws a guided error when provideBetterAuth() was not registered', () => {
+    TestBed.configureTestingModule({
+      providers: [provideConvexTesting(new MockConvexClient())],
+    });
+
+    expect(() => TestBed.runInInjectionContext(() => injectBetterAuth())).toThrow(/provideBetterAuth/);
+  });
 });

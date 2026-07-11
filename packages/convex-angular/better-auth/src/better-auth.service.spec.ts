@@ -11,6 +11,19 @@ const fail = <T>(status: number, message = 'denied'): BetterAuthFetchResult<T> =
   error: { status, message },
 });
 
+interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+}
+
+function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 class FakeBetterAuthClient implements BetterAuthClientLike {
   sessionResult: BetterAuthFetchResult<BetterAuthSessionData> = ok(session('s1'));
   tokenResult: BetterAuthFetchResult<{ token?: string | null }> = ok({ token: 'jwt-1' });
@@ -19,15 +32,20 @@ class FakeBetterAuthClient implements BetterAuthClientLike {
   updateSessionCalls = 0;
   sessionDataFallback: BetterAuthSessionData | null = null;
 
+  // Queued per-call overrides so race tests can control resolution order;
+  // consumed in call order, falling back to sessionResult/tokenResult.
+  sessionQueue: Array<Promise<BetterAuthFetchResult<BetterAuthSessionData>>> = [];
+  tokenQueue: Array<Promise<BetterAuthFetchResult<{ token?: string | null }>>> = [];
+
   async getSession() {
     this.sessionCalls += 1;
-    return this.sessionResult;
+    return this.sessionQueue.shift() ?? this.sessionResult;
   }
 
   convex = {
     token: async () => {
       this.tokenCalls += 1;
-      return this.tokenResult;
+      return this.tokenQueue.shift() ?? this.tokenResult;
     },
   };
 
@@ -216,4 +234,112 @@ describe('BetterAuthService', () => {
     tick();
     expect(factoryCalls).toBe(0);
   }));
+
+  describe('session refresh / sign-out race', () => {
+    it('discards a stale refreshSession() result after a concurrent clearSession()', fakeAsync(() => {
+      const service = setup();
+      tick(); // settle the constructor's initial refresh (session s1)
+
+      const deferred = createDeferred<BetterAuthFetchResult<BetterAuthSessionData>>();
+      client.sessionQueue = [deferred.promise];
+
+      void service.refreshSession(); // in flight, awaiting the deferred response
+      service.clearSession(); // signs out synchronously and bumps the epoch
+
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.session()).toBeNull();
+
+      deferred.resolve(ok(session('s1'))); // the stale refresh response lands late
+      tick();
+
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.session()).toBeNull();
+      expect(service.isLoading()).toBe(false);
+    }));
+
+    it('only applies the result of the most recently started overlapping refreshSession()', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const first = createDeferred<BetterAuthFetchResult<BetterAuthSessionData>>();
+      const second = createDeferred<BetterAuthFetchResult<BetterAuthSessionData>>();
+      client.sessionQueue = [first.promise, second.promise];
+
+      void service.refreshSession(); // consumes first.promise
+      void service.refreshSession(); // consumes second.promise
+
+      second.resolve(ok(session('s-second')));
+      tick();
+      expect(service.session()).toEqual(session('s-second'));
+
+      first.resolve(ok(session('s-first'))); // the earlier call resolves later
+      tick();
+
+      expect(service.session()).toEqual(session('s-second'));
+      expect(service.isLoading()).toBe(false);
+    }));
+  });
+
+  describe('token cache race', () => {
+    it('does not let a stale non-forced token response overwrite a forced refresh result', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const stale = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue = [stale.promise];
+
+      void service.fetchAccessToken({ forceRefreshToken: false }); // pending, awaiting `stale`
+
+      client.tokenResult = ok({ token: 'jwt-B' });
+      let forced: string | null = null;
+      void service.fetchAccessToken({ forceRefreshToken: true }).then((t) => (forced = t));
+      tick();
+
+      expect(forced).toBe('jwt-B');
+      expect(client.tokenCalls).toBe(2);
+
+      stale.resolve(ok({ token: 'jwt-A' })); // the superseded request resolves late
+      tick();
+
+      let cached: string | null = null;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (cached = t));
+      tick();
+
+      expect(cached).toBe('jwt-B'); // cache still holds the fresher forced token
+      expect(client.tokenCalls).toBe(2); // served from cache, no extra client call
+    }));
+  });
+
+  describe('error sequencing', () => {
+    it('keeps a session error visible after a subsequent successful token exchange', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      client.sessionResult = fail(500, 'session boom');
+      client.sessionDataFallback = session('s1'); // keeps the user authenticated
+      void service.refreshSession();
+      tick();
+
+      expect(service.isAuthenticated()).toBe(true);
+      expect(service.error()?.message).toContain('session boom');
+
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick();
+
+      expect(service.error()?.message).toContain('session boom');
+    }));
+  });
+
+  describe('401/403 session fallback', () => {
+    it('ignores a stale getSessionData() fallback on an expected 401/403 response', fakeAsync(() => {
+      client.sessionResult = fail(401);
+      client.sessionDataFallback = session('stale-cached');
+      const service = setup();
+      tick();
+
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.session()).toBeNull();
+      expect(service.error()).toBeUndefined();
+    }));
+  });
 });
