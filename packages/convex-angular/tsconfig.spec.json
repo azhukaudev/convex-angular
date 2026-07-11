@@ -9,5 +9,12 @@
     "isolatedModules": true
   },
   "files": ["src/test-setup.ts"],
-  "include": ["jest.config.ts", "src/**/*.test.ts", "src/**/*.spec.ts", "src/**/*.d.ts"]
+  "include": [
+    "jest.config.ts",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/**/*.d.ts",
+    "testing/src/**/*.spec.ts",
+    "better-auth/src/**/*.spec.ts"
+  ]
 }

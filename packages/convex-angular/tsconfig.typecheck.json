@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["src/**/*.ts", "testing/src/**/*.ts", "better-auth/src/**/*.ts"],
+  "exclude": [
+    "src/**/*.spec.ts",
+    "src/test-setup.ts",
+    "jest.config.ts",
+    "src/**/*.test.ts",
+    "testing/src/**/*.spec.ts",
+    "better-auth/src/**/*.spec.ts"
+  ]
+}
