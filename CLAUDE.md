@@ -18,7 +18,7 @@ Use pnpm. Nx targets can be run either via the package.json scripts or `nx <targ
 - `pnpm check:duplication` — copy-paste detection over library + app sources (`jscpd`, config in `.jscpd.json`). Run it after adding or restructuring code; it exits non-zero when duplicated lines exceed the threshold (a ratchet set just above the current baseline). If your change trips it, extract a shared helper instead of raising the threshold; only raise the threshold deliberately, with justification. Spec files are excluded (mock scaffolding is intentionally repeated); the report's clone list tells you exactly which fragments to consolidate.
 - `pnpm check:deadcode` — unused files, exports, and dependencies (`knip`, config in `knip.ts`). The baseline is zero findings; keep it that way. Run it after adding/removing files, exports, or dependencies. If it flags your change, delete the dead code or remove the export from `index.ts` rather than suppressing; every entry in `knip.ts`'s ignore lists carries a comment justifying it — follow that pattern if a new exception is genuinely needed (e.g. a dependency used only by a builder at runtime).
 - `pnpm typecheck` — type-check the library sources with no emit (`tsc --noEmit -p packages/convex-angular/tsconfig.typecheck.json`), covering all three entry points (`src`, `testing`, `better-auth`).
-- `pnpm typecheck:spec` — type-check `*.spec.ts` files (`tsconfig.spec.json`). The Jest runner transpiles specs with `isolatedModules` and does **not** type-check them, so a passing test suite can still hide spec type errors. The suite is green and must stay that way — CI runs it unconditionally on every push and PR, so a regression here fails the build, not just a local nice-to-have.
+- `pnpm typecheck:spec` — type-check `*.spec.ts` files (`tsconfig.spec.json`). The Vitest runner transpiles specs without type-checking them, so a passing test suite can still hide spec type errors. The suite is green and must stay that way — CI runs it unconditionally on every push and PR, so a regression here fails the build, not just a local nice-to-have.
 - `pnpm lint` — ESLint across all projects (`nx run-many -t lint`). Warnings are tolerated; errors block. `nx lint convex-angular --fix` auto-fixes.
 - `pnpm format` / `pnpm format:check` — Prettier write / check over the repo. Note: the pre-commit hook only formats _staged_ files, so a repo-wide `format:check` reports pre-existing drift in files untouched since the last config change — fix only the files you changed.
 - `pnpm verify:quick` — fast gate for localized changes: `typecheck` → `lint` → `check:duplication` → `check:deadcode`. Run a targeted test yourself (see below).
@@ -31,8 +31,8 @@ CI (`.github/workflows/ci.yml`) runs on every push to `main` and on every PR: `p
 
 Targeted operations:
 
-- Single library test file: `nx test convex-angular --testFile=inject-query.spec.ts`
-- Filter by test name: `nx test convex-angular -t "skipToken"`
+- Single library test file: `nx test convex-angular --testFiles=packages/convex-angular/src/lib/providers/inject-query.spec.ts` (or `cd packages/convex-angular && pnpm exec vitest run inject-query`)
+- Filter by test name: `cd packages/convex-angular && pnpm exec vitest run -t "skipToken"`
 - Lint a project: `nx lint convex-angular` (or `nx lint frontend`)
 - Run a target across everything: `nx run-many -t build` / `nx run-many -t lint`
 
@@ -42,16 +42,16 @@ Convex `functions` root is configured in `convex.json` as `apps/frontend/src/con
 
 Run these gates yourself before committing — the git hooks enforce a subset (`check:duplication` + `check:deadcode` on pre-commit; `lint,test,build` on pre-push), so verifying up front catches failures early instead of at commit/push time. Gates are ordered cheap → expensive so the first failure stops the run.
 
-- **Localized change** (one or two files, no API surface change): run the relevant targeted test — `nx test convex-angular --testFile=<file>.spec.ts` or `-t "<name>"` — then `pnpm verify:quick`.
+- **Localized change** (one or two files, no API surface change): run the relevant targeted test — `nx test convex-angular --testFiles=<workspace-relative-path>.spec.ts` or `cd packages/convex-angular && pnpm exec vitest run -t "<name>"` — then `pnpm verify:quick`.
 - **Broad or higher-risk change** (new exports, cross-cutting refactor, dependency or config change): `pnpm verify:full`.
-- **Touched a `*.spec.ts`**: also run `pnpm typecheck:spec` and confirm your changed specs are error-free — the Jest runner does not type-check specs.
+- **Touched a `*.spec.ts`**: also run `pnpm typecheck:spec` and confirm your changed specs are error-free — the Vitest runner does not type-check specs.
 - **Touched only Markdown/docs**: `pnpm format:check` is enough; skip the test/build gates.
 
 Rules that hold across the flow:
 
 - **Duplication (`check:duplication`)**: when jscpd reports a clone you introduced, extract the shared logic (helper, base class, or constant) and reuse it — do not raise the threshold to silence it. The threshold is a ratchet that only moves down. Check existing `src/lib/providers/*` helpers before writing new shared code.
 - **Dead code (`check:deadcode`)**: keep the baseline at zero. Delete unused code or drop the export from `index.ts`; only add a `knip.ts` ignore with a justifying comment when genuinely required.
-- **Node version**: run on Node 22 LTS (`.nvmrc`). Node 24.14.0 has a V8 GC segfault that crashes Jest workers intermittently under parallel runs; `nvm use` before testing/pushing.
+- **Node version**: The repo is pinned to Node 22 LTS; `nvm use` before testing/pushing. (The old Node 24 segfault was a Jest-worker issue; validating Vitest on Node 24 and relaxing the pin is a tracked follow-up.)
 - Never bypass a failing hook with `LEFTHOOK=0` except mid-rebase on already-reviewed commits.
 
 ## Architecture
@@ -102,7 +102,7 @@ UI uses Angular Material 3 + SCSS. The theme lives in `src/styles.scss` (`mat.th
 ## Conventions
 
 - TypeScript path alias: `convex-angular` resolves to `packages/convex-angular/src/index.ts` (tsconfig.base.json) so the app imports the library as if it were the published package.
-- Tests are Jest via `jest-preset-angular`; specs live next to source as `*.spec.ts`. Both projects use the shared `jest.preset.js`.
+- Tests are Vitest via `@analogjs/vite-plugin-angular` (zone-based TestBed, `fakeAsync` supported); specs live next to source as `*.spec.ts`. Each project has its own `vitest.config.mts` and `src/test-setup.ts`.
 - Prettier: single quotes, `printWidth` 120, trailing commas. Imports are auto-sorted (`@ianvs/prettier-plugin-sort-imports`): builtins → third-party → `@convex-angular/*` → relative.
 - Public API surface is documented with TSDoc `@public`/`@internal` tags; keep new exports annotated and re-exported from `index.ts`.
 - Releases use Nx release (`nx.json` `release`), versioned from git tags; the library version lives in `packages/convex-angular/package.json`. Pushing a `v*` tag triggers `.github/workflows/release.yml` (verify → build → tag/version consistency check → `npm publish --provenance`); `workflow_dispatch` runs the same pipeline as a dry run.
