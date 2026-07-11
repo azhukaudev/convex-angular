@@ -8,11 +8,16 @@ export default defineConfig(() => ({
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/apps/frontend',
   plugins: [angular()],
-  // Same amendment as the library config: downlevel @angular/* fesm2022 bundles
-  // so zone.js fakeAsync can intercept their async/await (Router stalls without it).
-  ssr: { noExternal: [/fesm2022/] },
+  ssr: {
+    // Inline Angular fesm2022 bundles so @analogjs/vite-plugin-angular's vitest
+    // plugin downlevels their native async/await to es2016 — zone.js cannot
+    // patch native await, and without this Router navigation stalls forever
+    // under fakeAsync. The plugin itself only inlines */testing bundles.
+    noExternal: [/fesm2022/],
+  },
   resolve: {
     alias: [
+      // Order matters: specific subpaths must precede the bare package name (prefix matching).
       {
         find: 'convex-angular/testing',
         replacement: resolve(import.meta.dirname, '../../packages/convex-angular/testing/src/index.ts'),
