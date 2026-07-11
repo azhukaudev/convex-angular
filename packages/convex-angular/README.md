@@ -806,8 +806,52 @@ this.betterAuth.clearSession();
 
 Better Auth is browser-only in this integration: on the server platform
 `injectBetterAuth()` reports `isLoading: false` and unauthenticated, and never
-constructs your client. Pair it with `provideConvex(...)`'s `ssr.authToken`
-for authenticated server-side rendering.
+constructs your client. For authenticated server-side rendering, see
+[Authenticated SSR with Better Auth](#authenticated-ssr-with-better-auth) below.
+
+#### Authenticated SSR with Better Auth
+
+**Same-origin deployments only**: this recipe requires Better Auth's handler to
+be reachable on the app's own origin, so the session cookie rides the initial
+navigation request. If your client uses `crossDomainClient()`/`crossDomain()`
+(the cross-domain setup), the session lives in browser `localStorage`, which
+the server cannot see — authenticated SSR is not possible in that topology
+today, and the render is unauthenticated until the client hydrates and
+authenticates.
+
+For same-origin deployments, use `getToken` from `@convex-dev/better-auth/utils`
+inside the `ssr.authToken` factory:
+
+```typescript
+// app.config.server.ts — same-origin Better Auth deployments only
+import { REQUEST, inject } from '@angular/core';
+import { getToken } from '@convex-dev/better-auth/utils';
+import { provideConvex } from 'convex-angular';
+
+export const serverConfig: ApplicationConfig = {
+  providers: [
+    provideConvex(environment.convexUrl, {
+      ssr: {
+        authToken: async () => {
+          const request = inject(REQUEST); // must be the first statement — the injection context does not survive an await
+          if (!request) return null;
+
+          const headers = new Headers(request.headers); // copy: getToken mutates it
+          const { token } = await getToken(environment.convexSiteUrl, headers);
+          return token ?? null;
+        },
+      },
+    }),
+  ],
+};
+```
+
+`getToken` makes one blocking HTTP round trip to `${convexSiteUrl}/api/auth/convex/token`
+per server render — memoized per render, but it still gates every SSR query
+fetch, so budget for that latency. Mitigate it with `getToken`'s `jwtCache`
+option, backed by a same-origin `convex_jwt` cookie.
+`@convex-dev/better-auth/utils` is a dependency your app already has for its
+Better Auth setup; `convex-angular` itself needs nothing new for this.
 
 ### Custom Auth Providers
 
@@ -1098,6 +1142,8 @@ export const appConfig: ApplicationConfig = {
 ```
 
 ### Authenticated SSR
+
+Using Better Auth? See [Authenticated SSR with Better Auth](#authenticated-ssr-with-better-auth) for the same-origin recipe.
 
 To fetch user-specific data during the server render, provide an `ssr.authToken`
 factory that returns a JWT (for example, read from the request cookies):
