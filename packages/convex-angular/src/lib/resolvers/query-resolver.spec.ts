@@ -142,6 +142,39 @@ describe('convexQueryResolver', () => {
     tick(5000);
   }));
 
+  it('does not double-unsubscribe when the keep-warm timer and destroy both fire', fakeAsync(() => {
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+
+    void Promise.resolve(runResolver(resolver));
+    tick();
+    onUpdateCallback?.({ name: 'Ada' });
+    tick();
+
+    // Let the keep-warm timer fire first.
+    tick(5000);
+    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+
+    // Now simulate the environment being torn down (the second trigger).
+    TestBed.resetTestingModule();
+
+    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+  }));
+
+  it('resolves undefined and unsubscribes exactly once when destroyed before any result', fakeAsync(() => {
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+
+    let resolved: unknown = 'sentinel';
+    void Promise.resolve(runResolver(resolver)).then((value) => (resolved = value));
+    tick();
+
+    // Destroy before any result or timeout fires.
+    TestBed.resetTestingModule();
+    tick();
+
+    expect(resolved).toBeUndefined();
+    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+  }));
+
   it('resolves undefined on a disabled client instead of hanging', fakeAsync(() => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({

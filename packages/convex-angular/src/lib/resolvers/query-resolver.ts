@@ -105,10 +105,18 @@ export function convexQueryResolver<Query extends QueryReference>(
 
     return new Promise<FunctionReturnType<Query> | undefined>((resolve) => {
       let settled = false;
+      let disposed = false;
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
       const dispose = () => {
+        if (disposed) {
+          return;
+        }
+        disposed = true;
         clearTimeout(timeoutId);
+        // A scope destroyed before the first result must not hang the
+        // navigation; resolving undefined matches the error path's contract.
+        settle(undefined);
         unsubscribe();
       };
 
@@ -117,9 +125,11 @@ export function convexQueryResolver<Query extends QueryReference>(
           return;
         }
         settled = true;
-        // Keep the subscription warm so the routed component's injectQuery
-        // dedupes onto it before it is dropped.
-        timeoutId = setTimeout(dispose, keepSubscribedFor);
+        if (!disposed) {
+          // Keep the subscription warm so the routed component's injectQuery
+          // dedupes onto it before it is dropped.
+          timeoutId = setTimeout(dispose, keepSubscribedFor);
+        }
         resolve(value);
       };
 
