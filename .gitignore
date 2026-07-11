@@ -54,3 +54,5 @@ Thumbs.db
 # Local AI working docs
 docs/superpowers/
 plans/
+
+.nx/migrate-runs
