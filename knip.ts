@@ -22,11 +22,9 @@ const config: KnipConfig = {
     'packages/convex-angular/testing/src/index.ts',
     // Secondary entry point: convex-angular/better-auth
     'packages/convex-angular/better-auth/src/index.ts',
-    // Specs are entries (discovered by Jest, not imported)
+    // Specs are entries (discovered by Vitest, not imported)
     '{apps,packages}/**/*.spec.ts',
     // Tooling configs
-    'jest.preset.js',
-    '{apps,packages}/*/jest.config.ts',
     '{apps,packages}/*/vitest.config.mts',
     '{apps,packages}/*/eslint.config.mjs',
   ],
@@ -51,20 +49,8 @@ const config: KnipConfig = {
     // Toolchain required by Nx Angular executors and `nx migrate`; never imported
     '@angular/cli',
     '@nx/workspace',
-    // Resolved at runtime by the @nx/vitest executor / vitest config, never imported
-    '@nx/vitest',
     // IDE Angular template support; never imported
     '@angular/language-service',
-    // Loads TS configs (jest.config.ts) at runtime for Nx/Jest
-    'ts-node',
-    // Transformer underneath jest-preset-angular (peer dependency)
-    'ts-jest',
-    // TEMPORARY (jest→vitest migration): last import removed with the frontend's
-    // jest test-setup; the package itself is deleted in the dependency-removal task
-    'jest-preset-angular',
-    // TEMPORARY (jest→vitest migration): was only consumed via jest-preset-angular's
-    // zone setup; deleted in the dependency-removal task
-    '@angular/platform-browser-dynamic',
     // Emitted as runtime helper imports by @analogjs/vite-plugin-angular's
     // es2016 downleveling (oxc); never imported from source
     '@oxc-project/runtime',
