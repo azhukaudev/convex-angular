@@ -679,8 +679,11 @@ is replaced (for example after signing out and back in) or when organization
 context changes. Expose `sessionId` — without it a replaced session can leave
 Convex fetching tokens for the dead session, so auth looks loaded but stays
 unauthenticated until the app reloads.
-Return `null` only when the user is signed out or no token is available. Let
-real token-fetch failures throw so `injectAuth().error()` can surface them.
+Return `null` only when the user is signed out or no token is available. A
+failed `getToken()` call is caught by the adapter and treated as a clean
+signed-out outcome, so `injectAuth().error()` will not surface it — let
+unexpected errors propagate out of `getToken()` rather than swallowing them
+yourself.
 
 ### Auth0 Integration
 

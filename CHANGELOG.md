@@ -5,6 +5,22 @@
 ### ✨ Features
 
 - Add a `convex-angular/better-auth` entry point with `provideBetterAuth()` and `injectBetterAuth()`: built-in Better Auth integration (session tracking, Convex token exchange with caching/refresh/dedup) with no dependency on better-auth packages — the client is consumer-provided and typed structurally.
+- Add an optional `ClerkAuthProvider.sessionAudience` signal: when the session token's `aud` claim is `'convex'`, `provideClerkAuth()` uses Clerk's native Convex integration instead of requesting the `'convex'` JWT template.
+
+### ⚠️ Breaking Changes
+
+- Raise the `@angular/common`, `@angular/core`, and `@angular/router` peer dependency floors from `>=21.0.0` to `>=21.2.17`, which patches three high-severity advisories (hydration DOM clobbering/cache poisoning, `HttpTransferCache` weak key hashing, `formatDate` DoS) and one moderate advisory (two-way binding sanitization bypass); consumers on an older Angular must upgrade to install.
+- `provideClerkAuth()` and `provideAuth0Auth()`: a vendor token-fetch failure (e.g. an expired Auth0 SSO session throwing `login_required`) now resolves `null` — the normal signed-out outcome — instead of rejecting and surfacing through `injectAuth().error()`, matching convex-react's Clerk/Auth0 adapters.
+- `Auth0AuthProvider.getAccessTokenSilently` return type is now `Promise<string | null>`; the documented implementation requests `detailedResponse: true` and returns the OIDC `id_token` (the token Convex validates) instead of the access token.
+- `convex-angular/testing`: `MockConvexClient` subscriptions no longer deliver `emit`/`emitError` after unsubscribe, matching the real client. This is a test-fidelity fix, but tests that emitted to a torn-down subscription will now observe no delivery.
+- `convex-angular/better-auth`: on a 401/403 session response, `refreshSession()` no longer falls back to the cross-domain plugin's cached `getSessionData()` (which could resurrect a session the server just rejected) — it signs out instead.
+
+### 🐛 Bug Fixes
+
+- Fix `injectPaginatedQuery()` discarding a server-rendered/transferred first page: the Convex client's initial `LoadingFirstPage` emission after hydration no longer clobbers it, so the content no longer flashes to a loading skeleton.
+- Fix a spurious `"Convex auth sync failed"` internal error that `injectAuth()` recorded on every SSR render; the auth-clear path now respects the disabled SSR client instead of throwing from it.
+- Fix `convexQueryResolver()`: dispose is now idempotent, so the keep-warm timer and route destroy can no longer double-unsubscribe and tear down a co-located `injectQuery()`'s live subscription; a scope destroyed before the first result now resolves the navigation promise with `undefined` instead of hanging it.
+- `convex-angular/better-auth`: fix three stale-async races in `BetterAuthService` — a sign-out during an in-flight session refresh is no longer reverted by the stale response, a superseded token request can no longer overwrite a fresher cached token, and a genuine session error is no longer cleared by a later successful token exchange.
 
 ## [1.9.0](https://github.com/azhukaudev/convex-angular/compare/v1.8.0...v1.9.0) (2026-07-10)
 
