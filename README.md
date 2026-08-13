@@ -1,3 +1,5 @@
+
+
 # convex-angular
 
 [![NPM version](https://img.shields.io/npm/v/convex-angular?color=limegreen&label=npm)](https://www.npmjs.com/package/convex-angular)
@@ -371,7 +373,7 @@ Your Convex query must accept a `paginationOpts` argument.
 Note: `injectPaginatedQuery` currently relies on Convex's experimental
 paginated subscription client APIs. Check `convex-angular` release notes before
 upgrading `convex` to make sure your client version is still supported — this
-release is tested against `convex` 1.41.x.
+release is tested against `convex` 1.42.x.
 
 ```typescript
 import { Component } from '@angular/core';
