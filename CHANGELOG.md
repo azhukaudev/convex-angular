@@ -1,5 +1,11 @@
 # convex-angular
 
+## Unreleased
+
+### 🐛 Bug Fixes
+
+- `injectPaginatedQuery()` no longer duplicates items across pages when the server splits a non-first page: the upstream fix (get-convex/convex-js#54981, `7ceee3e`) makes the first split page resume from the split page's own cursor instead of restarting from `null`. `injectPaginatedQuery()` delegates to `ConvexClient.onPaginatedUpdate_experimental`, so no convex-angular code changed — upgrade the `convex` peer dependency to `>=1.43.0` to pick it up (the declared peer floor stays at `>=1.42.1`).
+
 ## [1.10.0](https://github.com/azhukaudev/convex-angular/compare/v1.9.0...v1.10.0) (2026-07-11)
 
 ### ✨ Features
