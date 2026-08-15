@@ -22,10 +22,10 @@ const config: KnipConfig = {
     'packages/convex-angular/testing/src/index.ts',
     // Secondary entry point: convex-angular/better-auth
     'packages/convex-angular/better-auth/src/index.ts',
-    // Specs are entries (discovered by Vitest, not imported)
+    // Specs are entries (discovered by Jest, not imported)
     '{apps,packages}/**/*.spec.ts',
     // Tooling configs
-    '{apps,packages}/*/vitest.config.mts',
+    '{apps,packages}/*/jest.config.cjs',
     '{apps,packages}/*/eslint.config.mjs',
   ],
   project: ['{apps,packages}/**/*.{ts,js,mjs}', '*.{ts,js,mjs}'],
@@ -51,9 +51,6 @@ const config: KnipConfig = {
     '@nx/workspace',
     // IDE Angular template support; never imported
     '@angular/language-service',
-    // Emitted as runtime helper imports by @analogjs/vite-plugin-angular's
-    // es2016 downleveling (oxc); never imported from source
-    '@oxc-project/runtime',
     // Flat-config ESLint toolchain: pulled transitively by @nx/eslint-plugin
     // presets and referenced only as rule-name strings; versions are managed
     // by `nx migrate` and must stay installed for the presets to resolve

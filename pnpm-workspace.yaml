@@ -45,7 +45,7 @@ minimumReleaseAgeExclude:
   - '@schematics/angular@21.2.14'
   - better-auth@1.6.14 || 1.6.16
   - convex@1.41.0
-  - jest-preset-angular@16.2.0
+  - jest-preset-angular@17.0.0
   - '@better-fetch/fetch@1.2.2'
   - '@convex-dev/better-auth@0.12.3'
   - '@swc/core-darwin-arm64@1.15.41'
@@ -91,4 +91,3 @@ minimumReleaseAgeExclude:
   - '@nx/webpack@23.0.2'
   - '@nx/workspace@23.0.2'
   - nx@23.0.2
-  - '@nx/vitest@23.0.2'

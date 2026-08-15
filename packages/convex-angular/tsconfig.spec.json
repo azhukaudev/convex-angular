@@ -4,13 +4,14 @@
     "outDir": "../../dist/out-tsc",
     "module": "preserve",
     "target": "es2016",
-    "types": ["vitest/globals", "node"],
+    "types": ["jest", "node"],
     "moduleResolution": "bundler",
+    // Angular does not need it; leaving it on makes ts-jest warn on every file.
+    "emitDecoratorMetadata": false,
     "isolatedModules": true
   },
   "files": ["src/test-setup.ts"],
   "include": [
-    "vitest.config.mts",
     "src/**/*.test.ts",
     "src/**/*.spec.ts",
     "src/**/*.d.ts",

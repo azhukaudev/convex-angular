@@ -1,5 +1,13 @@
 {
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "plugins": [
+    {
+      "plugin": "@nx/jest/plugin",
+      "options": {
+        "targetName": "test"
+      }
+    }
+  ],
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "sharedGlobals"],
     "production": [
@@ -8,7 +16,7 @@
       "!{projectRoot}/eslint.config.mjs",
       "!{projectRoot}/**/?(*.)+(spec|test).[jt]s?(x)?(.snap)",
       "!{projectRoot}/tsconfig.spec.json",
-      "!{projectRoot}/vitest.config.mts",
+      "!{projectRoot}/jest.config.cjs",
       "!{projectRoot}/src/test-setup.[jt]s",
       "!{projectRoot}/test-setup.[jt]s"
     ],
@@ -31,10 +39,6 @@
         "{workspaceRoot}/tools/eslint-rules/**/*"
       ]
     },
-    "@nx/vitest:test": {
-      "cache": true,
-      "inputs": ["default", "^production"]
-    },
     "@nx/angular:package": {
       "cache": true,
       "dependsOn": ["^build"],
@@ -46,11 +50,11 @@
       "e2eTestRunner": "none",
       "linter": "eslint",
       "style": "css",
-      "unitTestRunner": "vitest-analog"
+      "unitTestRunner": "jest"
     },
     "@nx/angular:library": {
       "linter": "eslint",
-      "unitTestRunner": "vitest-analog"
+      "unitTestRunner": "jest"
     },
     "@nx/angular:component": {
       "style": "css"
