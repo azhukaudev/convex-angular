@@ -2,7 +2,6 @@ import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angu
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
-import type { Mocked } from 'vitest';
 
 import { CONVEX } from '../tokens/convex';
 import { MutationReference, injectMutation } from './inject-mutation';
@@ -35,15 +34,15 @@ function createDeferred<T>(): Deferred<T> {
 }
 
 describe('injectMutation', () => {
-  let mockConvexClient: Mocked<ConvexClient>;
+  let mockConvexClient: jest.Mocked<ConvexClient>;
   const ignoreRejection = (promise: Promise<unknown>) => {
     promise.catch(() => undefined);
   };
 
   beforeEach(() => {
     mockConvexClient = {
-      mutation: vi.fn(),
-    } as unknown as Mocked<ConvexClient>;
+      mutation: jest.fn(),
+    } as unknown as jest.Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -321,7 +320,7 @@ describe('injectMutation', () => {
     it('should call onSuccess callback with result', fakeAsync(() => {
       const mockResult = { id: '123' };
       mockConvexClient.mutation.mockResolvedValue(mockResult);
-      const onSuccess = vi.fn();
+      const onSuccess = jest.fn();
 
       @Component({
         template: '',
@@ -343,7 +342,7 @@ describe('injectMutation', () => {
     it('should call onError callback with error', fakeAsync(() => {
       const error = new Error('Failed');
       mockConvexClient.mutation.mockRejectedValue(error);
-      const onError = vi.fn();
+      const onError = jest.fn();
 
       @Component({
         template: '',
@@ -365,7 +364,7 @@ describe('injectMutation', () => {
 
     it('should not call onSuccess on error', fakeAsync(() => {
       mockConvexClient.mutation.mockRejectedValue(new Error('Failed'));
-      const onSuccess = vi.fn();
+      const onSuccess = jest.fn();
 
       @Component({
         template: '',
@@ -386,7 +385,7 @@ describe('injectMutation', () => {
 
     it('should not call onError on success', fakeAsync(() => {
       mockConvexClient.mutation.mockResolvedValue({ id: '123' });
-      const onError = vi.fn();
+      const onError = jest.fn();
 
       @Component({
         template: '',
@@ -409,7 +408,7 @@ describe('injectMutation', () => {
   describe('optimistic updates', () => {
     it('should pass optimisticUpdate option to convex.mutation()', fakeAsync(() => {
       mockConvexClient.mutation.mockResolvedValue({ id: '123' });
-      const optimisticUpdate = vi.fn();
+      const optimisticUpdate = jest.fn();
 
       @Component({
         template: '',
@@ -888,7 +887,7 @@ describe('injectMutation', () => {
 
     it('should ignore a pending success after the owning component is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ id: string }>();
-      const onSuccess = vi.fn();
+      const onSuccess = jest.fn();
       mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
 
       @Component({
@@ -927,7 +926,7 @@ describe('injectMutation', () => {
 
     it('should ignore a pending failure after the owning component is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ id: string }>();
-      const onError = vi.fn();
+      const onError = jest.fn();
       mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
 
       @Component({
@@ -986,7 +985,7 @@ describe('injectMutation', () => {
 
     it('should ignore a pending success after the provided injector is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ id: string }>();
-      const onSuccess = vi.fn();
+      const onSuccess = jest.fn();
       mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);
@@ -1018,7 +1017,7 @@ describe('injectMutation', () => {
 
     it('should ignore a pending failure after the provided injector is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ id: string }>();
-      const onError = vi.fn();
+      const onError = jest.fn();
       mockConvexClient.mutation.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);

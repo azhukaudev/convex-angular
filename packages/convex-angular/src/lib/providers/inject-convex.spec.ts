@@ -1,20 +1,19 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
-import type { Mocked } from 'vitest';
 
 import { CONVEX, provideConvex } from '../tokens/convex';
 import { injectConvex } from './inject-convex';
 
 describe('injectConvex', () => {
-  let mockConvexClient: Mocked<ConvexClient>;
+  let mockConvexClient: jest.Mocked<ConvexClient>;
 
   beforeEach(() => {
     mockConvexClient = {
-      query: vi.fn(),
-      mutation: vi.fn(),
-      action: vi.fn(),
-    } as unknown as Mocked<ConvexClient>;
+      query: jest.fn(),
+      mutation: jest.fn(),
+      action: jest.fn(),
+    } as unknown as jest.Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],

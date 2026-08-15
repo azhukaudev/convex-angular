@@ -1,16 +1,15 @@
 import { PendingTasks, TransferState } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { FunctionReference } from 'convex/server';
-import type { Mock } from 'vitest';
 
 import { QueryReference } from '../providers/inject-query';
 import { ConvexServerQueryLoader } from './server-query-loader';
 import { makeQueryStateKey } from './state-transfer';
 import { CONVEX_HTTP_CLIENT, CONVEX_SSR_CONFIG, ConvexSsrOptions } from './tokens';
 
-vi.mock('convex/server', async () => ({
-  ...(await vi.importActual<typeof import('convex/server')>('convex/server')),
-  getFunctionName: vi.fn().mockReturnValue('todos:list'),
+jest.mock('convex/server', () => ({
+  ...jest.requireActual<typeof import('convex/server')>('convex/server'),
+  getFunctionName: jest.fn().mockReturnValue('todos:list'),
 }));
 
 const mockQuery = (() => {}) as unknown as FunctionReference<
@@ -21,8 +20,8 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
 > as QueryReference;
 
 describe('ConvexServerQueryLoader', () => {
-  let mockHttpQuery: Mock;
-  let mockSetAuth: Mock;
+  let mockHttpQuery: jest.Mock;
+  let mockSetAuth: jest.Mock;
 
   function setup(ssr: ConvexSsrOptions = {}) {
     TestBed.configureTestingModule({
@@ -36,8 +35,8 @@ describe('ConvexServerQueryLoader', () => {
   }
 
   beforeEach(() => {
-    mockHttpQuery = vi.fn().mockResolvedValue([{ _id: '1' }]);
-    mockSetAuth = vi.fn();
+    mockHttpQuery = jest.fn().mockResolvedValue([{ _id: '1' }]);
+    mockSetAuth = jest.fn();
   });
 
   afterEach(() => {
@@ -78,7 +77,7 @@ describe('ConvexServerQueryLoader', () => {
   });
 
   it('should resolve the auth token once and apply it before querying', async () => {
-    const authToken = vi.fn().mockResolvedValue('jwt-token');
+    const authToken = jest.fn().mockResolvedValue('jwt-token');
     const loader = setup({ authToken });
 
     await loader.fetch(mockQuery, { count: 10 }, '{"count":10}');
@@ -98,7 +97,7 @@ describe('ConvexServerQueryLoader', () => {
   });
 
   it('should not transfer authenticated results when transferAuthenticatedResults is false', async () => {
-    const authToken = vi.fn().mockResolvedValue('jwt-token');
+    const authToken = jest.fn().mockResolvedValue('jwt-token');
     const loader = setup({ authToken, transferAuthenticatedResults: false });
 
     const result = await loader.fetch(mockQuery, { count: 10 }, '{"count":10}');
@@ -112,7 +111,7 @@ describe('ConvexServerQueryLoader', () => {
   });
 
   it('should transfer results when transferAuthenticatedResults is false but no token is resolved', async () => {
-    const authToken = vi.fn().mockResolvedValue(null);
+    const authToken = jest.fn().mockResolvedValue(null);
     const loader = setup({ authToken, transferAuthenticatedResults: false });
 
     await loader.fetch(mockQuery, { count: 10 }, '{"count":10}');
@@ -133,7 +132,7 @@ describe('ConvexServerQueryLoader', () => {
   });
 
   it('should transfer authenticated results by default when transferAuthenticatedResults is omitted', async () => {
-    const authToken = vi.fn().mockResolvedValue('jwt-token');
+    const authToken = jest.fn().mockResolvedValue('jwt-token');
     const loader = setup({ authToken });
 
     await loader.fetch(mockQuery, { count: 10 }, '{"count":10}');
@@ -156,8 +155,8 @@ describe('ConvexServerQueryLoader', () => {
   it('should block stability via a pending task until the fetch settles', async () => {
     const loader = setup();
     const pendingTasks = TestBed.inject(PendingTasks);
-    const removeTask = vi.fn();
-    const addSpy = vi.spyOn(pendingTasks, 'add').mockReturnValue(removeTask);
+    const removeTask = jest.fn();
+    const addSpy = jest.spyOn(pendingTasks, 'add').mockReturnValue(removeTask);
 
     const fetchPromise = loader.fetch(mockQuery, { count: 10 }, '{"count":10}');
     expect(addSpy).toHaveBeenCalledTimes(1);
@@ -171,8 +170,8 @@ describe('ConvexServerQueryLoader', () => {
     mockHttpQuery.mockRejectedValue(new Error('boom'));
     const loader = setup();
     const pendingTasks = TestBed.inject(PendingTasks);
-    const removeTask = vi.fn();
-    vi.spyOn(pendingTasks, 'add').mockReturnValue(removeTask);
+    const removeTask = jest.fn();
+    jest.spyOn(pendingTasks, 'add').mockReturnValue(removeTask);
 
     await expect(loader.fetch(mockQuery, { count: 10 }, '{"count":10}')).rejects.toThrow('boom');
     expect(removeTask).toHaveBeenCalledTimes(1);

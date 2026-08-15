@@ -1,5 +1,4 @@
 import { DestroyRef } from '@angular/core';
-import type { Mock } from 'vitest';
 
 import { CallableState, createCallableState } from './callable-state';
 
@@ -22,9 +21,9 @@ function deferred<T>(): Deferred<T> {
 describe('createCallableState', () => {
   let destroyCallbacks: Array<() => void>;
   let destroyRef: DestroyRef;
-  let invoke: Mock;
-  let onSuccess: Mock;
-  let onError: Mock;
+  let invoke: jest.Mock;
+  let onSuccess: jest.Mock;
+  let onError: jest.Mock;
 
   function create(): CallableState<{ title: string }, string> {
     return createCallableState<{ title: string }, string>(destroyRef, invoke, { onSuccess, onError });
@@ -44,9 +43,9 @@ describe('createCallableState', () => {
         return () => undefined;
       },
     } as DestroyRef;
-    invoke = vi.fn();
-    onSuccess = vi.fn();
-    onError = vi.fn();
+    invoke = jest.fn();
+    onSuccess = jest.fn();
+    onError = jest.fn();
   });
 
   describe('initial state', () => {

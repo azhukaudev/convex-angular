@@ -3,12 +3,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, Router, convertToParamMap } from '@angular/router';
 import { BetterAuthClientLike, provideBetterAuth } from 'convex-angular/better-auth';
 import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
-import type { Mock } from 'vitest';
 
 import { DemoAuthService } from '../../auth/demo-auth.service';
 import AuthLogin from './auth-login';
 
-vi.mock('../../auth/demo-auth.service', () => {
+jest.mock('../../auth/demo-auth.service', () => {
   class MockDemoAuthService {}
 
   return { DemoAuthService: MockDemoAuthService };
@@ -38,12 +37,12 @@ function fakeBetterAuthClient(): BetterAuthClientLike {
 describe('AuthLogin', () => {
   let fixture: ComponentFixture<AuthLogin>;
   let component: AuthLogin;
-  let router: { navigateByUrl: Mock };
+  let router: { navigateByUrl: jest.Mock };
   let authService: {
     formErrorMessage: ReturnType<typeof signal<string | null>>;
-    signIn: Mock<(email: string, password: string) => Promise<boolean>>;
-    signUp: Mock<(email: string, password: string, name: string) => Promise<boolean>>;
-    clearFormError: Mock;
+    signIn: jest.MockedFunction<(email: string, password: string) => Promise<boolean>>;
+    signUp: jest.MockedFunction<(email: string, password: string, name: string) => Promise<boolean>>;
+    clearFormError: jest.Mock;
   };
 
   beforeAll(() => {
@@ -66,13 +65,13 @@ describe('AuthLogin', () => {
 
   async function setup(returnUrl: string | null = null): Promise<void> {
     router = {
-      navigateByUrl: vi.fn().mockResolvedValue(true),
+      navigateByUrl: jest.fn().mockResolvedValue(true),
     };
     authService = {
       formErrorMessage: signal<string | null>(null),
-      signIn: vi.fn().mockResolvedValue(true),
-      signUp: vi.fn().mockResolvedValue(true),
-      clearFormError: vi.fn(),
+      signIn: jest.fn().mockResolvedValue(true),
+      signUp: jest.fn().mockResolvedValue(true),
+      clearFormError: jest.fn(),
     };
 
     await TestBed.configureTestingModule({

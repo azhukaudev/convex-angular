@@ -1,7 +1,6 @@
 import { Component, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
-import type { Mock, Mocked } from 'vitest';
 
 import { provideConvexAuth } from '../providers/inject-auth';
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
@@ -14,22 +13,22 @@ import {
 } from './auth-helpers';
 
 describe('Auth Helper Directives', () => {
-  let mockConvexClient: Mocked<ConvexClient>;
-  let mockSetAuth: Mock;
-  let mockClearAuth: Mock;
-  let mockHasAuth: Mock;
+  let mockConvexClient: jest.Mocked<ConvexClient>;
+  let mockSetAuth: jest.Mock;
+  let mockClearAuth: jest.Mock;
+  let mockHasAuth: jest.Mock;
   let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
   let setAuthOnRefreshChange: ((isRefreshing: boolean) => void) | undefined;
   let isLoading: ReturnType<typeof signal<boolean>>;
   let isAuthenticated: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
-    mockSetAuth = vi.fn((_fetchToken, onChange, onRefreshChange) => {
+    mockSetAuth = jest.fn((_fetchToken, onChange, onRefreshChange) => {
       setAuthOnChange = onChange;
       setAuthOnRefreshChange = onRefreshChange;
     });
-    mockClearAuth = vi.fn();
-    mockHasAuth = vi.fn().mockReturnValue(false);
+    mockClearAuth = jest.fn();
+    mockHasAuth = jest.fn().mockReturnValue(false);
 
     mockConvexClient = {
       disabled: false,
@@ -38,7 +37,7 @@ describe('Auth Helper Directives', () => {
         clearAuth: mockClearAuth,
         hasAuth: mockHasAuth,
       },
-    } as unknown as Mocked<ConvexClient>;
+    } as unknown as jest.Mocked<ConvexClient>;
 
     isLoading = signal(true);
     isAuthenticated = signal(false);

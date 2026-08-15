@@ -2,16 +2,15 @@ import { Component, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
-import type { Mock, Mocked } from 'vitest';
 
 import { skipToken } from '../skip-token';
 import { CONVEX } from '../tokens/convex';
 import { QueryReference, injectQuery } from './inject-query';
 
 // Mock getFunctionName to avoid needing a real FunctionReference
-vi.mock('convex/server', async () => ({
-  ...(await vi.importActual<typeof import('convex/server')>('convex/server')),
-  getFunctionName: vi.fn().mockReturnValue('todos:listTodos'),
+jest.mock('convex/server', () => ({
+  ...jest.requireActual<typeof import('convex/server')>('convex/server'),
+  getFunctionName: jest.fn().mockReturnValue('todos:listTodos'),
 }));
 
 // Mock query function reference
@@ -23,24 +22,24 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
 > as QueryReference;
 
 describe('injectQuery placeholder and refetch states', () => {
-  let mockConvexClient: Mocked<ConvexClient>;
-  let mockLocalQueryResult: Mock;
+  let mockConvexClient: jest.Mocked<ConvexClient>;
+  let mockLocalQueryResult: jest.Mock;
   let onUpdateCallback: (result: any) => void;
   let onErrorCallback: (err: Error) => void;
 
   beforeEach(() => {
-    mockLocalQueryResult = vi.fn().mockReturnValue(undefined);
+    mockLocalQueryResult = jest.fn().mockReturnValue(undefined);
 
     mockConvexClient = {
       client: {
         localQueryResult: mockLocalQueryResult,
       },
-      onUpdate: vi.fn((_query, _args, onUpdate, onError) => {
+      onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
         onUpdateCallback = onUpdate;
         onErrorCallback = onError;
-        return vi.fn();
+        return jest.fn();
       }),
-    } as unknown as Mocked<ConvexClient>;
+    } as unknown as jest.Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -261,7 +260,7 @@ describe('injectQuery placeholder and refetch states', () => {
     }));
 
     it('should call a placeholder factory with the current args', fakeAsync(() => {
-      const placeholderData = vi.fn((args: { count: number }) => [{ _id: 'p', title: `Placeholder ${args.count}` }]);
+      const placeholderData = jest.fn((args: { count: number }) => [{ _id: 'p', title: `Placeholder ${args.count}` }]);
 
       @Component({
         template: '',
@@ -384,7 +383,7 @@ describe('injectQuery placeholder and refetch states', () => {
     }));
 
     it('should not fire onSuccess for placeholder data', fakeAsync(() => {
-      const onSuccess = vi.fn();
+      const onSuccess = jest.fn();
 
       @Component({
         template: '',

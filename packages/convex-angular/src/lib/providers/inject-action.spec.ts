@@ -2,7 +2,6 @@ import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angu
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
-import type { Mocked } from 'vitest';
 
 import { CONVEX } from '../tokens/convex';
 import { ActionReference, injectAction } from './inject-action';
@@ -35,15 +34,15 @@ function createDeferred<T>(): Deferred<T> {
 }
 
 describe('injectAction', () => {
-  let mockConvexClient: Mocked<ConvexClient>;
+  let mockConvexClient: jest.Mocked<ConvexClient>;
   const ignoreRejection = (promise: Promise<unknown>) => {
     promise.catch(() => undefined);
   };
 
   beforeEach(() => {
     mockConvexClient = {
-      action: vi.fn(),
-    } as unknown as Mocked<ConvexClient>;
+      action: jest.fn(),
+    } as unknown as jest.Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -319,7 +318,7 @@ describe('injectAction', () => {
     it('should call onSuccess callback with result', fakeAsync(() => {
       const mockResult = { success: true };
       mockConvexClient.action.mockResolvedValue(mockResult);
-      const onSuccess = vi.fn();
+      const onSuccess = jest.fn();
 
       @Component({
         template: '',
@@ -341,7 +340,7 @@ describe('injectAction', () => {
     it('should call onError callback with error', fakeAsync(() => {
       const error = new Error('Failed');
       mockConvexClient.action.mockRejectedValue(error);
-      const onError = vi.fn();
+      const onError = jest.fn();
 
       @Component({
         template: '',
@@ -363,7 +362,7 @@ describe('injectAction', () => {
 
     it('should not call onSuccess on error', fakeAsync(() => {
       mockConvexClient.action.mockRejectedValue(new Error('Failed'));
-      const onSuccess = vi.fn();
+      const onSuccess = jest.fn();
 
       @Component({
         template: '',
@@ -384,7 +383,7 @@ describe('injectAction', () => {
 
     it('should not call onError on success', fakeAsync(() => {
       mockConvexClient.action.mockResolvedValue({ success: true });
-      const onError = vi.fn();
+      const onError = jest.fn();
 
       @Component({
         template: '',
@@ -862,7 +861,7 @@ describe('injectAction', () => {
 
     it('should ignore a pending success after the owning component is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ success: boolean }>();
-      const onSuccess = vi.fn();
+      const onSuccess = jest.fn();
       mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       @Component({
@@ -901,7 +900,7 @@ describe('injectAction', () => {
 
     it('should ignore a pending failure after the owning component is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ success: boolean }>();
-      const onError = vi.fn();
+      const onError = jest.fn();
       mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       @Component({
@@ -958,7 +957,7 @@ describe('injectAction', () => {
 
     it('should ignore a pending success after the provided injector is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ success: boolean }>();
-      const onSuccess = vi.fn();
+      const onSuccess = jest.fn();
       mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);
@@ -990,7 +989,7 @@ describe('injectAction', () => {
 
     it('should ignore a pending failure after the provided injector is destroyed', fakeAsync(() => {
       const pending = createDeferred<{ success: boolean }>();
-      const onError = vi.fn();
+      const onError = jest.fn();
       mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);

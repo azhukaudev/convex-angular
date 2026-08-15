@@ -1,12 +1,11 @@
 import { ConvexClient } from 'convex/browser';
-import type { Mock } from 'vitest';
 
 import { ConvexHydrationState } from '../ssr/state-transfer';
 import { readInitialQueryData } from './initial-query-data';
 
 describe('readInitialQueryData', () => {
-  let mockLocalQueryResult: Mock;
-  let mockConsume: Mock;
+  let mockLocalQueryResult: jest.Mock;
+  let mockConsume: jest.Mock;
   let disabled: boolean;
 
   const queryName = 'todos:listTodos';
@@ -30,8 +29,8 @@ describe('readInitialQueryData', () => {
 
   beforeEach(() => {
     disabled = false;
-    mockLocalQueryResult = vi.fn().mockReturnValue(undefined);
-    mockConsume = vi.fn().mockReturnValue(undefined);
+    mockLocalQueryResult = jest.fn().mockReturnValue(undefined);
+    mockConsume = jest.fn().mockReturnValue(undefined);
   });
 
   it('returns a cache hit from the warm client cache', () => {

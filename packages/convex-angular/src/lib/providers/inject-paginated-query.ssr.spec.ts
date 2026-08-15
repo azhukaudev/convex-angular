@@ -2,7 +2,6 @@ import { Component, PLATFORM_ID, TransferState } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, PaginationResult } from 'convex/server';
-import type { Mock, Mocked } from 'vitest';
 
 import { skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
@@ -10,9 +9,9 @@ import { ConvexHydrationState, makeQueryStateKey, serializeQueryArgs, wrapQueryR
 import { CONVEX } from '../tokens/convex';
 import { PaginatedQueryReference, injectPaginatedQuery } from './inject-paginated-query';
 
-vi.mock('convex/server', async () => ({
-  ...(await vi.importActual<typeof import('convex/server')>('convex/server')),
-  getFunctionName: vi.fn().mockReturnValue('todos:listTodosPaginated'),
+jest.mock('convex/server', () => ({
+  ...jest.requireActual<typeof import('convex/server')>('convex/server'),
+  getFunctionName: jest.fn().mockReturnValue('todos:listTodosPaginated'),
 }));
 
 // Mock paginated query function reference
@@ -24,16 +23,16 @@ const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
 > as PaginatedQueryReference;
 
 describe('injectPaginatedQuery SSR and hydration', () => {
-  let mockConvexClient: Mocked<ConvexClient>;
+  let mockConvexClient: jest.Mocked<ConvexClient>;
   let onUpdateCallback: (result: any) => void;
 
   beforeEach(() => {
     mockConvexClient = {
-      onPaginatedUpdate_experimental: vi.fn((_query, _args, _options, onUpdate) => {
+      onPaginatedUpdate_experimental: jest.fn((_query, _args, _options, onUpdate) => {
         onUpdateCallback = onUpdate;
-        return vi.fn();
+        return jest.fn();
       }),
-    } as unknown as Mocked<ConvexClient>;
+    } as unknown as jest.Mocked<ConvexClient>;
 
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: mockConvexClient }],
@@ -62,7 +61,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
         get client() {
           throw new Error('ConvexClient is disabled');
         },
-        onPaginatedUpdate_experimental: vi.fn(() => noopUnsubscribe),
+        onPaginatedUpdate_experimental: jest.fn(() => noopUnsubscribe),
       } as unknown as ConvexClient;
 
       TestBed.configureTestingModule({
@@ -93,7 +92,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
     }));
 
     describe('first-page server fetching', () => {
-      let mockLoader: { enabled: boolean; fetch: Mock };
+      let mockLoader: { enabled: boolean; fetch: jest.Mock };
       let serverConvexClient: ConvexClient;
 
       function setupServer() {
@@ -102,7 +101,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
           get disabled() {
             return true;
           },
-          onPaginatedUpdate_experimental: vi.fn(),
+          onPaginatedUpdate_experimental: jest.fn(),
         } as unknown as ConvexClient;
 
         TestBed.configureTestingModule({
@@ -117,7 +116,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
       beforeEach(() => {
         mockLoader = {
           enabled: true,
-          fetch: vi.fn().mockResolvedValue({
+          fetch: jest.fn().mockResolvedValue({
             page: [{ _id: '1', name: 'Server todo' }],
             isDone: false,
             continueCursor: 'cursor-1',
@@ -183,7 +182,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
         mockLoader.fetch.mockRejectedValue(fetchError);
         setupServer();
 
-        const onError = vi.fn();
+        const onError = jest.fn();
 
         @Component({
           template: '',
@@ -264,7 +263,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
       onUpdateCallback({
         results: [{ _id: '1', name: 'Live todo' }],
         status: 'CanLoadMore',
-        loadMore: vi.fn().mockReturnValue(true),
+        loadMore: jest.fn().mockReturnValue(true),
       });
 
       expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Live todo' }]);
@@ -304,7 +303,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
       onUpdateCallback({
         results: [],
         status: 'LoadingFirstPage',
-        loadMore: vi.fn().mockReturnValue(false),
+        loadMore: jest.fn().mockReturnValue(false),
       });
 
       expect(fixture.componentInstance.todos.status()).toBe('success');
@@ -316,7 +315,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
       onUpdateCallback({
         results: [{ _id: '1', name: 'Live todo' }],
         status: 'CanLoadMore',
-        loadMore: vi.fn().mockReturnValue(true),
+        loadMore: jest.fn().mockReturnValue(true),
       });
       expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Live todo' }]);
       expect(fixture.componentInstance.todos.loadMore(10)).toBe(true);
