@@ -89,10 +89,8 @@ export class ConvexHydrationState {
     }
 
     const key = makeQueryStateKey(queryName, argsKey);
-    if (!this.transferState.hasKey(key)) {
-      return undefined;
-    }
-
+    // `get` returns the `null` default for a missing key, so a separate
+    // `hasKey` check would be redundant.
     const transferred = this.transferState.get(key, null);
     if (transferred === null) {
       return undefined;

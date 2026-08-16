@@ -57,6 +57,8 @@ export function createCallableState<TArgs, TResult>(
   let isDestroyed = false;
 
   // Track if the callable has been called (to distinguish idle from success)
+  // Written on every settling path, success and failure alike, to keep the model
+  // symmetric — even where the current `status`/`isSuccess` derivation masks it.
   const hasCompleted = signal(false);
 
   // Computed signals
@@ -93,6 +95,7 @@ export function createCallableState<TArgs, TResult>(
       // Reset state for the latest invocation.
       data.set(undefined);
       error.set(undefined);
+      // Stryker disable next-line BooleanLiteral: masked by the isLoading.set(true) below.
       hasCompleted.set(false);
       isLoading.set(true);
 
@@ -107,6 +110,7 @@ export function createCallableState<TArgs, TResult>(
       const errorObj = err instanceof Error ? err : new Error(String(err));
       if (currentVersion() === callVersion) {
         error.set(errorObj);
+        // Stryker disable next-line BooleanLiteral: masked by error() in the current derivation.
         hasCompleted.set(true);
         options?.onError?.(errorObj);
       }

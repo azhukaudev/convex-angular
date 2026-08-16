@@ -42,10 +42,9 @@ export const CONVEX = new InjectionToken<ConvexClient>('CONVEX');
 
 // Internal multi-token used as a per-injector registration marker for
 // provideConvex(...). The number of values in the current injector tells us
-// how many times provideConvex(...) was registered in that scope.
-const CONVEX_PROVIDER_REGISTRATION = new InjectionToken<boolean[]>(
-  'CONVEX_PROVIDER_REGISTRATION',
-);
+// how many times provideConvex(...) was registered in that scope; the values
+// themselves are never inspected.
+const CONVEX_PROVIDER_REGISTRATION = new InjectionToken<unknown[]>('CONVEX_PROVIDER_REGISTRATION');
 
 // Internal token whose factory performs provider placement validation.
 const CONVEX_PROVIDER_GUARD = new InjectionToken<true>('CONVEX_PROVIDER_GUARD');
@@ -68,7 +67,7 @@ function assertConvexProviderConfiguration() {
 
   // 2) Guard against nested/child registrations when parent already configured
   // Convex. This keeps provideConvex(...) root-only.
-  if (parentScopeRegistrations && parentScopeRegistrations.length > 0) {
+  if (parentScopeRegistrations) {
     throw new Error(
       '`provideConvex(...)` must be configured only in your root application providers ' +
         '(for example, in `app.config.ts`). Remove nested or route-level registrations.',
@@ -91,10 +90,7 @@ function convexProviderGuardFactory(): true {
  *
  * @internal
  */
-function convexClientFactory(
-  convexUrl: string,
-  options?: ProvideConvexOptions,
-): ConvexClient {
+function convexClientFactory(convexUrl: string, options?: ProvideConvexOptions): ConvexClient {
   const destroyRef = inject(DestroyRef);
   const isServer = isPlatformServer(inject(PLATFORM_ID));
   // The `ssr` key is Angular-specific and must not reach the ConvexClient
@@ -133,10 +129,7 @@ function convexClientFactory(
  *
  * @public
  */
-export function provideConvex(
-  convexUrl: string,
-  options?: ProvideConvexOptions,
-): EnvironmentProviders {
+export function provideConvex(convexUrl: string, options?: ProvideConvexOptions): EnvironmentProviders {
   return makeEnvironmentProviders([
     // Registration marker for the current injector scope (multi so we can
     // detect accidental duplicates in the same providers array).

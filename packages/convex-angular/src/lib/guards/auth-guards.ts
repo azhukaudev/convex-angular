@@ -167,7 +167,7 @@ export function createConvexAuthGuard(options?: ConvexAuthGuardOptions): CanActi
           return true;
         }
 
-        return options?.forbiddenRoute ? router.parseUrl(options.forbiddenRoute) : false;
+        return options.forbiddenRoute ? router.parseUrl(options.forbiddenRoute) : false;
       }),
     );
   };

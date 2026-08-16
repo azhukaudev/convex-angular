@@ -31,7 +31,11 @@ interface SequencedError {
 }
 
 const CONVEX_AUTH_STATE = new InjectionToken<ConvexAuthState>('CONVEX_AUTH_STATE');
-const CONVEX_AUTH_PROVIDER_REGISTRATION = new InjectionToken<boolean[]>('CONVEX_AUTH_PROVIDER_REGISTRATION');
+// Internal multi-token used as a per-injector registration marker for
+// provideConvexAuth(). The number of values in the current injector tells us
+// how many times provideConvexAuth() was registered in that scope; the values
+// themselves are never inspected.
+const CONVEX_AUTH_PROVIDER_REGISTRATION = new InjectionToken<unknown[]>('CONVEX_AUTH_PROVIDER_REGISTRATION');
 const CONVEX_AUTH_PROVIDER_GUARD = new InjectionToken<true>('CONVEX_AUTH_PROVIDER_GUARD');
 
 function assertConvexAuthProviderConfiguration() {
@@ -49,7 +53,7 @@ function assertConvexAuthProviderConfiguration() {
     skipSelf: true,
   });
 
-  if (parentScopeRegistrations && parentScopeRegistrations.length > 0) {
+  if (parentScopeRegistrations) {
     throw new Error(
       '`provideConvexAuth()` must be configured only in your root application providers ' +
         '(for example, in `app.config.ts`). Remove nested or route-level registrations.',

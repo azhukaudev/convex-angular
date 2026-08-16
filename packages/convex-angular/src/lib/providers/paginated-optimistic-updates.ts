@@ -45,6 +45,9 @@ export function optimisticallyUpdateValueInPaginatedQuery<Query extends Paginate
   const expectedArgs = JSON.stringify(convexToJson(args as Value));
 
   for (const queryResult of localStore.getAllQueries(query)) {
+    // Fast path: subsumed by the hasPaginatedPage check below, kept to skip a query
+    // result that cannot be updated without doing the arg comparison first.
+    // Stryker disable next-line BlockStatement: output-equivalent to falling through.
     if (queryResult.value === undefined) {
       continue;
     }
@@ -242,9 +245,6 @@ function insertAtPositionInPages<Query extends PaginatedQueryReference>(options:
   }
 
   const lastLoadedPage = sortedPages[sortedPages.length - 1];
-  if (lastLoadedPage === undefined) {
-    return;
-  }
 
   const lastPageKey = sortKeyFromItem(lastLoadedPage.value.page[lastLoadedPage.value.page.length - 1]);
   const isAfterLastPage =
@@ -271,6 +271,9 @@ function insertAtPositionInPages<Query extends PaginatedQueryReference>(options:
   const pageToUpdate =
     successorPageIndex === -1 ? sortedPages[sortedPages.length - 1] : sortedPages[successorPageIndex - 1];
 
+  // Unreachable for a deterministic `sortKeyFromItem`, but an impure one can yield
+  // `successorPageIndex === 0` and land here. A no-op beats crashing consumer code.
+  // Stryker disable next-line BlockStatement: no test can kill a well-behaved-comparator-unreachable branch.
   if (pageToUpdate === undefined) {
     return;
   }
