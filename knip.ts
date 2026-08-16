@@ -27,6 +27,8 @@ const config: KnipConfig = {
     // Tooling configs
     '{apps,packages}/*/jest.config.cjs',
     '{apps,packages}/*/eslint.config.mjs',
+    // stryker.config.mjs needs no entry: knip's built-in Stryker plugin claims it
+    // and resolves the runner/checker plugins named inside it.
   ],
   project: ['{apps,packages}/**/*.{ts,js,mjs}', '*.{ts,js,mjs}'],
   ignore: [
