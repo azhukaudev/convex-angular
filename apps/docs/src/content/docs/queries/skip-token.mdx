@@ -1,0 +1,99 @@
+---
+title: Conditional queries with skipToken
+description: Skip a query subscription until its arguments are ready, without conditionally creating the helper.
+sidebar:
+  order: 2
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import skipTokenExample from '../../../examples/queries-skip-token.ts?raw';
+
+Some queries only make sense once something else is known — a selected row, a route
+parameter, a signed-in user. `skipToken` expresses that: return it from the argument function
+and no subscription is opened.
+
+```ts
+export const skipToken: unique symbol = Symbol('skipToken');
+export type SkipToken = typeof skipToken;
+```
+
+It is a `unique symbol`, so the argument function's return type is
+`Query['_args'] | SkipToken` and TypeScript narrows correctly on either branch.
+
+<Code code={skipTokenExample} lang="ts" title="todo-detail.component.ts" />
+
+<Aside type="danger">
+  Do **not** wrap the helper in an `@if` or a conditional branch to skip it. `injectQuery()`, `injectQueries()`, and
+  `injectPaginatedQuery()` must run unconditionally in an injection context — the condition belongs inside the argument
+  function.
+</Aside>
+
+## What happens when a query is skipped
+
+The moment the argument function returns `skipToken`, the helper:
+
+1. tears down the active subscription (if any),
+2. sets `data()` to `undefined`,
+3. sets `error()` to `undefined`,
+4. sets `isLoading()` to `false`,
+5. sets `isSkipped()` to `true`,
+6. sets `isPlaceholderData()` to `false`,
+7. bumps the generation counter, so any in-flight callback from the old subscription is
+   discarded.
+
+The derived signals follow: `status()` is `'skipped'`, `isSuccess()` is `false`, and
+`isRefetching()` is `false` (there is no data to preserve).
+
+<Aside type="caution">
+  Skipping is destructive. `data()` is cleared, not parked. If you need the previous value to stay visible while the
+  query is inactive, keep it in your own signal — or keep the query subscribed with different arguments instead of
+  skipping it.
+</Aside>
+
+## Handling the skipped state
+
+`'skipped'` is a first-class member of `QueryStatus`, so a `@switch` covers it exhaustively:
+
+```html
+@switch (todo.status()) { @case ('skipped') {
+<p>Select a todo.</p>
+} @case ('pending') {
+<p>Loading…</p>
+} @case ('error') {
+<p role="alert">{{ todo.error()?.message }}</p>
+} @case ('success') {
+<p>{{ todo.data()?.title }}</p>
+} }
+```
+
+## A skip round trip bypasses args dedup
+
+Normally, a re-run of the argument function that produces identical serialized arguments is
+deduplicated: the live subscription is kept and no round trip happens. Skipping clears the
+remembered subscription identity, so going _out_ of the skipped state always opens a fresh
+subscription — even when the arguments are exactly what they were before.
+
+```ts
+const shouldSkip = signal(false);
+const todos = injectQuery(api.todos.list, () => (shouldSkip() ? skipToken : { count: 10 }));
+
+shouldSkip.set(true); // unsubscribes, clears data
+shouldSkip.set(false); // subscribes again, even though args are unchanged
+```
+
+This is usually what you want — the local state was cleared, so it has to be refilled — but
+it does mean a rapidly toggled condition produces real subscription churn. If a condition
+flips often and the arguments do not change, prefer leaving the query subscribed and hiding
+its output in the template.
+
+## Other helpers
+
+`skipToken` works the same way in [`injectPaginatedQuery`](/queries/pagination/) (results go
+back to `[]`, `status()` becomes `'skipped'`, `loadMore()` returns `false`) and in the
+[`convexQueryResolver`](/queries/route-resolver/), where it resolves `undefined`
+synchronously without touching the network.
+
+[`injectQueries`](/queries/inject-queries/) treats it differently in one important way: a key
+assigned `skipToken` stays present in every record with status `'skipped'`, whereas a key
+removed from the definition disappears entirely.

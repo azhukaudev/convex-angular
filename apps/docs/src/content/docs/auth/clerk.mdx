@@ -1,0 +1,122 @@
+---
+title: Clerk
+description: Wire Clerk into Convex with the ClerkAuthProvider structural interface, the CLERK_AUTH token, and provideClerkAuth().
+sidebar:
+  order: 2
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import clerkConfig from '../../../examples/auth-clerk-config.ts?raw';
+import clerkService from '../../../examples/auth-clerk.ts?raw';
+
+The Clerk integration is a thin adapter. `convex-angular` has no dependency on any `@clerk/*`
+package: you write a small service that exposes Clerk's state as signals, register it under the
+`CLERK_AUTH` token, and `provideClerkAuth()` bridges it to Convex.
+
+## `ClerkAuthProvider`
+
+The interface your service must satisfy. Only the first three members are required.
+
+| Member            | Type                                                                                | Required | Purpose                                                                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isLoaded`        | `Signal<boolean>`                                                                   | yes      | `true` once Clerk has initialized and auth state is known. Mapped to `isLoading: computed(() => !clerk.isLoaded())`.                                |
+| `isSignedIn`      | `Signal<boolean \| undefined>`                                                      | yes      | Whether Clerk reports a signed-in user. May be `undefined` while loading; mapped to `isAuthenticated: computed(() => clerk.isSignedIn() ?? false)`. |
+| `getToken`        | `(options?: { template?: string; skipCache?: boolean }) => Promise<string \| null>` | yes      | Returns the JWT for Convex.                                                                                                                         |
+| `sessionId`       | `Signal<string \| null \| undefined>`                                               | no       | Current Clerk session id. Part of `reauthVersion`.                                                                                                  |
+| `orgId`           | `Signal<string \| null \| undefined>`                                               | no       | Current organization id. Part of `reauthVersion`.                                                                                                   |
+| `orgRole`         | `Signal<string \| null \| undefined>`                                               | no       | Current organization role. Part of `reauthVersion`.                                                                                                 |
+| `sessionAudience` | `Signal<string \| null \| undefined>`                                               | no       | The session token's `aud` claim. Selects the token-fetch mode (below).                                                                              |
+| `error`           | `Signal<Error \| undefined>`                                                        | no       | Provider-owned errors, mirrored onto `injectAuth().error()`.                                                                                        |
+
+```ts
+interface ClerkAuthProvider {
+  isLoaded: Signal<boolean>;
+  isSignedIn: Signal<boolean | undefined>;
+  getToken(options?: { template?: string; skipCache?: boolean }): Promise<string | null>;
+  sessionId?: Signal<string | null | undefined>;
+  orgId?: Signal<string | null | undefined>;
+  orgRole?: Signal<string | null | undefined>;
+  sessionAudience?: Signal<string | null | undefined>;
+  error?: Signal<Error | undefined>;
+}
+```
+
+## `CLERK_AUTH`
+
+```ts
+const CLERK_AUTH: InjectionToken<ClerkAuthProvider>;
+```
+
+Register your implementation under this token **before** calling `provideClerkAuth()`. Prefer
+`useExisting` over `useClass` when the service is also injected elsewhere in your app, so Angular
+reuses the singleton instead of constructing a second instance.
+
+## `provideClerkAuth()`
+
+```ts
+function provideClerkAuth(): EnvironmentProviders;
+```
+
+It registers a `CONVEX_AUTH` factory that adapts `CLERK_AUTH`, and then `provideConvexAuth()`.
+
+<Aside type="danger" title="provideClerkAuth() already includes provideConvexAuth()">
+  Do not add `provideConvexAuth()` (or `provideConvexAuthFromExisting()`) next to it — two registrations in the same
+  injector throw at bootstrap. All auth providers are root-only and once-only, validated eagerly during bootstrap. See
+  [the overview](/auth/overview/#provideconvexauth) for the exact messages.
+</Aside>
+
+## Token fetching
+
+The adapter decides how to ask Clerk for a token from `sessionAudience()`:
+
+| `sessionAudience()`      | Call made                                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `'convex'`               | `clerk.getToken({ skipCache })` — Clerk's native Convex integration, with **no** JWT template. |
+| anything else, or absent | `clerk.getToken({ template: 'convex', skipCache })` — requests the `'convex'` JWT template.    |
+
+`forceRefreshToken` from Convex maps directly to `skipCache`: when Convex needs a genuinely fresh
+token it passes `forceRefreshToken: true`, and the adapter sets `skipCache: true` so Clerk bypasses
+its own token cache.
+
+<Aside type="caution" title="Rejections are swallowed">
+  A `getToken` that rejects is caught and turned into `null` — the signed-out outcome, matching `convex-react`'s Clerk
+  adapter. It is **not** reported as an auth error, so `injectAuth().error()` stays `undefined`. If you need visibility
+  into those failures, catch them inside your own `getToken` and push them onto the optional `error` signal.
+</Aside>
+
+## `reauthVersion`
+
+The adapter builds it for you:
+
+```ts
+reauthVersion: computed(() => [clerk.sessionId?.(), clerk.orgId?.(), clerk.orgRole?.()]);
+```
+
+Any change to that tuple makes `provideConvexAuth()` tear down the current auth wiring and re-run
+setup with a fresh token, while the user stays signed in.
+
+`orgId` and `orgRole` cover organization switching, where the token's claims change but the user
+does not. **`sessionId` is the one that is easy to omit and expensive to miss.** Signing out and
+back in replaces the Clerk session while `isSignedIn` may never dip to `false` for long enough to
+retrigger setup. Without `sessionId` in the tuple, Convex keeps fetching tokens for the dead
+session: auth looks loaded, but the app stays unauthenticated until a full page reload. Expose
+`sessionId` unless you have a specific reason not to.
+
+## Example
+
+<Code code={clerkService} lang="ts" title="clerk-auth.service.ts" />
+
+Register it in your root providers:
+
+<Code code={clerkConfig} lang="ts" title="app.config.ts" />
+
+In a real application the SDK bindings come from Clerk directly, for example:
+
+```ts
+import { Clerk } from '@clerk/clerk-js';
+```
+
+Then read the state with [`injectAuth()`](/auth/overview/), gate templates with
+[the auth directives](/auth/directives/), and protect routes with
+[the route guards](/auth/route-guards/).

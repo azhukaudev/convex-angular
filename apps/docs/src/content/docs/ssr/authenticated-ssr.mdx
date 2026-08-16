@@ -1,0 +1,207 @@
+---
+title: Authenticated SSR
+description: Render user-specific pages on the server with ssr.authToken, and serve the resulting private HTML safely.
+sidebar:
+  order: 3
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import authConfig from '../../../examples/ssr-auth-config.ts?raw';
+
+A server render has no browser session: the internal HTTP client starts unauthenticated, so queries
+that depend on `ctx.auth` see an anonymous caller and your page renders signed-out. `ssr.authToken`
+is the hook that fixes this — it hands the server render a JWT taken from the incoming request.
+
+```typescript
+provideConvex(convexUrl, {
+  ssr: {
+    authToken: () => readTokenFromCurrentRequest(),
+  },
+});
+```
+
+The factory is resolved at most once per render and applied with `setAuth` before the first query
+goes out. See [Configuration](/ssr/configuration/#authtoken) for the exact evaluation rules.
+
+<Aside type="danger" title="Authenticated HTML is private data">
+
+When `authToken` returns a token, the rendered HTML — and the `TransferState` payload embedded in
+it — contains **one specific user's data**. Such a response MUST be served with:
+
+```http
+Cache-Control: private, no-store
+```
+
+or at minimum `Cache-Control: private`.
+
+Never let it reach a shared cache: no CDN caching, no reverse-proxy caching, no
+`Cache-Control: public`, no static prerendering of the route. A single cached authenticated response
+will be served to other users, and it carries both the rendered markup and the raw query results.
+Treat any route whose `authToken` can return a token as uncacheable, and audit the whole chain —
+framework, proxy, CDN — not just your own handler.
+
+</Aside>
+
+## One token per render, for every query
+
+There is one HTTP client per server render, so `setAuth` is applied once and every query fetched
+during that render is authenticated — including queries that do not need auth. That is usually what
+you want (the render is on behalf of one user), but it means the "authenticated" gate is
+render-global: if a token was applied, `transferAuthenticatedResults: false` suppresses the transfer
+for _all_ results of that render, not only the user-specific ones.
+
+## Keeping results out of the HTML
+
+If you would rather not embed user data in the markup at all, set:
+
+```typescript
+provideConvex(convexUrl, {
+  ssr: {
+    authToken: () => readTokenFromCurrentRequest(),
+    transferAuthenticatedResults: false,
+  },
+});
+```
+
+The server still fetches with the token and still renders real content, so there is no layout shift
+and the page is complete for crawlers and for users with JavaScript disabled. Only the
+`TransferState` payload is skipped. The trade-off is on the client: with nothing to seed from, each
+query starts `pending` after hydration and shows its loading branch until the live subscription
+delivers — a brief flash rather than none.
+
+| Approach                                            | Server HTML     | Data in the payload | Client after hydration    | Cacheability                                     |
+| --------------------------------------------------- | --------------- | ------------------- | ------------------------- | ------------------------------------------------ |
+| `authToken` only (default transfer)                 | User's content  | Yes                 | Instant, no loading state | Private / no-store only                          |
+| `authToken` + `transferAuthenticatedResults: false` | User's content  | No                  | Brief loading state       | Still private — the HTML itself is user-specific |
+| No `authToken`                                      | Signed-out view | Yes (public data)   | Instant, no loading state | Cacheable like any anonymous page                |
+
+<Aside type="caution">
+  `transferAuthenticatedResults: false` reduces the payload, not the sensitivity. The _markup_ is still rendered from
+  one user's data, so the `Cache-Control` rule above still applies.
+</Aside>
+
+## `provideConvex` is root-only and once-only
+
+`provideConvex()` validates its own placement eagerly at bootstrap. Registering it twice in the same
+injector throws:
+
+```text
+`provideConvex(...)` was registered more than once in the same injector. Register it exactly once in your root application providers (for example, in `app.config.ts`).
+```
+
+Registering it in a child injector below one that already registered it throws:
+
+```text
+`provideConvex(...)` must be configured only in your root application providers (for example, in `app.config.ts`). Remove nested or route-level registrations.
+```
+
+This matters for authenticated SSR because the obvious wiring does not work. In the Angular CLI's SSR
+scaffold, `app.config.server.ts` merges a server-only config into the shared one:
+
+```typescript title="app.config.server.ts — does NOT work"
+const serverConfig: ApplicationConfig = {
+  providers: [
+    provideServerRendering(),
+    // Both configs are merged into the SAME root injector, so this is a
+    // second registration and throws at bootstrap.
+    provideConvex(environment.convexUrl, { ssr: { authToken } }),
+  ],
+};
+
+export const config = mergeApplicationConfig(appConfig, serverConfig);
+```
+
+`mergeApplicationConfig` concatenates providers into one root injector, so the merged result contains
+two `provideConvex(...)` registrations and fails the duplicate check.
+
+### Approach 1 — parameterize the shared config
+
+Export the root config as a factory that takes `ConvexSsrOptions`. The browser entry point calls it
+with nothing; the server entry point calls it with an `authToken`. There is still exactly one
+`provideConvex(...)` call.
+
+<Code code={authConfig} lang="ts" title="app.config.ts" />
+
+Then build the configuration per request, closing over the request itself:
+
+```typescript title="server.ts"
+import { bootstrapApplication } from '@angular/platform-browser';
+import { provideServerRendering, renderApplication } from '@angular/platform-server';
+
+import { App } from './app/app';
+import { createAppConfig } from './app/app.config';
+
+app.get('**', async (req, res) => {
+  const token = readTokenFromCookies(req);
+
+  const html = await renderApplication(
+    () =>
+      bootstrapApplication(App, {
+        providers: [provideServerRendering(), ...createAppConfig({ authToken: () => token }).providers],
+      }),
+    { document: indexHtml, url: req.originalUrl },
+  );
+
+  // The response is now one user's private data.
+  res.set('Cache-Control', 'private, no-store');
+  res.send(html);
+});
+```
+
+### Approach 2 — a request-scoped store
+
+If you use `@angular/ssr`'s standard node handler and cannot build the config per request, keep the
+shared config's `authToken` stable and have it read from an `AsyncLocalStorage` store that the
+request handler populates. The store follows the async call chain into the render, and unlike a
+module-level variable it stays correct under concurrent requests.
+
+```typescript title="server.ts"
+import { AsyncLocalStorage } from 'node:async_hooks';
+
+export const requestStore = new AsyncLocalStorage<{ token: string | null }>();
+
+app.use('**', (req, res, next) => {
+  requestStore.run({ token: readTokenFromCookies(req) }, () => {
+    if (requestStore.getStore()?.token) {
+      res.set('Cache-Control', 'private, no-store');
+    }
+    angularApp
+      .handle(req)
+      .then((response) => (response ? writeResponseToNodeResponse(response, res) : next()))
+      .catch(next);
+  });
+});
+```
+
+```typescript title="app.config.ts"
+provideConvex(environment.convexUrl, {
+  ssr: {
+    // Stable closure, per-request value. Never call inject() here — the
+    // factory runs outside any injection context.
+    authToken: () => requestStore.getStore()?.token ?? null,
+  },
+});
+```
+
+`requestStore` is server-only code; keep it behind the server entry point so `node:async_hooks` never
+reaches the browser bundle.
+
+### Approach 3 — do not server-render private data
+
+The blunt option is `fetchOnServer: false`. The server renders the shell, every query loads live
+after hydration, and no user data ever enters the HTML. It costs a loading state on every page, but
+it removes the caching hazard entirely and needs no request plumbing.
+
+## Failure behavior
+
+If `authToken` rejects — an expired session, an unreachable identity provider — the failure is
+memoized for that render and every query fetch fails with it. Each helper reports
+`status() === 'error'`, nothing is transferred, and the browser retries live after hydration, where
+the user's real session applies. Render an error branch that degrades gracefully rather than assuming
+the server fetch always succeeds.
+
+## Next
+
+- [Configuration](/ssr/configuration/) — the full option reference and degradation matrix.
+- [Hydration semantics](/ssr/hydration-semantics/) — what the browser does with what it received.

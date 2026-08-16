@@ -1,0 +1,121 @@
+---
+title: Server-side rendering
+description: How convex-angular renders on the server, transfers query results through TransferState, and hands off to the live subscription after hydration.
+sidebar:
+  order: 1
+---
+
+import { Aside, Code, Steps } from '@astrojs/starlight/components';
+
+import queryComponent from '../../../examples/ssr-query-component.ts?raw';
+
+Angular SSR works with `convex-angular` **without any extra Convex configuration**. During the
+server render, query helpers fetch their data over HTTP, Angular waits for those fetches before it
+serializes the HTML, and the results travel to the browser inside `TransferState`. The hydrated
+application reads them back and renders the same content on its first change detection, then the
+live WebSocket subscription takes over.
+
+## What you wire up
+
+```typescript title="app.config.ts"
+import { ApplicationConfig } from '@angular/core';
+import { provideClientHydration } from '@angular/platform-browser';
+import { provideConvex } from 'convex-angular';
+
+import { environment } from '../environments/environment';
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideClientHydration(), provideConvex(environment.convexUrl)],
+};
+```
+
+That is the whole setup. `provideConvex()` lives in the _shared_ root config used by both the
+browser and the server bootstrap — it is root-only and may be registered exactly once, so it must
+not be repeated in a server-only config (see
+[Authenticated SSR](/ssr/authenticated-ssr/#provideconvex-is-root-only-and-once-only)).
+
+`provideClientHydration()` is Angular's DOM-reuse hydration. Query transfer itself only depends on
+`TransferState`, so it works for any platform-server render, but without hydration the browser
+discards the server DOM and you lose most of the benefit.
+
+Nothing in a component changes for SSR:
+
+<Code code={queryComponent} lang="ts" title="todo-page.component.ts" />
+
+## What happens on the server
+
+<Steps>
+
+1. **The client is constructed disabled.** On the server platform, `provideConvex()` creates the
+   `ConvexClient` with `disabled: true`. No WebSocket is opened, and `onUpdate` registration is a
+   no-op — a live subscription cannot exist inside a one-shot render.
+
+2. **Queries fetch over HTTP.** Because there is no subscription, each query helper routes through
+   an internal server loader that uses Convex's `ConvexHttpClient`. Fetches are deduplicated by
+   query name plus serialized args, so ten components asking for the same data during one render
+   produce one request — and one consistent error if it fails.
+
+3. **Angular waits for the data.** Every fetch registers a task with Angular's `PendingTasks`, so
+   the application is not stable — and SSR does not serialize — until the fetch settles. The task is
+   released in a `finally` block, so a rejected fetch cannot hang the render.
+
+4. **Results are written to `TransferState`.** On success the loader stores the result under the key
+   `cva:<queryName>:<argsKey>`, encoded with `convexToJson` so non-JSON Convex values (such as
+   `Int64`) survive the round trip. A rejected fetch transfers nothing.
+
+5. **The helper settles like an emission.** The resolved value lands in `data()` and `status()`
+   becomes `'success'`; a rejection lands in `error()` and `status()` becomes `'error'`. The
+   server-rendered HTML therefore contains whichever branch your template renders for that status.
+
+</Steps>
+
+Unlike hydration seeding in the browser, the server fetch **does** fire `onSuccess` (or `onError`) —
+it is a real result, not a seed.
+
+## What happens in the browser
+
+On the first change detection after hydration, each query helper looks for a transferred entry for
+its query and args. A hit sets `data()`, clears `error()`, and reports `status() === 'success'`
+synchronously — no loading flash, and the hydrated DOM matches the server HTML. The live
+subscription is still opened immediately afterwards and silently replaces the seed as soon as it
+syncs.
+
+The seeding window closes permanently once `ApplicationRef.whenStable()` resolves. Everything after
+that is an ordinary live query. The precedence rules, the paginated-query specifics, and the
+key-matching footgun are covered in [Hydration semantics](/ssr/hydration-semantics/).
+
+## Behavior per helper
+
+| Helper                                | During the server render                                                                                  | After hydration                                                                                          |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `injectQuery()`                       | One-shot HTTP fetch; `pending` until it settles, then `success` or `error`. `onSuccess`/`onError` fire.   | Seeds from the transferred result, reports `success` immediately, then the live subscription takes over. |
+| `injectQueries()`                     | Same, once per definition entry.                                                                          | Same, once per key.                                                                                      |
+| `injectPaginatedQuery()`              | Fetches the first page over HTTP with `paginationOpts: { numItems: initialNumItems, cursor: null }`.      | Seeds the first page; `loadMore()` stays inert until a real emission arrives.                            |
+| `convexQueryResolver()`               | Fetches over HTTP through the same loader; a failure resolves `undefined` instead of blocking navigation. | Subscribes live and keeps the subscription warm for the routed component.                                |
+| `injectPrewarmQuery()`                | `prewarm()` is a no-op and resolves `false` — a background subscription would only delay SSR stability.   | Normal prewarming.                                                                                       |
+| `injectMutation()` / `injectAction()` | Throw `ConvexClient is disabled` if invoked.                                                              | Normal.                                                                                                  |
+| `injectConvexConnectionState()`       | A static disconnected snapshot that never updates. See [Connection state](/reference/connection-state/).  | Live connection state.                                                                                   |
+| `injectAuth()`                        | Nothing is pushed to the (absent) socket; the disabled client is never touched.                           | Normal auth wiring.                                                                                      |
+
+<Aside type="caution" title="Mutations and actions throw during server rendering">
+  A disabled `ConvexClient` throws `ConvexClient is disabled` for mutations, actions, and one-shot client queries. That
+  is intentional: mutations and actions are user interactions and must not run as a side effect of rendering a page.
+  Keep them behind event handlers, or guard them with `isPlatformBrowser(inject(PLATFORM_ID))`.
+</Aside>
+
+## When a fetch fails
+
+A failed server fetch never aborts the render. The rejection is delivered to every consumer of that
+query, the helper reports `status() === 'error'`, and the error branch of your template is what gets
+serialized. Nothing is written to `TransferState`, so the hydrated browser has no seed and simply
+performs a normal pending load over the live subscription — which usually succeeds, since the
+failure was often a server-side networking or auth problem.
+
+## Next
+
+- [Configuration](/ssr/configuration/) — the `ConvexSsrOptions` reference and the full degradation
+  matrix.
+- [Authenticated SSR](/ssr/authenticated-ssr/) — rendering user-specific pages, and the caching rule
+  that comes with them.
+- [Hydration semantics](/ssr/hydration-semantics/) — precedence, the seeding window, and key
+  matching.

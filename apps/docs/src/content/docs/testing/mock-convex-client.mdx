@@ -1,0 +1,262 @@
+---
+title: Mock reference
+description: Complete API reference for convex-angular/testing — MockConvexClient, provideConvexTesting(), the capture types, and the mock's documented limitations.
+sidebar:
+  order: 3
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `convex-angular/testing` entry point exports two runtime values and four types:
+
+```typescript
+import {
+  MockConvexClient,
+  provideConvexTesting,
+  type MockCallableCall,
+  type MockConvexClientOptions,
+  type MockPaginatedSubscription,
+  type MockQuerySubscription,
+} from 'convex-angular/testing';
+```
+
+## provideConvexTesting()
+
+```typescript
+function provideConvexTesting(client?: MockConvexClient): Provider[];
+```
+
+The parameter defaults to a fresh instance:
+
+```typescript
+function provideConvexTesting(client: MockConvexClient = new MockConvexClient()): Provider[];
+```
+
+It returns a plain `Provider[]` — **not** `EnvironmentProviders`, unlike `provideConvex()`. That
+makes it usable anywhere a provider array is accepted, including `TestBed.configureTestingModule`,
+a component-level `providers` array, and `Injector.create`.
+
+It registers **only** the `CONVEX` token, pointing at the supplied mock:
+
+```typescript
+[{ provide: CONVEX, useValue: client as unknown as ConvexClient }];
+```
+
+Nothing else that `provideConvex()` registers is included — no SSR configuration, no
+`ConvexHttpClient`, no server query loader, no hydration state, and no duplicate-registration guard.
+Helpers inject those services optionally, which is exactly why a bare `CONVEX` token is enough for a
+test. Auth providers (`provideConvexAuth()`, `provideClerkAuth()`, `provideAuth0Auth()`,
+`provideBetterAuth()`) are separate and must be registered yourself if the code under test needs
+them.
+
+## MockConvexClient
+
+```typescript
+class MockConvexClient {
+  constructor(options: MockConvexClientOptions = {});
+}
+```
+
+### MockConvexClientOptions
+
+```typescript
+interface MockConvexClientOptions {
+  disabled?: boolean;
+}
+```
+
+| Option     | Type      | Default | Meaning                                                                                                                                               |
+| ---------- | --------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `disabled` | `boolean` | `false` | Mirror a disabled `ConvexClient` (the server-render state): subscriptions become no-ops and the `client` getter throws, exactly like the real client. |
+
+### Capture properties
+
+Every array is readonly, ordered oldest first, and **never cleared** — build a fresh
+`MockConvexClient` per test.
+
+| Property                 | Type                          | Contents                                               |
+| ------------------------ | ----------------------------- | ------------------------------------------------------ |
+| `querySubscriptions`     | `MockQuerySubscription[]`     | Every live-query subscription made through `onUpdate`. |
+| `paginatedSubscriptions` | `MockPaginatedSubscription[]` | Every paginated subscription.                          |
+| `mutationCalls`          | `MockCallableCall[]`          | Every mutation invocation.                             |
+| `actionCalls`            | `MockCallableCall[]`          | Every action invocation.                               |
+
+### Getters
+
+| Getter     | Type      | Behavior                                                                                                                                             |
+| ---------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `disabled` | `boolean` | `options.disabled ?? false`.                                                                                                                         |
+| `client`   | object    | The low-level client surface used by the helpers. **Throws `Error('ConvexClient is disabled')` when `disabled` is true**, mirroring the real client. |
+
+The `client` getter returns a fresh object exposing exactly four members:
+
+| Member                                                               | Behavior                                                                      |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `localQueryResult(queryName: string, args: Record<string, unknown>)` | Reads the warm cache populated by `seedQueryResult()`; `undefined` on a miss. |
+| `setAuth()`                                                          | No-op, returns `undefined`.                                                   |
+| `clearAuth()`                                                        | No-op, returns `undefined`.                                                   |
+| `hasAuth()`                                                          | Always returns `false`.                                                       |
+
+### Test-driving methods
+
+| Method                                                                               | Returns                                  | Purpose                                                                                                      |
+| ------------------------------------------------------------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `lastQuerySubscription()`                                                            | `MockQuerySubscription \| undefined`     | The most recent live-query subscription, if any.                                                             |
+| `lastPaginatedSubscription()`                                                        | `MockPaginatedSubscription \| undefined` | The most recent paginated subscription, if any.                                                              |
+| `seedQueryResult(queryName: string, args: Record<string, unknown>, result: unknown)` | `void`                                   | Pre-seed the warm local cache consulted by `injectQuery`/`injectQueries` before their subscription delivers. |
+| `setConnectionState(state: Partial<ConnectionState>)`                                | `void`                                   | Shallow-merge into the current state and push it to every connection-state listener.                         |
+
+### ConvexClient surface
+
+These are the members the helpers call. Tests rarely call them directly, but the signatures define
+what gets captured.
+
+```typescript
+onUpdate(
+  query: unknown,
+  args: Record<string, unknown>,
+  onUpdate: (result: unknown) => unknown,
+  onError?: (err: Error) => unknown,
+): () => void;
+
+onPaginatedUpdate_experimental(
+  query: unknown,
+  args: Record<string, unknown>,
+  options: { initialNumItems: number },
+  onUpdate: (result: unknown) => unknown,
+  onError?: (err: Error) => unknown,
+): () => void;
+
+mutation(fn: unknown, args: Record<string, unknown>): Promise<unknown>;
+
+action(fn: unknown, args: Record<string, unknown>): Promise<unknown>;
+
+getAuth(): { token: string; decoded: Record<string, unknown> } | undefined;
+
+connectionState(): ConnectionState;
+
+subscribeToConnectionState(listener: (state: ConnectionState) => void): () => void;
+
+close(): Promise<void>;
+```
+
+Behavior worth knowing:
+
+- Both subscription methods return an unsubscribe function that flips the capture's `unsubscribed`
+  flag. When `disabled` is true they capture nothing and return a callable no-op.
+- `mutation()` and `action()` return a promise that only the corresponding capture's `resolve` /
+  `reject` settles. The third `options` argument that `injectMutation()` passes (carrying
+  `optimisticUpdate`) is ignored, so optimistic update functions never run against the mock.
+- `getAuth()` always returns `undefined`.
+- `connectionState()` throws `Error('ConvexClient is disabled')` when `disabled` is true.
+- `subscribeToConnectionState()` returns an unsubscribe that removes just that listener.
+- `close()` resolves immediately.
+
+### Default connection state
+
+A fresh `MockConvexClient` starts connected and idle:
+
+```typescript
+{
+  hasInflightRequests: false,
+  isWebSocketConnected: true,
+  timeOfOldestInflightRequest: null,
+  hasEverConnected: true,
+  connectionCount: 1,
+  connectionRetries: 0,
+  inflightMutations: 0,
+  inflightActions: 0,
+}
+```
+
+`setConnectionState()` merges over this, so a partial update leaves the other fields untouched.
+
+## Capture types
+
+### MockQuerySubscription
+
+```typescript
+interface MockQuerySubscription {
+  /** The query function reference passed to the helper. */
+  query: unknown;
+  /** The args the helper subscribed with. */
+  args: Record<string, unknown>;
+  /** Deliver a result to the subscriber, as the live WebSocket would; a no-op once the helper has unsubscribed. */
+  emit: (result: unknown) => void;
+  /** Deliver an error to the subscriber; a no-op once the helper has unsubscribed. */
+  emitError: (err: Error) => void;
+  /** True once the helper has unsubscribed. */
+  unsubscribed: boolean;
+}
+```
+
+### MockPaginatedSubscription
+
+```typescript
+interface MockPaginatedSubscription {
+  query: unknown;
+  args: Record<string, unknown>;
+  initialNumItems: number;
+  emit: (result: { results: unknown[]; status: string; loadMore: (n: number) => boolean }) => void;
+  emitError: (err: Error) => void;
+  unsubscribed: boolean;
+}
+```
+
+`emit` takes the client-shaped paginated result, not the server `PaginationResult` — see
+[Driving state](/testing/driving-state/#paginated-pages).
+
+### MockCallableCall
+
+Used for both mutations and actions.
+
+```typescript
+interface MockCallableCall {
+  /** The mutation/action function reference. */
+  fn: unknown;
+  /** The args of the invocation. */
+  args: Record<string, unknown>;
+  /** Resolve the invocation's promise. */
+  resolve: (result: unknown) => void;
+  /** Reject the invocation's promise. */
+  reject: (err: Error) => void;
+}
+```
+
+## Limitations
+
+The mock is deliberately a thin, honest stand-in. Where it does not reproduce the real client, it
+says so rather than pretending.
+
+<Aside type="caution">
+  **No auth, hydration, or TransferState emulation.** `getAuth()` always returns `undefined` and `client.hasAuth()`
+  always returns `false`, so authenticated-vs-anonymous behavior cannot be driven through the mock — register a fake
+  auth provider for that. `provideConvexTesting()` registers only the `CONVEX` token, so none of the SSR services
+  `provideConvex()` sets up (the SSR config, the `ConvexHttpClient`, the server query loader, the hydration state) exist
+  in a testing injector. Server-render fetching and hydration take a different path through the helpers than anything
+  the mock can exercise.
+</Aside>
+
+<Aside type="caution">
+  **`mutation()` and `action()` are not disabled-aware.** The real `ConvexClient` throws for
+  mutations, actions, and one-shot queries while disabled — that is how the library's server-render
+  contract is enforced. The mock captures them normally even when constructed with
+  `{ disabled: true }`, so a test cannot use the mock to prove that a mutation is refused during
+  SSR. Only the subscription methods, the `client` getter, and `connectionState()` honor the disabled
+  flag.
+</Aside>
+
+<Aside type="caution">
+  **The warm-cache key is order-independent; the real TransferState key is not.**
+  `seedQueryResult()` stores under a stable, key-sorted serialization, so `{ a: 1, b: 2 }` and
+  `{ b: 2, a: 1 }` resolve to the same entry. The library's hydration key is
+  `JSON.stringify(convexToJson(args))`, which preserves property insertion order and therefore
+  distinguishes those two arg objects. A hydration bug caused by args being built in a different key
+  order on the server than in the browser will not reproduce through the mock.
+</Aside>
+
+<Aside type="tip">
+  These gaps are about fidelity to the real client, not about the mock being incomplete for ordinary component tests.
+  Query results, errors, pagination, mutation and action settlement, connection state, and the disabled-subscription
+  path all behave as the live client does — including the contract that nothing is delivered after unsubscribe.
+</Aside>

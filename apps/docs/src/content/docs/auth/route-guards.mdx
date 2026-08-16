@@ -1,0 +1,139 @@
+---
+title: Route guards
+description: convexAuthGuard, convexUnauthGuard, and createConvexAuthGuard() for protecting routes on Convex auth state and JWT claims.
+sidebar:
+  order: 7
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import guardsExample from '../../../examples/auth-route-guards.ts?raw';
+
+The router guards wait for [auth to settle](/auth/overview/) and then decide once. All three are
+typed `CanActivateFn & CanMatchFn`, so the same value works in either slot.
+
+## `convexAuthGuard`
+
+```ts
+const convexAuthGuard: CanActivateFn & CanMatchFn;
+```
+
+Requires authentication. It:
+
+1. Waits until `auth.status()` is no longer `'loading'`.
+2. Allows navigation when the status is `'authenticated'` **or** `'refreshing'`.
+3. Otherwise redirects to the login route with a `returnUrl` query parameter.
+
+`'refreshing'` counts as authenticated on purpose. It only ever occurs while the user is still
+authenticated, so bouncing to login would visibly sign the user out for a routine recovery.
+
+`convexAuthGuard` is exactly `createConvexAuthGuard()` with no options.
+
+## `convexUnauthGuard`
+
+```ts
+const convexUnauthGuard: CanActivateFn & CanMatchFn;
+```
+
+For routes that only make sense signed out — login, registration, password reset. It waits for
+`'loading'` to clear, allows the navigation when the status is `'unauthenticated'`, and otherwise
+redirects to `authenticatedRoute` (default `'/'`). Note the asymmetry: because only
+`'unauthenticated'` is allowed, a user in the `'refreshing'` state is redirected away, same as a
+fully authenticated one.
+
+There is no `returnUrl` on this redirect.
+
+## `createConvexAuthGuard()`
+
+```ts
+function createConvexAuthGuard(options?: ConvexAuthGuardOptions): CanActivateFn & CanMatchFn;
+
+interface ConvexAuthGuardOptions {
+  allow?: (auth: { token: string; claims: Record<string, unknown> }) => boolean;
+  forbiddenRoute?: string;
+  loginRoute?: string;
+}
+```
+
+| Option           | Type                                                                    | Behavior                                                                                                                                                             |
+| ---------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow`          | `(auth: { token: string; claims: Record<string, unknown> }) => boolean` | Extra check run **after** authentication is confirmed, with the current JWT and its decoded claims from `injectAuth().getAuth()`. Return `true` to allow navigation. |
+| `forbiddenRoute` | `string`                                                                | Where authenticated users who fail `allow` are sent. When omitted, the guard returns `false` and navigation is blocked with no redirect.                             |
+| `loginRoute`     | `string`                                                                | Per-guard override of the login route. Resolution order: `options.loginRoute` → `CONVEX_AUTH_GUARD_CONFIG.loginRoute` → `'/login'`.                                  |
+
+### Claim-gated guards wait through `'refreshing'`
+
+When `allow` is set, the guard's settle condition tightens: it waits until the status is neither
+`'loading'` **nor** `'refreshing'`. A `'refreshing'` status means the server rejected the current
+token, so its claims are exactly the ones you must not trust. Waiting for the replacement
+guarantees `allow` never reads stale claims.
+
+Guards without `allow` do not wait for a refresh — there are no claims to read, and the user is
+still authenticated.
+
+### A missing snapshot blocks
+
+`allow` runs against `injectAuth().getAuth()`. If that snapshot is `undefined` — no token is set
+on the Convex client — the guard treats the check as failed **even though the status is
+`'authenticated'`**, and redirects to `forbiddenRoute` or blocks. There is no "allow by default"
+path when claims cannot be read.
+
+## `CONVEX_AUTH_GUARD_CONFIG`
+
+```ts
+const CONVEX_AUTH_GUARD_CONFIG: InjectionToken<ConvexAuthGuardConfig>;
+
+interface ConvexAuthGuardConfig {
+  loginRoute?: string;
+  authenticatedRoute?: string;
+}
+```
+
+| Option               | Default    | Used by                                                                                                                                    |
+| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `loginRoute`         | `'/login'` | `convexAuthGuard` and `createConvexAuthGuard()` when redirecting unauthenticated users. Overridden by `ConvexAuthGuardOptions.loginRoute`. |
+| `authenticatedRoute` | `'/'`      | `convexUnauthGuard` when redirecting already-authenticated users.                                                                          |
+
+The token is optional; omit it entirely to take both defaults.
+
+## `returnUrl`
+
+When an unauthenticated user is redirected, the guard parses `loginRoute` into a `UrlTree`,
+preserves any query parameters already written into that route, and adds `returnUrl` pointing at
+the navigation target.
+
+The captured target is the URL of the in-flight navigation: the final URL after redirects when the
+router has resolved one (which is what `canActivate` sees, matching `RouterStateSnapshot.url`), and
+otherwise the requested URL — `canMatch` runs during recognition, before redirects resolve. Path,
+query parameters, and fragment are all preserved. Read it in your login component and navigate back
+after a successful sign-in.
+
+## Prefer `canMatch` for lazy routes
+
+Both slots work, but they differ in what they prevent:
+
+| Slot          | Effect on failure                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `canMatch`    | The route does not match at all. `loadComponent` / `loadChildren` is never invoked, so the protected chunk is never downloaded. |
+| `canActivate` | The route matches and its bundle is fetched first; only then is activation blocked.                                             |
+
+Use `canMatch` for anything lazily loaded. `canActivate` remains appropriate for eagerly declared
+routes and for child routes where you want matching to succeed.
+
+<Aside type="caution" title="Navigation is held indefinitely while status is 'loading'">
+Every guard waits for the first status that is not `'loading'` and takes only that one value. There
+is no timeout and no fallback: while auth is loading, the navigation is **held**, not redirected.
+
+If your auth provider never settles — a misconfigured SDK, a network stall, a provider whose
+`isLoading` signal stays `true` — the router simply never completes the navigation. The user sees
+the previous view with no error. When diagnosing "clicking the link does nothing", check
+`injectAuth().status()` before suspecting the guard logic.
+
+Render a loading affordance for the `'loading'` state (see
+[`*cvaAuthLoading`](/auth/directives/)) so the wait is visible rather than silent.
+
+</Aside>
+
+## Example
+
+<Code code={guardsExample} lang="ts" title="app.routes.ts + app.config.ts" />

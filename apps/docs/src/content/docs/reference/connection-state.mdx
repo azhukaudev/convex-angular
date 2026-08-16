@@ -1,0 +1,107 @@
+---
+title: injectConvexConnectionState
+description: Reference for injectConvexConnectionState() and every field of Convex's ConnectionState, including the disabled server-render snapshot.
+sidebar:
+  order: 11
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import connectionState from '../../../examples/reference-connection-state.ts?raw';
+
+`injectConvexConnectionState()` exposes the Convex client's WebSocket connectivity and in-flight
+request counters as a Signal. Use it for reconnecting indicators, offline-aware UI, and connectivity
+diagnostics.
+
+## Signature
+
+```typescript
+function injectConvexConnectionState(options?: InjectConvexConnectionStateOptions): Signal<ConnectionState>;
+
+interface InjectConvexConnectionStateOptions {
+  /**
+   * Environment injector used to create the connection state helper outside
+   * the current injection context.
+   */
+  injectRef?: EnvironmentInjector;
+}
+```
+
+The return value is a **readonly** `Signal<ConnectionState>`. It is seeded with the client's current
+state and updated on every change the client publishes; the subscription is released automatically
+when the owning scope is destroyed.
+
+`ConnectionState` is Convex's own type, imported from `convex/browser` when you need to annotate it:
+
+```typescript
+import { ConnectionState } from 'convex/browser';
+```
+
+## `ConnectionState` fields
+
+| Field                         | Type           | Meaning                                                                                                                                                                                    |
+| ----------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `hasInflightRequests`         | `boolean`      | True while at least one request (mutation or action) is outstanding.                                                                                                                       |
+| `isWebSocketConnected`        | `boolean`      | True while the WebSocket to the Convex backend is currently connected.                                                                                                                     |
+| `timeOfOldestInflightRequest` | `Date \| null` | When the oldest still-outstanding request started, or `null` when nothing is in flight. Useful for "this is taking a while" affordances.                                                   |
+| `hasEverConnected`            | `boolean`      | True once the client has opened a WebSocket to the "ready" state at least once. Distinguishes a first connection from a dropped one.                                                       |
+| `connectionCount`             | `number`       | How many times this client has connected to the backend. A high number indicates trouble keeping a stable connection — server errors, bad internet, or expiring auth all force reconnects. |
+| `connectionRetries`           | `number`       | How many times this client has tried and failed to connect.                                                                                                                                |
+| `inflightMutations`           | `number`       | Number of mutations currently in flight.                                                                                                                                                   |
+| `inflightActions`             | `number`       | Number of actions currently in flight.                                                                                                                                                     |
+
+<Aside type="note">
+  Convex documents `ConnectionState` as a type that may grow in future versions of the `convex` package. Read the fields
+  you need rather than destructuring exhaustively.
+</Aside>
+
+## Connection status indicator
+
+<Code code={connectionState} lang="ts" title="connection-indicator.component.ts" />
+
+The interesting states are the combinations: `isWebSocketConnected` alone tells you the socket is up,
+but pairing it with `hasEverConnected` separates "connecting for the first time" from "we lost the
+connection", and `connectionRetries` tells you the client is actively failing rather than idle.
+
+## Server-side rendering
+
+During a server render the Convex client is disabled and its connection-state accessors throw. The
+helper detects this and returns a static, never-updating snapshot instead:
+
+```typescript
+{
+  hasInflightRequests: false,
+  isWebSocketConnected: false,
+  timeOfOldestInflightRequest: null,
+  hasEverConnected: false,
+  connectionCount: 0,
+  connectionRetries: 0,
+  inflightMutations: 0,
+  inflightActions: 0,
+}
+```
+
+No subscription is created and the value never changes for the lifetime of that render. A naive
+connection indicator therefore server-renders as "connecting"/"offline" and switches to the real
+state after hydration. If that flicker matters, render the indicator only once the client is live —
+for example by gating it on `hasEverConnected` — rather than making it the first thing a visitor
+sees.
+
+## Errors
+
+The helper resolves the client through `injectConvex()`, so a missing provider throws:
+
+```text
+Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers (for example, in `app.config.ts`).
+```
+
+Calling it outside an injection context without an `injectRef` throws:
+
+```text
+injectConvexConnectionState() must be called from an injection context (for example, a component or service field initializer or constructor), or be given an explicit injector via the `injectRef` option to create it later from plain code.
+```
+
+## Related
+
+- [injectConvex](/reference/convex-client/) — the client this state comes from.
+- [Server-side rendering](/ssr/overview/) — the disabled-client behavior in context.

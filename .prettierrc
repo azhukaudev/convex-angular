@@ -1,5 +1,5 @@
 {
-  "plugins": ["@ianvs/prettier-plugin-sort-imports"],
+  "plugins": ["@ianvs/prettier-plugin-sort-imports", "prettier-plugin-astro"],
   "printWidth": 120,
   "singleQuote": true,
   "trailingComma": "all",
@@ -12,6 +12,12 @@
       "files": "*.html",
       "options": {
         "parser": "angular"
+      }
+    },
+    {
+      "files": "*.astro",
+      "options": {
+        "parser": "astro"
       }
     }
   ]

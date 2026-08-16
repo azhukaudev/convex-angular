@@ -1,0 +1,161 @@
+---
+title: Paginated optimistic updates
+description: Helpers for editing locally cached pages of a paginated query inside a mutation's optimistic update.
+sidebar:
+  order: 6
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import optimisticExample from '../../../examples/queries-paginated-optimistic-updates.ts?raw';
+
+A mutation's `optimisticUpdate` receives an `OptimisticLocalStore`, and rewriting paginated
+query results through it by hand is fiddly: pages are separate cached query results keyed by
+their own `paginationOpts`, and each has to be found and rewritten individually.
+`convex-angular` ships five helpers that do that work.
+
+| Helper                                      | Purpose                                                                 |
+| ------------------------------------------- | ----------------------------------------------------------------------- |
+| `optimisticallyUpdateValueInPaginatedQuery` | Map every item across all cached pages.                                 |
+| `insertAtTop`                               | Prepend an item to the first page.                                      |
+| `insertAtBottomIfLoaded`                    | Append an item to the final page, if it is loaded.                      |
+| `insertAtPosition`                          | Insert an item into the correct page and offset for a known sort order. |
+| `sortByField`                               | Build a `sortKeyFromItem` callback from item fields.                    |
+
+<Aside type="danger">
+  **Two different calling conventions.** `optimisticallyUpdateValueInPaginatedQuery` takes **positional** arguments. The
+  three insert helpers take a **single options object**. This trips people up constantly — the parameter name for the
+  store even differs (`localStore` positionally, `localQueryStore` in the options object).
+</Aside>
+
+<Code code={optimisticExample} lang="ts" title="optimistic-todos.component.ts" />
+
+## `optimisticallyUpdateValueInPaginatedQuery` — positional
+
+```ts
+function optimisticallyUpdateValueInPaginatedQuery<Query extends PaginatedQueryReference>(
+  localStore: OptimisticLocalStore,
+  query: Query,
+  args: PaginatedQueryArgs<Query>,
+  updateValue: (currentValue: PaginatedQueryItem<Query>) => PaginatedQueryItem<Query>,
+): void;
+```
+
+| Position | Name          | Type                        | Description                                                                                |
+| -------- | ------------- | --------------------------- | ------------------------------------------------------------------------------------------ |
+| 1        | `localStore`  | `OptimisticLocalStore`      | The store handed to `optimisticUpdate`.                                                    |
+| 2        | `query`       | `Query`                     | The paginated query whose cached pages to rewrite.                                         |
+| 3        | `args`        | `PaginatedQueryArgs<Query>` | Exact non-pagination arguments. Cached pages whose args do not match are skipped.          |
+| 4        | `updateValue` | `(item) => item`            | Called for every item on every matching page. Return the item unchanged to leave it alone. |
+
+`args` here is an **exact** match on the query's non-pagination arguments, not a partial one:
+every cached page is compared by serializing its args with `paginationOpts` stripped. Use
+`{}` for a query whose only argument is `paginationOpts`.
+
+## `insertAtTop` — options object
+
+```ts
+function insertAtTop<Query extends PaginatedQueryReference>(options: {
+  paginatedQuery: Query;
+  argsToMatch?: Partial<PaginatedQueryArgs<Query>>;
+  localQueryStore: OptimisticLocalStore;
+  item: PaginatedQueryItem<Query>;
+}): void;
+```
+
+Prepends `item` to the page whose `paginationOpts.cursor === null` — the first page. Use it
+for feeds sorted newest-first.
+
+## `insertAtBottomIfLoaded` — options object
+
+```ts
+function insertAtBottomIfLoaded<Query extends PaginatedQueryReference>(options: {
+  paginatedQuery: Query;
+  argsToMatch?: Partial<PaginatedQueryArgs<Query>>;
+  localQueryStore: OptimisticLocalStore;
+  item: PaginatedQueryItem<Query>;
+}): void;
+```
+
+Appends `item` to the final page — the one whose value has `isDone === true`. If the user has
+not paged to the end, the final page is not in the local store and the call does nothing,
+which is correct: the item will simply appear when they eventually scroll there.
+
+## `insertAtPosition` — options object
+
+```ts
+function insertAtPosition<Query extends PaginatedQueryReference>(options: {
+  paginatedQuery: Query;
+  argsToMatch?: Partial<PaginatedQueryArgs<Query>>;
+  sortOrder: 'asc' | 'desc';
+  sortKeyFromItem: (element: PaginatedQueryItem<Query>) => Value | Value[];
+  localQueryStore: OptimisticLocalStore;
+  item: PaginatedQueryItem<Query>;
+}): void;
+```
+
+| Name              | Type                                 | Default          | Description                                                        |
+| ----------------- | ------------------------------------ | ---------------- | ------------------------------------------------------------------ |
+| `paginatedQuery`  | `Query`                              | —                | The paginated query to update.                                     |
+| `argsToMatch`     | `Partial<PaginatedQueryArgs<Query>>` | match everything | Only cached pages whose args match every listed key are touched.   |
+| `sortOrder`       | `'asc' \| 'desc'`                    | —                | Must match the server query's ordering.                            |
+| `sortKeyFromItem` | `(item) => Value \| Value[]`         | —                | Extracts the sort key. Must reproduce the server ordering exactly. |
+| `localQueryStore` | `OptimisticLocalStore`               | —                | The store handed to `optimisticUpdate`.                            |
+| `item`            | `PaginatedQueryItem<Query>`          | —                | The item to insert.                                                |
+
+It groups cached pages by their pagination stream, sorts the loaded pages by their first
+item's key, and places `item` into the page that would contain it — falling back to
+prepending on the first page or appending on the final page when the key sorts outside the
+loaded range.
+
+### `sortKeyFromItem` must reproduce the server ordering exactly
+
+<Aside type="caution">
+`insertAtPosition` derives page boundaries by comparing keys produced by your callback. If
+the callback disagrees with the server query's `order()`/index ordering — even only for ties
+— the optimistic item lands in the wrong page or at the wrong offset, and the UI visibly
+jumps when the real result arrives.
+
+Always end the key with a **stable tie-breaker** such as `_creationTime`. Two items with an
+equal `priority` and no tie-breaker have no defined relative order, and the optimistic
+placement becomes a coin flip.
+
+</Aside>
+
+### `sortByField`
+
+```ts
+function sortByField<Item extends Record<string, Value>>(
+  ...fields: Array<keyof Item & string>
+): (item: Item) => Value | Value[];
+```
+
+Builds the callback from one or more field names. Pass them in the same order the server
+query sorts by, ending with the tie-breaker. A single field yields that field's value; two or
+more yield an array, which `compareValues` compares lexicographically.
+
+```ts
+sortKeyFromItem: sortByField<Pick<Todo, 'priority' | '_creationTime'>>('priority', '_creationTime');
+```
+
+## Silent no-ops are by design
+
+Every insert helper returns without doing anything when the page it would have to modify is
+not in the local store:
+
+| Helper                                      | No-op when                                                                                                                                                                                                                                    |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `insertAtTop`                               | the first page (`cursor === null`) is not loaded, or its value is `undefined`                                                                                                                                                                 |
+| `insertAtBottomIfLoaded`                    | no loaded page reports `isDone === true`                                                                                                                                                                                                      |
+| `insertAtPosition`                          | no page in the group is loaded and non-empty; the key sorts before the first loaded page but that page is not the first page (`cursor !== null`); or the key sorts after the last loaded page but that page is not final (`isDone === false`) |
+| `optimisticallyUpdateValueInPaginatedQuery` | no cached page matches `args`, or a matching entry has no `page` array                                                                                                                                                                        |
+
+<Aside type="tip">
+  Nothing throws and nothing is logged. If an optimistic insert appears to do nothing, the first thing to check is
+  whether the boundary page it targets is actually loaded — for example, calling `insertAtBottomIfLoaded` on a list the
+  user has never scrolled to the end of.
+</Aside>
+
+## Related
+
+- [Pagination](/queries/pagination/)

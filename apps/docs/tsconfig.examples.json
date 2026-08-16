@@ -1,0 +1,26 @@
+// Compiled documentation examples, checked against library source through the
+// `convex-angular` path aliases so a renamed helper or removed export fails
+// `nx run docs:check` instead of rotting on the page.
+//
+// Run with `ngc`, not `tsc`: most examples are components, and plain TypeScript
+// does not check templates at all.
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2022", "dom"],
+    "types": [],
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "skipLibCheck": true
+  },
+  "angularCompilerOptions": {
+    "strictTemplates": true,
+    "strictInjectionParameters": true
+  },
+  "include": ["src/examples/**/*.ts"]
+}

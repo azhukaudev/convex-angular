@@ -1,0 +1,20 @@
+/* Override Starlight's accent custom properties rather than component styles,
+   so the theme survives Starlight upgrades. */
+:root {
+  --sl-color-accent-low: #10251c;
+  --sl-color-accent: #1f8f5f;
+  --sl-color-accent-high: #a8e6c4;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #c9efd9;
+  --sl-color-accent: #14764c;
+  --sl-color-accent-high: #0c3f29;
+}
+
+/* The API tables are wide; scroll them instead of the page. */
+.sl-markdown-content table {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+}

@@ -6,6 +6,7 @@ This is an Nx 23 + pnpm 11 monorepo for `convex-angular`, an Angular library tha
 
 - `packages/convex-angular` — published library with the primary `convex-angular` entry point and the `convex-angular/testing` and `convex-angular/better-auth` secondary entry points.
 - `apps/frontend` — standalone Angular demo application and manual integration harness. Its Convex backend lives in `apps/frontend/src/convex`.
+- `apps/docs` — Astro Starlight documentation site. It is the one pnpm workspace package (declared in `pnpm-workspace.yaml`) and owns its own `package.json`, so Astro's Vite 8 toolchain resolves independently of the Angular build, which pins Vite 7 exactly.
 - Node is pinned by `.nvmrc`; pnpm is pinned by `packageManager` in `package.json`.
 
 Use pnpm. Prefer existing Nx targets and root scripts over ad hoc commands.
@@ -13,6 +14,9 @@ Use pnpm. Prefer existing Nx targets and root scripts over ad hoc commands.
 ## Common Commands
 
 - `pnpm dev:frontend` — serve the demo app.
+- `pnpm dev:docs` — serve the documentation site.
+- `pnpm build:docs` — build the docs site; it depends on `check:docs`.
+- `pnpm check:docs` — run `astro check`, type-check the compiled examples, and verify each one is rendered.
 - `pnpm dev:backend` — run the Convex development backend. Run it with the frontend for auth and data-flow testing.
 - `pnpm build:library` / `pnpm build:frontend` — build the library or demo.
 - `pnpm test:library` — run all library Jest tests.
@@ -35,7 +39,8 @@ Jest 30 uses `--testPathPatterns` (plural). A bare argument forwarded after `--`
 - Localized change: run the relevant targeted test, then `pnpm verify:quick`.
 - Broad, cross-cutting, dependency, configuration, or public-API change: run `pnpm verify:full`.
 - Any changed `*.spec.ts`: also run `pnpm typecheck:spec`.
-- Markdown-only change: `pnpm format:check` is sufficient.
+- Plain Markdown-only change: `pnpm format:check` is sufficient.
+- Any change under `apps/docs` — including `.mdx`, which is executable content, not prose: run `pnpm check:docs` (or `pnpm build:docs`). `format:check` alone is not sufficient there.
 
 CI runs `pnpm verify:full` and `pnpm typecheck:spec` for every pull request and push to `main`. Treat both as required.
 
@@ -80,6 +85,18 @@ Stryker is configured in the root `stryker.config.mjs`. Mutation testing is minu
 - Strengthen behavior-focused tests before narrowing mutation scope.
 - Treat a survivor as equivalent only after constructing a contract-valid behavioral witness or proving none exists.
 - For deliberately unkillable code, use the narrowest line-level `// Stryker disable next-line <Mutator>: <reason>` directive. Never use `all` or a broad config exclusion to improve the score, and verify the resulting `Ignored` status in the report.
+
+## Documentation Site
+
+`apps/docs` is an Astro Starlight site. Content lives in `apps/docs/src/content/docs/**` as Markdown/MDX; the sidebar is configured in `apps/docs/astro.config.mjs`.
+
+Code samples resist drift by being real files. Anything substantial lives in `apps/docs/src/examples/**.ts`, is type-checked by `apps/docs/tsconfig.examples.json` against the library **source** through the `convex-angular` path aliases, and is rendered on the page with Starlight's `<Code>` component and a Vite `?raw` import. A renamed helper or a removed export therefore fails `nx run docs:check` instead of silently rotting. `astro build` does not type-check, which is why `check` is a separate target that `build` depends on.
+
+- `apps/docs/src/examples/convex/api.ts` is a hand-written stand-in for the `api` object `convex dev` generates. Extend it rather than importing a real generated file.
+- Examples import package names (`convex-angular`), never relative paths into `packages/`.
+- Starlight itself validates only the slugs named in the `sidebar` config, so `starlight-links-validator` is registered to cover cross-links inside page content. Both fail the build.
+- `apps/docs/scripts/check-examples-referenced.mjs` fails the `check` target when an example is not rendered by any page, since the knip entry glob cannot distinguish an orphan from a rendered file.
+- Astro's optional `sharp` dependency is denied in `pnpm-workspace.yaml`; the site uses Astro's passthrough image service instead. Do not add image optimization without revisiting that decision.
 
 ## Code Conventions
 

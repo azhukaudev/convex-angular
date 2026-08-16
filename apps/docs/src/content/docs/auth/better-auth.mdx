@@ -1,0 +1,203 @@
+---
+title: Better Auth
+description: The convex-angular/better-auth entry point — provideBetterAuth(), injectBetterAuth(), and the structurally typed client contract.
+sidebar:
+  order: 4
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import betterAuthConfig from '../../../examples/auth-better-auth-config.ts?raw';
+import betterAuthFlows from '../../../examples/auth-better-auth-flows.ts?raw';
+
+Better Auth support lives in its own entry point:
+
+```ts
+import { injectBetterAuth, provideBetterAuth } from 'convex-angular/better-auth';
+```
+
+Unlike [Clerk](/auth/clerk/) and [Auth0](/auth/auth0/), this integration does more than adapt
+signals: it owns session tracking, the Convex token exchange, token caching, and re-auth on
+session change.
+
+<Aside type="tip" title="Structurally typed, zero added dependencies">
+  The entry point declares the exact shape it needs from a Better Auth client and nothing more. It does **not** depend
+  on `better-auth` or `@convex-dev/better-auth`, so their releases cannot break this integration and importing it adds
+  nothing to your dependency graph.
+</Aside>
+
+## `provideBetterAuth()`
+
+```ts
+function provideBetterAuth(clientFactory: () => BetterAuthClientLike): EnvironmentProviders;
+```
+
+Pass a factory that returns your Better Auth client. The factory is invoked **lazily** — only when
+the session is first needed — and **only in the browser**. It never runs on the server; for
+authenticated SSR use `provideConvex(...)`'s `ssr.authToken` option instead.
+
+<Aside type="danger" title="provideBetterAuth() already includes provideConvexAuth()">
+  Internally it registers `BetterAuthService` and `provideConvexAuthFromExisting(BetterAuthService)`, which includes
+  `provideConvexAuth()`. Adding `provideConvexAuth()` alongside it puts two registrations in the same injector and
+  throws at bootstrap. All auth providers are root-only and once-only, validated eagerly during bootstrap — see [the
+  overview](/auth/overview/#provideconvexauth) for the exact messages.
+</Aside>
+
+## One shared client instance
+
+You own the client. Create exactly one instance and use it for both the library and your own
+sign-in, sign-up, and sign-out flows:
+
+```ts
+// auth-client.ts
+import { convexClient, crossDomainClient } from '@convex-dev/better-auth/client/plugins';
+import { createAuthClient } from 'better-auth/client';
+
+import { environment } from '../environments/environment';
+
+function buildAuthClient() {
+  return createAuthClient({
+    baseURL: environment.convexSiteUrl,
+    plugins: [convexClient(), crossDomainClient({ storagePrefix: 'my-app' })],
+  });
+}
+
+export type AppAuthClient = ReturnType<typeof buildAuthClient>;
+
+let instance: AppAuthClient | null = null;
+
+/** One instance shared by provideBetterAuth() and the app's sign-in flows. */
+export function getAuthClient(): AppAuthClient {
+  instance ??= buildAuthClient();
+  return instance;
+}
+```
+
+A second instance would keep its own session cache and quietly diverge from the one the library
+reads.
+
+Register it once:
+
+<Code code={betterAuthConfig} lang="ts" title="app.config.ts" />
+
+## Sign-in, sign-up, and sign-out stay on your client
+
+The library never calls your auth flows. Run them on your own client instance, then tell the
+library to re-read the session:
+
+- After a successful **sign-in** or **sign-up**: `await betterAuth.refreshSession()`.
+- After **sign-out**: `betterAuth.clearSession()`.
+
+<Code code={betterAuthFlows} lang="ts" title="auth-flows.service.ts" />
+
+## `injectBetterAuth()`
+
+```ts
+function injectBetterAuth(options?: InjectBetterAuthOptions): BetterAuthState;
+
+interface InjectBetterAuthOptions {
+  injectRef?: EnvironmentInjector;
+}
+```
+
+Called without `provideBetterAuth(...)` registered, it throws:
+
+```text
+Could not find BetterAuthService. Call provideBetterAuth(...) in your providers, or pass { injectRef } when calling injectBetterAuth() outside an injection context.
+```
+
+### `BetterAuthState`
+
+```ts
+interface BetterAuthState {
+  session: Signal<BetterAuthSessionData | null>;
+  isLoading: Signal<boolean>;
+  isAuthenticated: Signal<boolean>;
+  error: Signal<Error | undefined>;
+  refreshSession(): Promise<void>;
+  clearSession(): void;
+}
+```
+
+| Member             | Type                                    | Description                                                                                                                                    |
+| ------------------ | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session`          | `Signal<BetterAuthSessionData \| null>` | The current session snapshot, or `null` when signed out.                                                                                       |
+| `isLoading`        | `Signal<boolean>`                       | `true` while the session is being loaded or re-loaded. Set to `false` immediately on the server.                                               |
+| `isAuthenticated`  | `Signal<boolean>`                       | `true` when a session is present.                                                                                                              |
+| `error`            | `Signal<Error \| undefined>`            | The most recent **unexpected** session or token-exchange failure. Session and token failures are tracked independently and the newer one wins. |
+| `refreshSession()` | `() => Promise<void>`                   | Re-syncs the session from Better Auth. Call after a sign-in/up/out flow completes. No-op on the server.                                        |
+| `clearSession()`   | `() => void`                            | Local sign-out bookkeeping: clears the session snapshot and the Convex token cache, and notifies the client's session listeners.               |
+
+`BetterAuthState` is also what backs `injectAuth()`: the same service implements
+`ConvexAuthProvider`, so Convex-level state (`status()`, `isRefreshing()`, `getAuth()`) comes from
+[`injectAuth()`](/auth/overview/) while session detail comes from `injectBetterAuth()`.
+
+## 401 and 403 are signed-out, not errors
+
+A `401` or `403` from `getSession()` or from the Convex token exchange is the expected
+signed-out outcome. The session is cleared and `error()` stays `undefined`. Anything else — a
+network failure, a `500`, a thrown exception — sets `error()`:
+
+| Failing path     | Message prefix                                                |
+| ---------------- | ------------------------------------------------------------- |
+| `getSession()`   | `[convex-angular better-auth] Session refresh failed: `       |
+| `convex.token()` | `[convex-angular better-auth] Convex token exchange failed: ` |
+
+On a 401/403 the library also refuses to fall back to the cross-domain plugin's cached
+`getSessionData()`, because that cache is only written on a successful response and can otherwise
+hand back a stale, already-invalid session.
+
+## Structural types
+
+### `BetterAuthClientLike`
+
+The complete surface the library uses. A client created with
+`createAuthClient({ plugins: [convexClient(), crossDomainClient()] })` satisfies it.
+
+```ts
+interface BetterAuthClientLike {
+  getSession(options?: { fetchOptions?: { throw?: boolean } }): Promise<BetterAuthFetchResult<BetterAuthSessionData>>;
+
+  /** Provided by the convexClient() plugin: exchanges the session for a Convex JWT. */
+  convex: {
+    token(options?: { fetchOptions?: { throw?: boolean } }): Promise<BetterAuthFetchResult<{ token?: string | null }>>;
+  };
+
+  /** Cross-domain plugin extras; used when present. */
+  getSessionData?(): BetterAuthSessionData | null;
+  updateSession?(): void;
+}
+```
+
+| Member           | Required | Used for                                                                                        |
+| ---------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `getSession`     | yes      | Reading the session on startup and on every `refreshSession()`.                                 |
+| `convex.token`   | yes      | Exchanging the session for the JWT Convex validates. Comes from the `convexClient()` plugin.    |
+| `getSessionData` | no       | Fallback session snapshot when `getSession()` returns no data and no error. Skipped on 401/403. |
+| `updateSession`  | no       | Notifying the client's own session listeners during `clearSession()`.                           |
+
+### `BetterAuthSessionData`
+
+```ts
+interface BetterAuthSessionData {
+  session: { id: string; expiresAt?: string | Date };
+  user: { id: string } & Record<string, unknown>;
+}
+```
+
+Extra fields on `user` are preserved but untyped. `session.id` is what the library watches: when it
+changes, the token cache is dropped and Convex auth setup re-runs.
+
+### `BetterAuthFetchResult`
+
+Better Auth's `{ data, error }` envelope.
+
+```ts
+interface BetterAuthFetchResult<T> {
+  data: T | null;
+  error: { message?: string; status?: number } | null;
+}
+```
+
+The library always calls with `fetchOptions: { throw: false }` so failures arrive as `error`
+rather than exceptions.

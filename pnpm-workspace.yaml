@@ -2,6 +2,12 @@
 # @convex-dev/better-auth resolves ^1.1.18 independently; two copies produce
 # incompatible BetterFetch type identities and break the better-auth client
 # plugin types (crossDomainClient/convexClient) during the Angular build.
+# The docs site owns its own manifest so Astro's toolchain (Vite 8) resolves
+# independently of the Angular build (Vite 7.3.6, pinned exactly by
+# @angular/build). The root manifest stays the workspace root; overrides,
+# allowBuilds, and release-age settings below remain workspace-wide.
+packages:
+  - apps/docs
 overrides:
   '@better-fetch/fetch': 1.1.21
 allowBuilds:
@@ -13,6 +19,10 @@ allowBuilds:
   lmdb: true
   msgpackr-extract: true
   nx: true
+  # Astro declares sharp as an optional dependency for image optimization.
+  # The docs site configures Astro's passthrough image service instead, so
+  # sharp is never loaded and its native install script stays denied.
+  sharp: false
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - jscpd@5.0.6

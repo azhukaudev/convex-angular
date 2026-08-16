@@ -1,0 +1,98 @@
+---
+title: Placeholder data
+description: Show a provisional value while the first result for the current arguments loads.
+sidebar:
+  order: 3
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import placeholderExample from '../../../examples/queries-placeholder-data.ts?raw';
+
+`placeholderData` fills `data()` with a provisional value while the first result for the
+current arguments is still loading. The classic use is a master/detail view: the list row you
+just clicked already contains most of the detail document, so the detail pane can render
+instantly instead of flashing a skeleton.
+
+```ts
+type QueryPlaceholderData<Query extends QueryReference> =
+  | FunctionReturnType<Query>
+  | ((args: Query['_args']) => FunctionReturnType<Query> | undefined);
+```
+
+Pass either a plain value or a factory. Convex values are never functions, so a
+function-typed `placeholderData` is unambiguously treated as a factory.
+
+<Code code={placeholderExample} lang="ts" title="todo-master-detail.component.ts" />
+
+## A placeholder is never a success
+
+This is the whole design. Showing invented data must never be mistaken for having loaded
+real data:
+
+| Signal                | Value while a placeholder is shown                                                             |
+| --------------------- | ---------------------------------------------------------------------------------------------- |
+| `data()`              | the placeholder value                                                                          |
+| `isPlaceholderData()` | `true`                                                                                         |
+| `isLoading()`         | `true`                                                                                         |
+| `status()`            | `'pending'`                                                                                    |
+| `isSuccess()`         | `false`                                                                                        |
+| `isRefetching()`      | `false` — explicitly excluded by `isLoading() && !isPlaceholderData() && data() !== undefined` |
+| `onSuccess`           | not called                                                                                     |
+
+`isRefetching()` being false is deliberate: it means "a real previous value is on screen
+while we revalidate". A placeholder is not a previous value, so a UI gated on
+`isRefetching()` correctly shows its first-load treatment.
+
+<Aside type="caution">
+  Because `status()` stays `'pending'`, a template that only renders inside `@case ('success')` will never display the
+  placeholder. Read `data()` and `isPlaceholderData()` directly when you want the provisional render.
+</Aside>
+
+## When a placeholder is cleared
+
+| Event                                 | Result                                                                          |
+| ------------------------------------- | ------------------------------------------------------------------------------- |
+| First real emission arrives           | `data()` replaced, `isPlaceholderData()` false, `onSuccess` fires               |
+| Query errors                          | `data()` set to `undefined`, `isPlaceholderData()` false, `error()` set         |
+| Argument function returns `skipToken` | `data()` cleared, `isPlaceholderData()` false, `status()` `'skipped'`           |
+| Arguments change                      | the old placeholder is dropped and the factory is re-evaluated for the new args |
+
+The error case is the one that differs from real data. `injectQuery` normally **preserves**
+existing data when the subscription fails, so the UI does not blank out — but a placeholder
+is discarded, because invented data sitting next to an error message is worse than no data.
+Once a placeholder has been replaced by a real value, that real value is preserved on error
+like any other.
+
+## Precedence: real local data always wins
+
+On every resubscribe the helper resolves what to show, in this order:
+
+1. **Warm cache** — a locally cached result for the current args.
+2. **Transferred data** — a value carried over from the server render during hydration.
+3. **Preserved previous real value** — whatever `data()` already held, if it was real.
+4. **`placeholderData`** — only when none of the above applies.
+
+So the placeholder is a last resort. Navigating back to a detail page whose value is still in
+the client cache shows the cached document, not the placeholder; and an args change on a
+query that already has real data keeps that data rather than swapping in a placeholder.
+
+The one nuance in step 3: if what `data()` held was itself a placeholder, it is _not_
+preserved. The factory is re-evaluated against the new args, so a stale placeholder for the
+previous selection never leaks into the next one. A factory returning `undefined` means "no
+placeholder for these args", and `data()` becomes `undefined`.
+
+## Factories run untracked
+
+Placeholder factories are invoked inside `untracked()`. Signals read inside the factory — the
+list query's `data()`, a store selector, a route parameter — do **not** become dependencies of
+the subscription effect.
+
+<Aside type="tip">
+  This is what makes the master/detail pattern safe. Seeding the detail query from `list.data()` inside the factory
+  would otherwise make every list update tear down and reopen the detail subscription.
+</Aside>
+
+Note the consequence: the factory is only re-evaluated when the subscription effect re-runs
+(an args change, a `refetch()`, or a skip round trip). It does not re-run when the signals it
+reads change.

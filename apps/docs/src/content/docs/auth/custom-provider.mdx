@@ -1,0 +1,95 @@
+---
+title: Custom auth providers
+description: Implement ConvexAuthProvider yourself and register it with CONVEX_AUTH plus provideConvexAuth(), or with provideConvexAuthFromExisting().
+sidebar:
+  order: 5
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import customProvider from '../../../examples/auth-custom-provider.ts?raw';
+
+Every bundled integration — [Clerk](/auth/clerk/), [Auth0](/auth/auth0/),
+[Better Auth](/auth/better-auth/) — is a `ConvexAuthProvider` under the hood. Implement that
+interface yourself to bridge any identity system: a session cookie, a bespoke OIDC client, a
+native shell, or a test double.
+
+## `ConvexAuthProvider`
+
+```ts
+interface ConvexAuthProvider {
+  isLoading: Signal<boolean>;
+  isAuthenticated: Signal<boolean>;
+  fetchAccessToken: AuthTokenFetcher;
+  reauthVersion?: Signal<unknown>;
+  error?: Signal<Error | undefined>;
+}
+
+type AuthTokenFetcher = (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>;
+```
+
+| Member             | Type                         | Required | Contract                                                                                                                                                                                                                                                         |
+| ------------------ | ---------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isLoading`        | `Signal<boolean>`            | yes      | `true` while your provider is still determining initial state. `injectAuth().status()` is `'loading'` for as long as this is `true`.                                                                                                                             |
+| `isAuthenticated`  | `Signal<boolean>`            | yes      | `true` when your provider considers the user signed in. This alone is not enough: `injectAuth()` stays `'loading'` until Convex confirms or rejects the token.                                                                                                   |
+| `fetchAccessToken` | `AuthTokenFetcher`           | yes      | Returns the JWT. Return `null` or `undefined` for "no token available" — that is the ordinary signed-out outcome, not an error. `forceRefreshToken` is `true` when the server rejected the previous token or it is close to expiring; bypass any cache you keep. |
+| `reauthVersion`    | `Signal<unknown>`            | no       | Any change re-runs Convex auth setup while the user stays signed in. Use it for auth context changes — organization switch, workspace switch, session replacement — that need a different token.                                                                 |
+| `error`            | `Signal<Error \| undefined>` | no       | Provider-owned errors. `injectAuth().error()` mirrors it unless a newer internal auth error was recorded.                                                                                                                                                        |
+
+<Aside type="caution" title="Your fetchAccessToken errors are not swallowed">
+  The Clerk and Auth0 adapters catch a rejected token fetch and report it as signed out, so `injectAuth().error()` stays
+  `undefined` for them. A custom provider behaves differently: anything thrown from **your** `fetchAccessToken` is
+  recorded and surfaces on `injectAuth().error()` with the prefix `[convex-angular auth] Token fetch failed: `. If you
+  would rather a failure read as signed out, return `null` instead of throwing.
+</Aside>
+
+The recorded error is cleared when Convex subsequently confirms a token, when a new auth attempt
+starts, and when the provider signs out.
+
+## Registration
+
+### `provideConvexAuthFromExisting()` (recommended)
+
+```ts
+function provideConvexAuthFromExisting(authProviderType: Type<ConvexAuthProvider>): EnvironmentProviders;
+```
+
+Registers `{ provide: CONVEX_AUTH, useExisting: authProviderType }` **and** `provideConvexAuth()`
+in one call. This is the convenient path whenever your auth service is a normal injectable that
+other parts of the app inject too.
+
+### `CONVEX_AUTH` + `provideConvexAuth()`
+
+```ts
+const CONVEX_AUTH: InjectionToken<ConvexAuthProvider>;
+
+providers: [
+  provideConvex(environment.convexUrl),
+  { provide: CONVEX_AUTH, useExisting: MyAuthService },
+  provideConvexAuth(),
+];
+```
+
+<Aside type="tip" title="useExisting, not useClass">
+  `useClass: MyAuthService` tells Angular to construct a **second** instance for the token, separate from the one your
+  components inject. The two would keep independent state and diverge immediately. Alias with `useExisting` (or let
+  `provideConvexAuthFromExisting()` do it for you) so both resolve to the same instance.
+</Aside>
+
+<Aside type="danger" title="Root-only, once-only">
+`provideConvexAuth()` and `provideConvexAuthFromExisting()` must be registered exactly once, in
+your root application providers. They are validated eagerly at bootstrap: a duplicate in the same
+injector, or a nested/route-level registration below an existing one, throws immediately.
+
+`provideClerkAuth()`, `provideAuth0Auth()`, and `provideBetterAuth()` **each already include
+`provideConvexAuth()` internally** — never combine them with it, or with each other. See
+[the overview](/auth/overview/#provideconvexauth) for the exact messages.
+
+</Aside>
+
+## Example
+
+<Code code={customProvider} lang="ts" title="my-auth.service.ts + app.config.ts" />
+
+Once registered, everything else in the library works unchanged: [`injectAuth()`](/auth/overview/),
+[the auth directives](/auth/directives/), and [the route guards](/auth/route-guards/).

@@ -1,0 +1,98 @@
+---
+title: Quick start
+description: Build a live todo list end to end with a Convex query, a Convex mutation, injectQuery, and injectMutation.
+sidebar:
+  order: 3
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import quickStart from '../../../examples/start-quick-start.ts?raw';
+
+This walks through one complete feature: a Convex table, a query and a mutation on the backend, and
+an Angular component that renders the query live and writes through the mutation.
+
+It assumes you have already [installed the packages and registered
+`provideConvex()`](/start/installation/).
+
+## 1. Define the table
+
+```typescript title="convex/schema.ts"
+import { defineSchema, defineTable } from 'convex/server';
+import { v } from 'convex/values';
+
+export default defineSchema({
+  todos: defineTable({
+    title: v.string(),
+    completed: v.boolean(),
+  }),
+});
+```
+
+## 2. Write the backend functions
+
+A `query` reads data and is subscribable; a `mutation` writes data transactionally.
+
+```typescript title="convex/todos.ts"
+import { v } from 'convex/values';
+
+import { mutation, query } from './_generated/server';
+
+export const list = query({
+  args: { count: v.number() },
+  handler: async (ctx, args) => {
+    return await ctx.db.query('todos').order('desc').take(args.count);
+  },
+});
+
+export const create = mutation({
+  args: { title: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert('todos', { title: args.title, completed: false });
+  },
+});
+```
+
+With `convex dev` running, saving this file deploys both functions and regenerates
+`convex/_generated/api.d.ts`. The generated `api` object is what you pass to the helpers, and it is
+what makes argument and return types flow into your component with no manual annotations.
+
+## 3. Use them in a component
+
+`injectQuery()` takes a function reference and a **function** returning the arguments. `injectMutation()`
+takes a function reference and returns a `mutate()` method plus reactive state.
+
+<Code code={quickStart} lang="ts" title="todo-list.component.ts" />
+
+<Aside type="tip">
+  There is no refetch after `mutate()`. The query holds a live subscription, so the newly inserted todo arrives over the
+  WebSocket and `todos.data()` updates on its own.
+</Aside>
+
+## What the pieces do
+
+| Expression                | Meaning                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| `todos.status()`          | `'pending' \| 'success' \| 'error' \| 'skipped'` — the single value to branch on.     |
+| `todos.data()`            | The query result, or `undefined` before the first value arrives.                      |
+| `todos.error()`           | The subscription error, or `undefined`.                                               |
+| `todos.isRefetching()`    | True while resubscribing with a previous value still shown — render a subtle spinner. |
+| `todos.refetch()`         | Force a resubscribe.                                                                  |
+| `createTodo.mutate(args)` | Runs the mutation; resolves with its return value, rejects on failure.                |
+| `createTodo.isLoading()`  | True while the mutation is in flight.                                                 |
+| `createTodo.error()`      | The last mutation error, or `undefined`.                                              |
+| `createTodo.reset()`      | Clears `data`, `error`, and returns the status to `'idle'`.                           |
+
+<Aside type="caution">
+  Do not treat `status() === 'success'` as proof that `data()` is defined. Before the first change detection the query's
+  subscription effect has not run yet, so the status reads `'success'` while the data is still `undefined`. Bind the
+  value with `@if (todos.data(); as list)` inside the success branch — see [Status and
+  state](/concepts/status-and-state/).
+</Aside>
+
+## Where to go next
+
+- [Providers](/concepts/providers/) — where `provideConvex()` may be registered, and what it sets up.
+- [Reactivity](/concepts/reactivity/) — how reactive arguments decide when to resubscribe.
+- [Status and state](/concepts/status-and-state/) — the exact status derivations and their gotchas.
+- [Error handling](/concepts/error-handling/) — signals, promise rejections, and `ConvexError`.

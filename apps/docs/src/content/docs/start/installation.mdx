@@ -1,0 +1,140 @@
+---
+title: Installation
+description: Install convex-angular, create a Convex deployment, and register the client in app.config.ts.
+sidebar:
+  order: 2
+---
+
+import { Aside, TabItem, Tabs } from '@astrojs/starlight/components';
+
+## Install the packages
+
+`convex-angular` depends on the `convex` package for the client and the code generator, so install
+both.
+
+<Tabs syncKey="pkg">
+  <TabItem label="pnpm">
+
+```bash
+pnpm add convex convex-angular
+```
+
+  </TabItem>
+  <TabItem label="npm">
+
+```bash
+npm install convex convex-angular
+```
+
+  </TabItem>
+  <TabItem label="yarn">
+
+```bash
+yarn add convex convex-angular
+```
+
+  </TabItem>
+</Tabs>
+
+Angular, `@angular/router`, `convex`, and `rxjs` are peer dependencies — see the version ranges in
+the [Introduction](/start/introduction/#requirements).
+
+## Create a Convex deployment
+
+Run the Convex CLI from your project root. It signs you in, creates a deployment, scaffolds a
+`convex/` directory for your backend functions, and starts watching them.
+
+<Tabs syncKey="pkg">
+  <TabItem label="pnpm">
+
+```bash
+pnpm dlx convex dev
+```
+
+  </TabItem>
+  <TabItem label="npm">
+
+```bash
+npx convex dev
+```
+
+  </TabItem>
+  <TabItem label="yarn">
+
+```bash
+yarn dlx convex dev
+```
+
+  </TabItem>
+</Tabs>
+
+Leave `convex dev` running while you develop. It deploys your functions on save and regenerates
+`convex/_generated/api.d.ts`, which is the typed `api` object every helper in this library takes as
+its first argument.
+
+The CLI writes your deployment URL into `.env.local` as `CONVEX_URL` (and `VITE_CONVEX_URL` /
+`NEXT_PUBLIC_CONVEX_URL` depending on the template). Angular does not read `.env` files on its own,
+so surface the value through your environment files or a build-time define — whatever your project
+already uses for configuration. The URL looks like `https://<deployment-name>.convex.cloud`.
+
+<Aside type="caution">
+  Never edit anything under `convex/_generated`. The CLI owns that directory and overwrites it on every change.
+</Aside>
+
+## Register the client
+
+Call `provideConvex()` once in your root application providers.
+
+```typescript title="app.config.ts"
+import { ApplicationConfig } from '@angular/core';
+import { provideConvex } from 'convex-angular';
+
+import { environment } from '../environments/environment';
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideConvex(environment.convexUrl)],
+};
+```
+
+That single call registers the `CONVEX` token holding the `ConvexClient`, the SSR configuration and
+HTTP client used for server-side fetches, and a guard that validates the provider's placement. It
+also closes the client when the injector is destroyed.
+
+<Aside type="caution">
+  `provideConvex()` must appear in exactly one injector. Registering it twice in the same providers array, or in a child
+  injector below one that already registered it, throws eagerly at startup. The rules — and the deliberate route-scoped
+  alternative — are covered in [Providers](/concepts/providers/).
+</Aside>
+
+If a helper is used without a registered client, `injectConvex()` throws:
+
+```text
+Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers (for example, in `app.config.ts`).
+```
+
+## Entry points
+
+The package publishes three entry points. Import from the narrowest one that covers your need — the
+secondary entry points are separate so their dependencies never reach an application that does not
+use them.
+
+| Entry point                  | Contents                                                                                                                                                                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `convex-angular`             | Everything in the core API: `provideConvex()`, the `inject*` helpers, `skipToken`, auth providers and integrations for Clerk and Auth0, router guards, structural auth directives, `convexQueryResolver()`, and the `ConvexError` re-export. |
+| `convex-angular/testing`     | `MockConvexClient` and `provideConvexTesting()` for driving query emissions, mutation settlement, and connection state in tests without a backend.                                                                                           |
+| `convex-angular/better-auth` | `provideBetterAuth()`, `injectBetterAuth()`, `BetterAuthService`, and `BETTER_AUTH_CLIENT_FACTORY`. The integration is structurally typed and carries no direct Better Auth dependency.                                                      |
+
+```typescript
+import { injectQuery, provideConvex } from 'convex-angular';
+import { injectBetterAuth, provideBetterAuth } from 'convex-angular/better-auth';
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+```
+
+<Aside type="tip">
+  `provideClerkAuth()`, `provideAuth0Auth()`, and `provideBetterAuth()` already include `provideConvexAuth()`. Do not
+  register it again alongside them.
+</Aside>
+
+## Next
+
+Build your first query and mutation in the [Quick start](/start/quick-start/).

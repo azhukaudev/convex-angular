@@ -1,0 +1,87 @@
+---
+title: Auth directives
+description: The four standalone structural directives that render template content based on Convex auth state.
+sidebar:
+  order: 6
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import directivesExample from '../../../examples/auth-directives.ts?raw';
+
+Four standalone structural directives read [`injectAuth()`](/auth/overview/) and render or clear
+their template as the auth state changes. They are the declarative alternative to a `@switch` on
+`auth.status()`.
+
+## The directives
+
+| Class                         | Selector               | Renders when                                   |
+| ----------------------------- | ---------------------- | ---------------------------------------------- |
+| `CvaAuthenticatedDirective`   | `[cvaAuthenticated]`   | `auth.isAuthenticated() && !auth.isLoading()`  |
+| `CvaUnauthenticatedDirective` | `[cvaUnauthenticated]` | `!auth.isAuthenticated() && !auth.isLoading()` |
+| `CvaAuthLoadingDirective`     | `[cvaAuthLoading]`     | `auth.isLoading()`                             |
+| `CvaAuthRefreshingDirective`  | `[cvaAuthRefreshing]`  | `auth.isRefreshing()`                          |
+
+The first three are mutually exclusive and exhaustive: exactly one of them renders at any moment.
+`*cvaAuthRefreshing` is **not** exclusive — it overlaps with `*cvaAuthenticated`, by design.
+
+## No inputs, no context
+
+These directives take **no inputs** and expose **no template context variables**. There is nothing
+to bind and nothing to destructure:
+
+```html
+<!-- Correct -->
+<div *cvaAuthenticated>…</div>
+
+<!-- Not supported: there is no input to bind and no context to alias -->
+<div *cvaAuthenticated="something as user">…</div>
+```
+
+To read user data, inject your auth service (or `injectAuth()`) in the component and read it from
+the template as usual.
+
+## Import them explicitly
+
+Each directive is standalone and must be added to the `imports` array of the standalone component
+that uses it. Importing only the ones a given template needs keeps the component's dependency list
+honest.
+
+```ts
+import { CvaAuthenticatedDirective, CvaUnauthenticatedDirective } from 'convex-angular';
+
+@Component({
+  imports: [CvaAuthenticatedDirective, CvaUnauthenticatedDirective],
+  // …
+})
+```
+
+## Refreshing is layered, not swapped
+
+<Aside type="tip" title="*cvaAuthenticated content stays mounted during a refresh">
+`isRefreshing()` can only be `true` while `isAuthenticated()` is also `true`, so entering the
+`'refreshing'` state does **not** tear down `*cvaAuthenticated` content. Your dashboard keeps its
+DOM, its scroll position, and its component state while Convex fetches a replacement token.
+
+That is precisely why `*cvaAuthRefreshing` exists: use it to layer a reconnecting banner, a
+disabled-actions overlay, or a progress indicator _on top of_ the still-mounted authenticated view,
+rather than swapping the user out to a signed-out or loading screen for a routine recovery.
+
+</Aside>
+
+Remember that `'refreshing'` is not routine background rotation — Convex only enters it when the
+server rejected a token it had previously accepted. See
+[the state machine](/auth/overview/#convexauthstatus).
+
+## Example
+
+<Code code={directivesExample} lang="ts" title="shell.component.ts" />
+
+## Choosing between directives and `@switch`
+
+Directives are terser when each branch is a self-contained block. A `@switch` on `auth.status()`
+is clearer when you need all four states in one place, or when you want the `'refreshing'` branch
+to be visibly distinct rather than additive. Both read the same shared state object, so mixing
+them in one application is fine.
+
+For blocking navigation instead of hiding content, use [the route guards](/auth/route-guards/).

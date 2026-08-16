@@ -1,0 +1,107 @@
+---
+title: injectConvex
+description: Reference for injectConvex(), InjectConvexOptions, and the CONVEX injection token holding the ConvexClient.
+sidebar:
+  order: 10
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import convexClient from '../../../examples/reference-convex-client.ts?raw';
+
+`injectConvex()` returns the `ConvexClient` instance that `provideConvex()` registered. Use it for
+the cases the reactive helpers do not cover: one-shot queries, imperative mutations and actions from
+non-component code, and manual subscriptions you want to own yourself.
+
+## Signature
+
+```typescript
+function injectConvex(options?: InjectConvexOptions): ConvexClient;
+
+interface InjectConvexOptions {
+  /**
+   * Environment injector used to resolve the Convex client when creating
+   * helpers outside the current injection context.
+   */
+  injectRef?: EnvironmentInjector;
+}
+```
+
+| Parameter           | Type                  | Purpose                                                                                 |
+| ------------------- | --------------------- | --------------------------------------------------------------------------------------- |
+| `options.injectRef` | `EnvironmentInjector` | Resolve the client from an explicit injector when calling outside an injection context. |
+
+The return value is the `ConvexClient` from `convex/browser` — the same instance every helper in this
+library uses, not a wrapper. Its full API is available: `query`, `mutation`, `action`, `onUpdate`,
+`connectionState`, and the underlying `client` (a `BaseConvexClient`).
+
+## Usage
+
+<Code code={convexClient} lang="ts" title="todo-admin.service.ts" />
+
+<Aside type="tip">
+  Prefer `injectQuery()`, `injectMutation()`, and `injectAction()` in components. They give you Signals, reactive
+  arguments, stale-result guards, and automatic teardown. Reach for `injectConvex()` when you genuinely need the
+  imperative client.
+</Aside>
+
+## Lifetime
+
+The client is created by `provideConvex()` and closed automatically when the owning injector is
+destroyed. Do not call `close()` on it yourself — the rest of the application shares the instance.
+
+## Errors
+
+`injectConvex()` throws a focused setup error when `provideConvex()` was never called, instead of
+Angular's generic `NullInjectorError`:
+
+```text
+Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers (for example, in `app.config.ts`).
+```
+
+Calling it outside an injection context without an `injectRef` throws:
+
+```text
+injectConvex() must be called from an injection context (for example, a component or service field initializer or constructor), or be given an explicit injector via the `injectRef` option to create it later from plain code.
+```
+
+## Server-side rendering
+
+During a server render the client is constructed with `disabled: true`. Direct calls to
+`convex.query()`, `convex.mutation()`, and `convex.action()` throw:
+
+```text
+ConvexClient is disabled
+```
+
+`convex.onUpdate()` registration is a no-op there, and the `convex.client` getter throws. Check
+`convex.disabled` before using the client imperatively in code that can run on the server. See
+[Server-side rendering](/ssr/overview/).
+
+## The `CONVEX` token
+
+```typescript
+const CONVEX: InjectionToken<ConvexClient>;
+```
+
+The injection token `provideConvex()` registers the client under. `injectConvex()` reads it, and you
+can inject it directly when you want plain Angular DI semantics:
+
+```typescript
+import { inject } from '@angular/core';
+import { CONVEX } from 'convex-angular';
+
+export class TodoService {
+  private readonly convex = inject(CONVEX);
+}
+```
+
+The difference is only in the failure mode: `inject(CONVEX)` produces Angular's standard
+`NullInjectorError` when the provider is missing, while `injectConvex()` produces the focused message
+above. The token is also the seam to override in tests — `provideConvexTesting()` registers a
+`MockConvexClient` under it.
+
+## Related
+
+- [Connection state](/reference/connection-state/) — observe the client's WebSocket connectivity.
+- [Server-side rendering](/ssr/overview/) — what the client does during a server render.

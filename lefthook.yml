@@ -5,7 +5,7 @@ pre-commit:
   parallel: true
   jobs:
     - name: format
-      glob: '*.{ts,js,mjs,html,css,json,md,yml,yaml}'
+      glob: '*.{ts,js,mjs,html,css,json,md,mdx,astro,yml,yaml}'
       exclude:
         - pnpm-lock.yaml
       run: pnpm exec prettier --write {staged_files}

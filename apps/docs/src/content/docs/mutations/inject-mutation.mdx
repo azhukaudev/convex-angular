@@ -1,0 +1,160 @@
+---
+title: injectMutation
+description: Reference for injectMutation(), the reactive mutation caller, and the callable contract shared by mutations and actions.
+sidebar:
+  order: 1
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import mutationBasic from '../../../examples/mutation-basic.ts?raw';
+import mutationStatus from '../../../examples/mutations-status.ts?raw';
+
+`injectMutation()` creates a reactive caller for a Convex mutation: an imperative
+`mutate()` method plus readonly Signals describing the most recent call.
+
+```ts
+function injectMutation<Mutation extends MutationReference>(
+  mutation: Mutation,
+  options?: MutationOptions<Mutation>,
+): MutationResult<Mutation>;
+```
+
+`MutationReference` is `FunctionReference<'mutation'>`, so any mutation from your
+generated `api` object is accepted.
+
+Call it from an injection context — a component or service field initializer or
+constructor — or pass an explicit injector through the `injectRef` option to
+create it from plain code later. Without either, it throws.
+
+<Code code={mutationBasic} lang="ts" title="add-todo.component.ts" />
+
+## Options
+
+`MutationOptions<Mutation>`:
+
+| Name               | Type                                           | Default | Description                                                                                                                                                                     |
+| ------------------ | ---------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `injectRef`        | `EnvironmentInjector`                          | —       | Injector used to resolve `ConvexClient` and `DestroyRef` when the mutation is created outside the ambient injection context. The mutation's lifetime is bound to that injector. |
+| `onSuccess`        | `(data: FunctionReturnType<Mutation>) => void` | —       | Called after `data` is written, for the latest call only.                                                                                                                       |
+| `onError`          | `(err: Error) => void`                         | —       | Called after `error` is written, for the latest call only. Receives the normalized `Error`.                                                                                     |
+| `optimisticUpdate` | `OptimisticUpdate<FunctionArgs<Mutation>>`     | —       | Local query-store update applied while the mutation is in flight. See [Optimistic updates](/mutations/optimistic-updates/).                                                     |
+
+The option object is passed straight through to Convex as
+`convex.mutation(mutation, args, { optimisticUpdate })`.
+
+## Result
+
+`MutationResult<Mutation>`:
+
+| Name        | Type                                                                      | Description                                                                                                                              |
+| ----------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `mutate`    | `(args: FunctionArgs<Mutation>) => Promise<FunctionReturnType<Mutation>>` | Runs the mutation. Resolves with its return value, rejects on failure.                                                                   |
+| `data`      | `Signal<FunctionReturnType<Mutation> \| undefined>`                       | Return value of the last successful call. `undefined` until a call succeeds, and again while a new call is in flight or after `reset()`. |
+| `error`     | `Signal<Error \| undefined>`                                              | Error from the last failed call, `undefined` otherwise.                                                                                  |
+| `isLoading` | `Signal<boolean>`                                                         | `true` while the latest call is in flight.                                                                                               |
+| `isSuccess` | `Signal<boolean>`                                                         | `true` only when a call has completed, nothing is loading, and there is no error.                                                        |
+| `status`    | `Signal<MutationStatus>`                                                  | `'idle' \| 'pending' \| 'success' \| 'error'`.                                                                                           |
+| `reset`     | `() => void`                                                              | Clears `data`, `error`, and `isLoading`, and returns `status` to `'idle'`.                                                               |
+
+`error()` is always a real `Error`. Errors your Convex function throws with
+`ConvexError` keep their typed payload — narrow with
+`error() instanceof ConvexError` to read `.data`.
+
+<Code code={mutationStatus} lang="ts" title="delete-todo.component.ts" />
+
+## The callable contract
+
+Mutations and [actions](/mutations/inject-action/) share one implementation, so
+the rules below apply identically to `mutate()` and `run()`.
+
+### State is cleared synchronously
+
+`mutate()` clears `data` and `error` and sets `isLoading` to `true`
+_synchronously_, before the request is awaited. Reading the signals immediately
+after the call — without awaiting anything — already shows `status() ===
+'pending'` and `data() === undefined`. A previous success is therefore not
+visible while a new call is running.
+
+### Last call wins
+
+Every call takes a version number. When a call settles, it only writes to
+`data`, `error`, and `isLoading` and only fires `onSuccess` / `onError` if it is
+still the latest call. A superseded call still settles its own promise with its
+own value or error — the caller of that promise sees the real outcome — but it
+is invisible to the reactive state.
+
+That also means `isLoading` stays `true` when an older call finishes while a
+newer one is still in flight: `isLoading` tracks the latest call, not the number
+of outstanding requests.
+
+| Current state        | Event                                  | Resulting status                                            |
+| -------------------- | -------------------------------------- | ----------------------------------------------------------- |
+| `idle`               | `mutate()` called                      | `pending`                                                   |
+| `success` or `error` | `mutate()` called                      | `pending` (previous `data` / `error` cleared synchronously) |
+| `pending`            | latest call resolves                   | `success`, `data` set, `onSuccess` fired                    |
+| `pending`            | latest call rejects                    | `error`, `error` set, `onError` fired                       |
+| `pending`            | superseded call resolves               | `pending` — unchanged, no callback                          |
+| `pending`            | superseded call rejects                | `pending` — unchanged, no callback                          |
+| any                  | `reset()`                              | `idle`, `data` and `error` cleared                          |
+| any                  | in-flight call settles after `reset()` | unchanged, no callback                                      |
+| any                  | owning scope destroyed                 | `idle`, and all later settlements are ignored               |
+
+### Failures reject _and_ populate `error()`
+
+<Aside type="caution" title="mutate() always rejects on failure">
+  The error is mirrored into `error()` *and* rethrown. `mutate()` never resolves on failure, so an unhandled rejection
+  is the caller's responsibility. Either `await` inside `try`/`catch`, or attach a `.catch()` when you intend to read
+  the outcome from `error()` and `status()` instead.
+</Aside>
+
+```ts
+// Reading state only — the rejection still needs a handler.
+void save.mutate({ title }).catch(() => undefined);
+
+// Or handle it directly.
+try {
+  await save.mutate({ title });
+} catch (err) {
+  // `err` is the exact same Error instance as `save.error()`.
+}
+```
+
+### Non-`Error` throws are normalized
+
+A rejection value that is not an `Error` is wrapped as `new Error(String(err))`.
+The wrapped instance is both stored in `error()` and thrown, so
+`err === save.error()` holds for the latest call in every failure case.
+
+### `reset()` orphans in-flight calls
+
+<Aside type="caution" title="reset() does not cancel anything">
+  `reset()` bumps the version counter, so any call still in flight is permanently orphaned: it keeps running on the
+  network, its promise still settles, but it will never write to `data`, `error`, or `isLoading`, and it will never fire
+  `onSuccess` or `onError`. Convex has no client-side cancellation; `reset()` only detaches the reactive state.
+</Aside>
+
+Calling `reset()` between two calls also prevents the older one from inheriting
+the newer one's identity — a stale result can never be mistaken for a fresh one.
+
+### After the owning scope is destroyed
+
+When the component, service, or `injectRef` injector that owns the mutation is
+destroyed, the state is reset and marked destroyed. From that point on:
+
+- calls already in flight settle their promises but touch no signals and fire no
+  callbacks;
+- new `mutate()` calls still go to the network and still resolve or reject, but
+  they bypass the reactive state entirely — `status()` stays `'idle'`.
+
+<Aside type="tip">
+  Fire-and-forget writes on teardown therefore still reach Convex. If you need the result, keep it in the returned
+  promise rather than in the signals.
+</Aside>
+
+## Related
+
+- [Optimistic updates](/mutations/optimistic-updates/) — instant UI feedback with
+  `optimisticUpdate`.
+- [injectAction](/mutations/inject-action/) — the same contract for Convex
+  actions.

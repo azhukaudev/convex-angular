@@ -1,0 +1,91 @@
+---
+title: injectAction
+description: Reference for injectAction(), the reactive caller for Convex actions.
+sidebar:
+  order: 3
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import actionExample from '../../../examples/mutations-action.ts?raw';
+
+`injectAction()` creates a reactive caller for a Convex action. Actions are the
+place for work that reaches beyond the database — calling third-party APIs,
+sending email, talking to an LLM — so they run outside a transaction and cannot
+be replayed by the client.
+
+```ts
+function injectAction<Action extends ActionReference>(
+  action: Action,
+  options?: ActionOptions<Action>,
+): ActionResult<Action>;
+```
+
+`ActionReference` is `FunctionReference<'action'>`. As with mutations, call it
+from an injection context or pass an explicit `injectRef`.
+
+<Code code={actionExample} lang="ts" title="send-email.component.ts" />
+
+## Options
+
+`ActionOptions<Action>`:
+
+| Name        | Type                                         | Default | Description                                                                                                                                              |
+| ----------- | -------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `injectRef` | `EnvironmentInjector`                        | —       | Injector used to resolve dependencies when the action is created outside the ambient injection context. The action's lifetime is bound to that injector. |
+| `onSuccess` | `(data: FunctionReturnType<Action>) => void` | —       | Called after `data` is written, for the latest call only.                                                                                                |
+| `onError`   | `(err: Error) => void`                       | —       | Called after `error` is written, for the latest call only. Receives the normalized `Error`.                                                              |
+
+<Aside type="caution" title="No optimisticUpdate">
+  `ActionOptions` deliberately omits `optimisticUpdate`. Actions do not write to the database transactionally, so there
+  is nothing for Convex to overlay and roll back. Put the optimistic update on a mutation the action calls instead — see
+  [Optimistic updates](/mutations/optimistic-updates/).
+</Aside>
+
+## Result
+
+`ActionResult<Action>` is the mutation surface with `run()` in place of
+`mutate()`:
+
+| Name        | Type                                                             | Description                                                                       |
+| ----------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `run`       | `(args: Action['_args']) => Promise<FunctionReturnType<Action>>` | Runs the action. Resolves with its return value, rejects on failure.              |
+| `data`      | `Signal<FunctionReturnType<Action> \| undefined>`                | Return value of the last successful call.                                         |
+| `error`     | `Signal<Error \| undefined>`                                     | Error from the last failed call.                                                  |
+| `isLoading` | `Signal<boolean>`                                                | `true` while the latest call is in flight.                                        |
+| `isSuccess` | `Signal<boolean>`                                                | `true` only when a call has completed, nothing is loading, and there is no error. |
+| `status`    | `Signal<ActionStatus>`                                           | `'idle' \| 'pending' \| 'success' \| 'error'`.                                    |
+| `reset`     | `() => void`                                                     | Clears `data`, `error`, and `isLoading`, and returns `status` to `'idle'`.        |
+
+`ActionStatus` and `MutationStatus` are the same union of four values.
+
+## Same callable contract as mutations
+
+`run()` and `mutate()` are the same function under two names — both come from
+one shared implementation. Everything documented in
+[the callable contract](/mutations/inject-mutation/#the-callable-contract)
+applies unchanged:
+
+- `run()` clears `data` and `error` and sets `isLoading` synchronously, before
+  awaiting.
+- Only the latest call writes state or fires callbacks; a superseded call still
+  settles its own promise silently.
+- `run()` always rejects on failure even though the error is also mirrored into
+  `error()`.
+- Non-`Error` throws are normalized to `new Error(String(err))`, and that one
+  instance is both stored and thrown.
+- `reset()` orphans in-flight calls.
+- After the owning scope is destroyed, calls still hit the network but touch no
+  signals and fire no callbacks.
+
+<Aside type="caution" title="Actions fail during server-side rendering">
+  On the server the underlying `ConvexClient` is created disabled, so `run()` rejects with `Error: ConvexClient is
+  disabled` and `status()` becomes `'error'`. Actions have side effects and must not run twice, so trigger them from
+  user interaction or a browser-only lifecycle, never during SSR. Queries are the only Convex functions the library
+  resolves on the server.
+</Aside>
+
+## Related
+
+- [injectMutation](/mutations/inject-mutation/) — database writes, optimistic
+  updates, and the full callable contract.

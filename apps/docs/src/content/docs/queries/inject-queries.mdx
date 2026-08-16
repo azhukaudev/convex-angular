@@ -1,0 +1,152 @@
+---
+title: injectQueries
+description: Subscribe to a dynamic, keyed group of Convex queries with one helper.
+sidebar:
+  order: 4
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import injectQueriesExample from '../../../examples/queries-inject-queries.ts?raw';
+
+`injectQueries()` manages a keyed group of subscriptions behind three record-shaped signals.
+Reach for it when the _set_ of queries is itself reactive — one query per selected row, per
+open tab, per visible chart — or when several related queries should share one aggregate
+loading state.
+
+For a fixed handful of unrelated queries, several `injectQuery()` calls are simpler and give
+you better types per query.
+
+## Signature
+
+```ts
+function injectQueries<Definitions extends QueriesDefinition>(
+  definitionsFn: () => Definitions,
+  options?: QueriesOptions,
+): QueriesResult<Definitions>;
+```
+
+```ts
+interface QueryRequest<Query extends QueryReference = QueryReference> {
+  query: Query;
+  args: Query['_args'];
+}
+
+type QueriesDefinition = Record<string, QueryRequest<any> | SkipToken>;
+```
+
+The definitions function is reactive: it re-runs whenever a signal it reads changes, and the
+helper reconciles the resulting key set against the live subscriptions.
+
+<Code code={injectQueriesExample} lang="ts" title="dashboard.component.ts" />
+
+## `QueriesOptions`
+
+| Name        | Type                                   | Default          | Description                                                              |
+| ----------- | -------------------------------------- | ---------------- | ------------------------------------------------------------------------ |
+| `injectRef` | `EnvironmentInjector`                  | ambient injector | Injector used to create the group outside the current injection context. |
+| `onSuccess` | `(key: string, data: unknown) => void` | —                | Invoked for every real emission, with the definition key it belongs to.  |
+| `onError`   | `(key: string, err: Error) => void`    | —                | Invoked when a keyed query fails.                                        |
+
+The callbacks are untyped in `data` because the group is heterogeneous — narrow on `key`, or
+read the typed value from `results()` instead.
+
+Like [`injectQuery`](/queries/inject-query/#when-onsuccess-fires), `onSuccess` fires only for
+real emissions. Warm-cache seeds and data transferred from a server render do not trigger it.
+
+## `QueriesResult`
+
+| Name        | Type                                                              | Description                                                                                |
+| ----------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `results`   | `Signal<{ [K in keyof Definitions]: QueryData<Definitions[K]> }>` | Latest value per key. `undefined` for a key that has not emitted yet and for skipped keys. |
+| `errors`    | `Signal<{ [K in keyof Definitions]: Error \| undefined }>`        | Latest error per key.                                                                      |
+| `statuses`  | `Signal<{ [K in keyof Definitions]: QueryStatus }>`               | `'pending' \| 'success' \| 'error' \| 'skipped'` per key.                                  |
+| `isLoading` | `Signal<boolean>`                                                 | True while **any** key's status is `'pending'`.                                            |
+| `refetch`   | `() => void`                                                      | Resubscribe every active key.                                                              |
+
+`isLoading` is literally `Object.values(statuses()).some((s) => s === 'pending')`. It is an
+"any key pending" aggregate, not "all keys pending" — one slow query keeps the whole group
+loading. When that is too coarse, read `statuses()` per key.
+
+## The key distinction: removing a key vs. skipping it
+
+This is the single most important thing to get right about `injectQueries`.
+
+<Aside type="caution">
+  **Removing a key from the definition deletes it from `results()`, `errors()`, and `statuses()`. Assigning `skipToken`
+  keeps the key present in all three, with status `'skipped'`.**
+</Aside>
+
+```ts
+const showProfile = signal(true);
+
+// Removal: `profile` disappears from every record when showProfile() is false.
+// Build the record explicitly — a conditional object literal would widen the
+// key to an optional property, which does not satisfy `QueriesDefinition`.
+const removed = injectQueries(() => {
+  const definitions: Record<string, QueryRequest<typeof api.users.current>> = {};
+  if (showProfile()) {
+    definitions['profile'] = { query: api.users.current, args: {} };
+  }
+  return definitions;
+});
+
+// Skipping: `profile` is always a key; it just reports 'skipped'.
+const skipped = injectQueries(() => ({
+  profile: showProfile() ? { query: api.users.current, args: {} } : skipToken,
+}));
+```
+
+|                                       | Removed key | `skipToken` key        |
+| ------------------------------------- | ----------- | ---------------------- |
+| Present in `results()`                | no          | yes, value `undefined` |
+| Present in `errors()`                 | no          | yes, value `undefined` |
+| Present in `statuses()`               | no          | yes, value `'skipped'` |
+| Subscription                          | torn down   | torn down              |
+| Contributes to `isLoading()`          | no          | no                     |
+| Template read `statuses()['profile']` | `undefined` | `'skipped'`            |
+
+Choose by what the template needs to say. A key that is genuinely gone — an unpinned row, a
+closed tab — should be removed. A key that is waiting on a precondition — no user selected
+yet — should be `skipToken`, so the template can render "select a user" from
+`statuses().profile === 'skipped'` rather than from a missing property.
+
+Removal also disposes correctly in both directions: a removed key's subscription is
+unsubscribed, and a late callback from it cannot resurrect the key in the records.
+
+## Per-key reconciliation and stale-work guarding
+
+Each re-run of the definitions function reconciles keys independently:
+
+- A key whose query name **and** serialized args are unchanged keeps its live subscription.
+  Changing one key's args resubscribes only that key.
+- A key whose definition changed is unsubscribed and resubscribed. Its `errors()` entry is
+  cleared and its `statuses()` entry goes back to `'pending'`, while its existing
+  `results()` entry is left in place.
+- Callbacks are matched against the subscription object that is currently registered for the
+  key. A result from a replaced subscription is dropped, so a slow response for old arguments
+  can never overwrite a newer one — and a result for a removed key is ignored entirely.
+
+Before the live subscription emits, each key is seeded like a single query: the warm client
+cache first (status stays `'pending'`), then data transferred from a server render (which
+reports `'success'` immediately so hydration matches the server HTML).
+
+## `refetch()`
+
+`refetch()` bumps a version counter that forces every active key to resubscribe, even those
+whose definitions are unchanged. Skipped keys stay skipped.
+
+While the refetch is pending, **previous results stay visible** but statuses go back to
+`'pending'`:
+
+```ts
+// After data has arrived for both keys:
+queries.refetch();
+
+queries.statuses(); // { user: 'pending', todos: 'pending' }
+queries.results().user; // still the previously loaded user
+queries.isLoading(); // true
+```
+
+Combine that with an `isLoading()`-driven affordance rather than an empty state, or the whole
+dashboard will blink on every refresh.

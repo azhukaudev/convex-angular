@@ -1,0 +1,131 @@
+---
+title: Injection context
+description: Why every inject* helper needs an injection context, what it throws when it does not have one, and how the injectRef escape hatch changes ownership.
+sidebar:
+  order: 2
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import injectRefExample from '../../../examples/concepts-inject-ref.ts?raw';
+
+Every `inject*` helper in this library resolves dependencies (the `ConvexClient`, `DestroyRef`,
+`PLATFORM_ID`) and creates effects. Both require Angular's injection context, exactly like the
+built-in `inject()`.
+
+## The rule
+
+Call the helpers where Angular is in an injection context:
+
+- a component, directive, or service **field initializer**
+- a **constructor**
+- inside `runInInjectionContext(...)`
+- inside a factory provider
+
+```typescript
+@Component({
+  /* … */
+})
+export class TodoListComponent {
+  // Field initializer: an injection context. Correct.
+  readonly todos = injectQuery(api.todos.list, () => ({ count: 20 }));
+
+  loadMore() {
+    // A method body is NOT an injection context. This throws.
+    const more = injectQuery(api.todos.list, () => ({ count: 100 }));
+  }
+}
+```
+
+## What it throws
+
+When a helper is called outside an injection context and no explicit injector was supplied, it
+throws an error naming the offending helper:
+
+```text
+<helperName>() must be called from an injection context (for example, a component or service field initializer or constructor), or be given an explicit injector via the `injectRef` option to create it later from plain code.
+```
+
+`<helperName>` is the real function name, so calling `injectQuery` from a method body produces
+`injectQuery() must be called from an injection context …`. This replaces Angular's generic
+`NG0203` message specifically to point at the `injectRef` option.
+
+## The `injectRef` escape hatch
+
+Every helper accepts an optional `injectRef: EnvironmentInjector` in its options object:
+
+| Helper                          | Options type                         |
+| ------------------------------- | ------------------------------------ |
+| `injectConvex()`                | `InjectConvexOptions`                |
+| `injectQuery()`                 | `QueryOptions`                       |
+| `injectQueries()`               | `QueriesOptions`                     |
+| `injectPaginatedQuery()`        | `PaginatedQueryOptions`              |
+| `injectPrewarmQuery()`          | `PrewarmQueryOptions`                |
+| `injectMutation()`              | `MutationOptions`                    |
+| `injectAction()`                | `ActionOptions`                      |
+| `injectConvexConnectionState()` | `InjectConvexConnectionStateOptions` |
+| `injectAuth()`                  | `InjectAuthOptions`                  |
+
+`injectBetterAuth()` from `convex-angular/better-auth` accepts an `injectRef` too, but it only uses
+it to resolve `BetterAuthService` from that injector — it creates no effects of its own.
+
+When `injectRef` is present, the helper skips the injection-context assertion entirely and runs its
+whole setup inside `runInInjectionContext(injectRef, …)`. When it is absent, the helper asserts the
+ambient context and runs there, so ownership stays with the caller's scope. An explicit `injectRef`
+always wins over an ambient context, even when one exists.
+
+Capture the injector where you _are_ in an injection context, then use it later from plain code:
+
+<Code code={injectRefExample} lang="ts" title="todo-list-cache.ts" />
+
+## `injectRef` overrides ownership
+
+<Aside type="danger">
+  `injectRef` does not only resolve dependencies from that injector — it makes that injector the **owner**. Effects are
+  created in it, `DestroyRef` is taken from it, and every cleanup callback is registered on it. Destroying the component
+  that called the helper does **not** unsubscribe. The subscription lives until the injector you passed is destroyed.
+</Aside>
+
+This is a real leak. The pattern below looks harmless and is not:
+
+```typescript
+@Injectable({ providedIn: 'root' })
+export class TodoService {
+  private readonly injector = inject(EnvironmentInjector); // the ROOT injector
+}
+
+@Component({
+  /* … */
+})
+export class TodoListComponent {
+  private readonly service = inject(TodoService);
+
+  // Called on every click. Each call opens a subscription owned by the root
+  // injector — destroying this component unsubscribes none of them.
+  refresh() {
+    injectQuery(api.todos.list, () => ({ count: 20 }), { injectRef: this.service.injector });
+  }
+}
+```
+
+Guidance:
+
+1. **Prefer the ambient context.** Call helpers in field initializers and let the component own them.
+   Cleanup is then automatic and correct.
+2. When you must use `injectRef`, pass an injector whose lifetime is the lifetime you actually want.
+   A component-scoped `EnvironmentInjector` unsubscribes with the component; the root injector does
+   not.
+3. If the call site can run more than once, **cache the result** (as the example above does) so
+   repeated calls reuse one subscription instead of stacking new ones.
+4. If you need a genuinely disposable scope, create one with `createEnvironmentInjector()` and
+   destroy it yourself.
+
+<Aside type="tip">
+  `injectRef` is for genuinely non-context call sites — router event handlers, class methods that build queries on
+  demand, framework glue. It is not a workaround for "I forgot to use a field initializer".
+</Aside>
+
+## Related
+
+- [Reactivity](/concepts/reactivity/) — the effects and `DestroyRef` cleanup that `injectRef` retargets.
+- [Providers](/concepts/providers/) — the injector that holds the `CONVEX` token in the first place.

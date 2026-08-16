@@ -1,0 +1,123 @@
+---
+title: SSR configuration
+description: Reference for ConvexSsrOptions — fetchOnServer, authToken, transferAuthenticatedResults — and what happens when server fetching degrades.
+sidebar:
+  order: 2
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import ssrConfig from '../../../examples/ssr-config.ts?raw';
+
+Server-side rendering behavior is configured through the `ssr` key of `provideConvex()`'s options.
+Every field is optional; the defaults are what most applications want.
+
+```typescript
+export interface ProvideConvexOptions extends ConvexClientOptions {
+  ssr?: ConvexSsrOptions;
+}
+
+export interface ConvexSsrOptions {
+  fetchOnServer?: boolean;
+  authToken?: () => string | null | undefined | Promise<string | null | undefined>;
+  transferAuthenticatedResults?: boolean;
+}
+```
+
+<Code code={ssrConfig} lang="ts" title="app.config.ts" />
+
+These options are read only during a server render. In the browser they are inert — hydration
+seeding is driven entirely by what is present in `TransferState`.
+
+## Options
+
+| Option                         | Type                                                                        | Default | Purpose                                                                                          |
+| ------------------------------ | --------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `fetchOnServer`                | `boolean`                                                                   | `true`  | Fetch query results over HTTP during the server render and transfer them to the browser.         |
+| `authToken`                    | `() => string \| null \| undefined \| Promise<string \| null \| undefined>` | —       | Produces a JWT for authenticated server-side fetches, for example read from the request cookies. |
+| `transferAuthenticatedResults` | `boolean`                                                                   | `true`  | Whether authenticated results may be embedded in the rendered HTML.                              |
+
+### `fetchOnServer`
+
+Evaluated as `fetchOnServer !== false`. The comparison is against the literal `false`, so leaving the
+option out — or setting it to `undefined` — leaves server fetching **enabled**. Only an explicit
+`false` disables it.
+
+When disabled, no HTTP fetch is issued, nothing is transferred, and every query stays `pending`
+through the server render. The server HTML therefore contains your loading branch, and the browser
+performs a normal live load after hydration.
+
+```typescript
+// Render the shell on the server; load all data live after hydration.
+provideConvex(convexUrl, { ssr: { fetchOnServer: false } });
+```
+
+### `authToken`
+
+A factory returning a JWT (or `null`/`undefined` for an unauthenticated render). It is resolved **at
+most once per server render** and memoized: the first query fetch of that render awaits it, applies
+it with `setAuth(token)` before issuing the query, and every later fetch of the same render reuses
+the memoized outcome without calling the factory again.
+
+- The factory is called lazily. A render that fetches no queries never calls it at all.
+- A falsy result (`null`, `undefined`, or an empty string) means no token is applied and the fetch
+  goes out unauthenticated.
+- If the factory throws or rejects, the memoized failure propagates: every query fetch of that render
+  fails and renders its error branch, and nothing is transferred.
+- The factory runs **outside** any Angular injection context, so `inject()` inside it will throw.
+  Capture whatever it needs (the request, a cookie parser) when you build the configuration.
+
+Since a truthy token also gates `transferAuthenticatedResults`, read
+[Authenticated SSR](/ssr/authenticated-ssr/) before shipping this — authenticated HTML is private
+data.
+
+### `transferAuthenticatedResults`
+
+Evaluated as `transferAuthenticatedResults === false`, again against the literal `false`, so
+`undefined` means results **are** transferred.
+
+Suppression is additionally gated on the render actually being authenticated. The transfer is
+skipped only when both of these hold:
+
+1. `authToken` was configured **and** returned a truthy token that was applied to the HTTP client, and
+2. `transferAuthenticatedResults` is exactly `false`.
+
+Setting `transferAuthenticatedResults: false` without an `authToken`, or with an `authToken` that
+resolved `null`, changes nothing: those fetches are unauthenticated, so their results are still
+transferred.
+
+| `authToken` result          | `transferAuthenticatedResults` | Transferred? |
+| --------------------------- | ------------------------------ | ------------ |
+| not configured              | any value                      | Yes          |
+| `null` / `undefined` / `''` | any value                      | Yes          |
+| truthy token                | omitted / `true` / `undefined` | Yes          |
+| truthy token                | `false`                        | No           |
+
+When the transfer is suppressed, the server still renders with real data — only the payload is kept
+out of the HTML. The hydrated browser has nothing to seed from and shows a brief loading state until
+the live subscription delivers.
+
+## Degradation matrix
+
+Every path is safe: a missing or failed server fetch degrades to the ordinary live-loading behavior.
+
+| Situation                                                      | Query status during the server render | Written to `TransferState` | Browser after hydration                                               |
+| -------------------------------------------------------------- | ------------------------------------- | -------------------------- | --------------------------------------------------------------------- |
+| Loader present, `fetchOnServer` enabled, fetch resolves        | `pending` → `success`                 | Yes                        | Seeds immediately as `success`, then the live subscription takes over |
+| Loader present, `fetchOnServer` enabled, fetch rejects         | `pending` → `error`                   | No                         | Normal pending load over the live subscription                        |
+| Authenticated fetch with `transferAuthenticatedResults: false` | `pending` → `success`                 | No                         | Brief pending state, then the live result                             |
+| Loader not provided (bare `CONVEX` token setups)               | `pending` for the whole render        | No                         | Normal pending load over the live subscription                        |
+| `fetchOnServer: false`                                         | `pending` for the whole render        | No                         | Normal pending load over the live subscription                        |
+| Args return `skipToken`                                        | `skipped`                             | No                         | `skipped` until the args become real                                  |
+
+<Aside type="note">
+  "Loader not provided" is not something an application configures — `provideConvex()` always registers it. It happens
+  in setups that provide the `CONVEX` token directly, such as some unit tests, and is handled gracefully rather than
+  crashing the render.
+</Aside>
+
+## Next
+
+- [Authenticated SSR](/ssr/authenticated-ssr/) — using `authToken` safely.
+- [Hydration semantics](/ssr/hydration-semantics/) — how a transferred result is seeded, and when it
+  is ignored.

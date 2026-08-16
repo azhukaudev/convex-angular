@@ -1,0 +1,297 @@
+---
+title: Driving state
+description: How to drive query results, errors, paginated pages, mutation settlement, warm-cache prefill, connection state, and the disabled client from a test.
+sidebar:
+  order: 2
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`MockConvexClient` captures everything the helpers ask of it and gives the test the controls. This
+page is the matrix of what you can drive and the call that drives it.
+
+| What you want to drive                    | How                                                                        |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| A query result                            | `convex.lastQuerySubscription()!.emit(value)`                              |
+| A query error                             | `convex.lastQuerySubscription()!.emitError(err)`                           |
+| A specific query, not the last            | `convex.querySubscriptions[i].emit(value)`                                 |
+| A paginated page                          | `convex.lastPaginatedSubscription()!.emit({ results, status, loadMore })`  |
+| A mutation result                         | `convex.mutationCalls[i].resolve(value)`                                   |
+| A mutation failure                        | `convex.mutationCalls[i].reject(err)`                                      |
+| An action result or failure               | `convex.actionCalls[i].resolve(value)` / `.reject(err)`                    |
+| Warm-cache data before the first emission | `convex.seedQueryResult(queryName, args, result)` before `createComponent` |
+| Connection state                          | `convex.setConnectionState(partial)`                                       |
+| Server-side rendering                     | `new MockConvexClient({ disabled: true })`                                 |
+
+Every capture array is ordered oldest first, and `lastQuerySubscription()` /
+`lastPaginatedSubscription()` return the newest entry or `undefined`.
+
+## Query results
+
+`emit()` delivers a value exactly as the live WebSocket would: it calls the helper's update callback
+synchronously, so `data()` and `status()` are current the moment it returns.
+
+```typescript
+const fixture = TestBed.createComponent(TodoList);
+fixture.detectChanges();
+tick();
+
+expect(fixture.componentInstance.todos.status()).toBe('pending');
+
+convex.lastQuerySubscription()!.emit([{ _id: '1', title: 'Write docs' }]);
+
+expect(fixture.componentInstance.todos.status()).toBe('success');
+expect(fixture.componentInstance.todos.data()).toEqual([{ _id: '1', title: 'Write docs' }]);
+```
+
+Emit again on the same subscription to model a live update pushed by someone else's mutation — the
+subscription stays open, so a second `emit()` simply replaces the value.
+
+Assert on the captured `args` before emitting. It is the only place a wrong argument function shows
+up; a query with wrong args otherwise just sits pending forever.
+
+```typescript
+expect(convex.lastQuerySubscription()!.args).toEqual({ category: 'work' });
+```
+
+With `injectQueries()`, or with several query helpers in one component, index into
+`convex.querySubscriptions` in the order the subscriptions were opened rather than using
+`lastQuerySubscription()`.
+
+## Query errors
+
+`emitError()` routes to the helper's error callback. The helper's `error()` signal exposes the very
+same object you passed, so identity assertions work and typed `ConvexError` payloads survive intact.
+
+```typescript
+const failure = new Error('boom');
+convex.lastQuerySubscription()!.emitError(failure);
+
+expect(fixture.componentInstance.todos.status()).toBe('error');
+expect(fixture.componentInstance.todos.error()).toBe(failure);
+```
+
+## Paginated pages
+
+`injectPaginatedQuery()` subscribes through `onPaginatedUpdate_experimental`, so its captures land in
+`paginatedSubscriptions`. Each capture also records the `initialNumItems` the helper resolved.
+
+```typescript
+const fixture = TestBed.createComponent(PaginatedTodos);
+fixture.detectChanges();
+tick();
+
+const page = convex.lastPaginatedSubscription()!;
+expect(page.args).toEqual({ category: 'work' });
+expect(page.initialNumItems).toBe(10);
+
+page.emit({
+  results: [{ _id: '1', title: 'Write docs' }],
+  status: 'CanLoadMore',
+  loadMore: () => true,
+});
+
+expect(fixture.componentInstance.todos.status()).toBe('success');
+expect(fixture.componentInstance.todos.canLoadMore()).toBe(true);
+```
+
+<Aside type="caution">
+  `emit()` takes the **client** paginated shape — `{ results, status, loadMore }` — not the server
+  `PaginationResult` shape (`{ page, isDone, continueCursor }`) that your Convex query function
+  returns. This trips people up: a paginated Convex query returns `page`/`isDone`/`continueCursor`,
+  but the client assembles the accumulated `results` array, the pagination `status`, and a
+  `loadMore` function before handing anything to a subscriber, and the mock sits at that boundary.
+  Emitting the server shape leaves `results()` empty.
+</Aside>
+
+`status` is the client's pagination status — `'LoadingFirstPage'`, `'CanLoadMore'`, `'LoadingMore'`,
+or `'Exhausted'` — and maps onto the helper's signals:
+
+| Emitted `status`     | Helper state                                              |
+| -------------------- | --------------------------------------------------------- |
+| `'LoadingFirstPage'` | `isLoadingFirstPage()` true, `status()` stays `'pending'` |
+| `'LoadingMore'`      | `isLoadingMore()` true                                    |
+| `'CanLoadMore'`      | `canLoadMore()` true                                      |
+| `'Exhausted'`        | `isExhausted()` true                                      |
+
+The `loadMore` function you emit is the one the helper calls when the component calls `loadMore(n)`,
+so a Jest mock there lets you assert the page size requested:
+
+```typescript
+const loadMore = jest.fn().mockReturnValue(true);
+convex.lastPaginatedSubscription()!.emit({ results: [], status: 'CanLoadMore', loadMore });
+
+fixture.componentInstance.todos.loadMore(25);
+
+expect(loadMore).toHaveBeenCalledWith(25);
+```
+
+Details of the helper itself are in [Pagination](/queries/pagination/).
+
+## Mutations and actions
+
+A captured mutation's promise **never settles on its own**. `mutation()` and `action()` push a
+`{ fn, args, resolve, reject }` record onto `mutationCalls` / `actionCalls` and return a promise held
+open until the test settles it. That is what makes the in-flight state assertable.
+
+```typescript
+fixture.componentInstance.add();
+tick();
+
+// In flight: nothing has settled.
+expect(convex.mutationCalls).toHaveLength(1);
+expect(convex.mutationCalls[0].args).toEqual({ title: 'New todo' });
+expect(fixture.componentInstance.addTodo.status()).toBe('pending');
+
+convex.mutationCalls[0].resolve('todo-id');
+tick();
+
+expect(fixture.componentInstance.addTodo.status()).toBe('success');
+expect(fixture.componentInstance.addTodo.data()).toBe('todo-id');
+```
+
+Settlement is asynchronous — it goes through the promise — so `tick()` (or an `await`) is required
+between `resolve()` and the assertion, unlike `emit()`. Failures work the same way:
+
+```typescript
+const failure = new Error('rejected by the server');
+convex.mutationCalls[0].reject(failure);
+tick();
+
+expect(fixture.componentInstance.addTodo.status()).toBe('error');
+expect(fixture.componentInstance.addTodo.error()).toBe(failure);
+```
+
+Actions are identical with `convex.actionCalls`. Note that the mock records the mutation's args only
+— optimistic update functions passed to `injectMutation()` are not invoked by the mock, since there
+is no local store for them to write into.
+
+<Aside type="tip">
+  A forgotten `resolve()`/`reject()` is the usual cause of a test that hangs on a pending status. If a mutation-driven
+  assertion fails with `status()` still `'pending'`, check that the call was settled and that a `tick()` followed it.
+</Aside>
+
+## Warm-cache prefill
+
+`seedQueryResult()` populates the local cache that `injectQuery()` and `injectQueries()` consult
+before their subscription delivers, which is how you model a query whose data is already warm — for
+example after `injectPrewarmQuery()` ran on a previous screen.
+
+```typescript
+// Before the fixture is created.
+convex.seedQueryResult('todos:list', {}, [{ _id: 'warm', title: 'Warm' }]);
+
+const fixture = TestBed.createComponent(TodoList);
+fixture.detectChanges();
+tick();
+
+expect(fixture.componentInstance.todos.data()).toEqual([{ _id: 'warm', title: 'Warm' }]);
+```
+
+Two things to get right.
+
+**The name must be the resolved function name**, the `"module:export"` string that
+`getFunctionName(query)` returns for the function reference the component passes — `'todos:list'`
+for `api.todos.list`, not the object itself. The args must match what the component's argument
+function produces, though the mock's key is order-independent, so `{ a: 1, b: 2 }` and `{ b: 2, a: 1 }`
+find the same entry.
+
+**A cache hit is a prefill, not a settlement.** The helper shows the seeded data immediately but
+stays `'pending'` until a live emission confirms it, because the subscription has not yet reported.
+
+```typescript
+expect(fixture.componentInstance.todos.data()).toEqual([{ _id: 'warm', title: 'Warm' }]);
+expect(fixture.componentInstance.todos.status()).toBe('pending');
+
+convex.lastQuerySubscription()!.emit([{ _id: 'warm', title: 'Warm' }]);
+
+expect(fixture.componentInstance.todos.status()).toBe('success');
+```
+
+Seeding never affects the subscription itself — the subscription is still captured, and still needs
+an `emit()`.
+
+## Connection state
+
+`setConnectionState()` shallow-merges the partial into the current state and pushes the result
+synchronously to every listener registered through `subscribeToConnectionState`, which is what
+`injectConvexConnectionState()` uses. Fields absent from the partial keep their previous value.
+
+```typescript
+const fixture = TestBed.createComponent(OfflineBanner);
+fixture.detectChanges();
+
+expect(fixture.componentInstance.connection().isWebSocketConnected).toBe(true);
+
+convex.setConnectionState({ isWebSocketConnected: false, connectionRetries: 3 });
+fixture.detectChanges();
+
+expect(fixture.componentInstance.connection().isWebSocketConnected).toBe(false);
+expect(fixture.componentInstance.connection().connectionRetries).toBe(3);
+// Untouched fields are preserved.
+expect(fixture.componentInstance.connection().hasEverConnected).toBe(true);
+```
+
+A fresh mock starts connected and idle; the exact defaults are listed in the
+[mock reference](/testing/mock-convex-client/#default-connection-state).
+
+## Simulating server-side rendering
+
+`new MockConvexClient({ disabled: true })` mirrors a disabled `ConvexClient`, which is the state the
+client is in during a server render: subscriptions become no-ops, the `client` getter throws
+`'ConvexClient is disabled'`, and `connectionState()` throws.
+
+```typescript
+const convex = new MockConvexClient({ disabled: true });
+TestBed.configureTestingModule({ providers: [provideConvexTesting(convex)] });
+
+// A component holding both injectQuery() and injectConvexConnectionState().
+const fixture = TestBed.createComponent(TodoShell);
+fixture.detectChanges();
+tick();
+
+// No subscription was captured, the helper stays pending, and the connection
+// state reports the static disconnected default.
+expect(convex.querySubscriptions).toHaveLength(0);
+expect(fixture.componentInstance.todos.status()).toBe('pending');
+expect(fixture.componentInstance.connection().isWebSocketConnected).toBe(false);
+expect(() => convex.client).toThrow('ConvexClient is disabled');
+```
+
+This is the right tool for asserting that a component renders a sane skeleton with no client, and for
+covering the `convex.disabled` branches of your own code. It is not a full SSR harness — the mock
+provides no `TransferState` or hydration emulation, so it cannot exercise the transfer-and-hydrate
+path. See the [limitations](/testing/mock-convex-client/#limitations).
+
+## Gotchas
+
+<Aside type="caution">
+  **A destroyed fixture cannot be driven.** `emit()` and `emitError()` become silent no-ops once the
+  helper has unsubscribed — matching the real client, which delivers nothing after unsubscribe. The
+  call does not throw and nothing warns; the assertion simply sees stale data. Check
+  `subscription.unsubscribed` when an emission appears to do nothing:
+
+```typescript
+fixture.destroy();
+
+expect(convex.lastQuerySubscription()!.unsubscribed).toBe(true);
+convex.lastQuerySubscription()!.emit(['ignored']); // no-op
+```
+
+The same applies after a reactive-argument change: the old subscription is unsubscribed and only
+the new one (`lastQuerySubscription()`) is live, so a handle captured earlier in the test is dead.
+
+</Aside>
+
+<Aside type="caution">
+  **A disabled mock captures nothing.** `onUpdate` and `onPaginatedUpdate_experimental` return a
+  no-op unsubscribe without recording anything, so `convex.querySubscriptions.length === 0` and
+  `lastQuerySubscription()` is `undefined`. There is no handle to emit through, and the helper stays
+  `'pending'` forever. If a test using `{ disabled: true }` fails on a missing subscription, that is
+  the contract, not a bug — use an enabled mock when the test needs to drive data.
+</Aside>
+
+<Aside type="tip">
+  Prefer `convex.lastQuerySubscription()!` in tests over storing a handle: it always names the live subscription, so a
+  re-subscribing argument change cannot leave the test pointing at a dead one.
+</Aside>

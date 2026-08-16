@@ -1,0 +1,114 @@
+---
+title: Route resolver
+description: Block navigation until a Convex query has a first result, so the routed component renders from a warm cache.
+sidebar:
+  order: 8
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import resolverExample from '../../../examples/queries-route-resolver.ts?raw';
+
+`convexQueryResolver()` builds an Angular `ResolveFn` that holds navigation until a Convex
+query delivers its first result, then keeps that subscription warm for a grace period. It is
+the explicit-preloading counterpart to `injectQuery` — the equivalent of React's
+`preloadQuery` / `usePreloadedQuery` flow.
+
+## Signature
+
+```ts
+function convexQueryResolver<Query extends QueryReference>(
+  query: Query,
+  argsFn?: (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => Query['_args'] | SkipToken,
+  options?: ConvexQueryResolverOptions,
+): ResolveFn<FunctionReturnType<Query> | undefined>;
+```
+
+`argsFn` maps the route snapshot to query arguments. Omit it and the query is called with
+`{}`.
+
+### `ConvexQueryResolverOptions`
+
+| Name                | Type     | Default | Description                                                                                                                                            |
+| ------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `keepSubscribedFor` | `number` | `5000`  | Milliseconds to keep the resolver's subscription alive **after** the route resolves, so the routed component's own `injectQuery` deduplicates onto it. |
+
+<Code code={resolverExample} lang="ts" title="app.routes.ts" />
+
+## How it is meant to be consumed
+
+<Aside type="tip">
+  The intended pattern is that the routed component **ignores the resolved value** and simply calls `injectQuery()` for
+  the same query and the same arguments. Because the resolver's subscription is still open, that call reads the warm
+  local cache and renders immediately — while remaining a live, reactive subscription rather than a frozen snapshot.
+</Aside>
+
+Reading `route.snapshot.data['profile']` would work, but it gives you a static value that
+never updates and forfeits the whole point of Convex. Resolve for the _timing_, subscribe for
+the _data_.
+
+`keepSubscribedFor` exists to cover the gap between the router resolving and the component's
+effect running. The 5 second default is generous; shorten it only if you have a reason.
+
+## The warm-cache render is `'pending'`, not `'success'`
+
+A warm cache hit is a **prefill**, not a settled result: the value is shown, but the helper
+still waits for the live subscription to confirm it.
+
+| Signal           | Value right after navigation                      |
+| ---------------- | ------------------------------------------------- |
+| `data()`         | the resolved value, from the warm cache           |
+| `status()`       | `'pending'`                                       |
+| `isLoading()`    | `true`                                            |
+| `isRefetching()` | `true`                                            |
+| `isSuccess()`    | `false`                                           |
+| `onSuccess`      | not called yet — the first live emission fires it |
+
+<Aside type="caution">
+A template built as `@if (status() === 'success') { … } @else { <skeleton /> }` will show the
+skeleton even though the data is right there. Render from `data()` and use `isRefetching()`
+for a subtle refreshing hint instead.
+</Aside>
+
+## Failures never block navigation
+
+Every failure path resolves `undefined` rather than rejecting, so navigation always proceeds
+and the component's own `injectQuery` surfaces the real state reactively:
+
+| Situation                                | Result                                                                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `argsFn` returns `skipToken`             | resolves `undefined` **synchronously**, no subscription, no network                                                       |
+| Subscription error                       | resolves `undefined`                                                                                                      |
+| Injector destroyed before a first result | resolves `undefined`, subscription disposed                                                                               |
+| Disabled client                          | resolves `undefined` immediately instead of hanging                                                                       |
+| Server-side rendering                    | the query is fetched over HTTP through the SSR loader and transferred to the browser; a failed fetch resolves `undefined` |
+
+The `skipToken` case is worth calling out: it returns a plain `undefined`, not a promise, so
+a route whose query is conditionally irrelevant costs nothing at all.
+
+<Aside type="danger">
+**There is no timeout.** If the query never emits — a permission-gated function that hangs, a
+dropped connection, a backend that never responds — the returned promise never settles and
+the navigation is held indefinitely. Angular has no built-in deadline for resolvers either.
+
+`keepSubscribedFor` does **not** help: it is a post-resolution grace period that only starts
+once the first result has arrived. If you need a bound, wrap the resolver or apply your own
+timeout at the route level.
+
+</Aside>
+
+## When to reach for it
+
+Blocking navigation is a real cost — the user sits on the previous screen with no feedback.
+Use the resolver when an empty first paint would be actively wrong (a detail page whose
+entire layout depends on the document), and prefer a normal `injectQuery` with a loading
+state everywhere else.
+
+For non-blocking warming driven by user intent, use
+[`injectPrewarmQuery`](/queries/prewarming/) instead.
+
+## Related
+
+- [`injectQuery`](/queries/inject-query/)
+- [Prewarming queries](/queries/prewarming/)
+- [Conditional queries with `skipToken`](/queries/skip-token/)

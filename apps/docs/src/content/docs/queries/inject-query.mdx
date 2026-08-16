@@ -1,0 +1,157 @@
+---
+title: injectQuery
+description: Subscribe to a single Convex query and read its state through signals.
+sidebar:
+  order: 1
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import injectQueryExample from '../../../examples/queries-inject-query.ts?raw';
+
+`injectQuery()` opens a live subscription to one Convex query and exposes its state as
+readonly signals. The subscription is reactive: every signal read inside the argument
+function is tracked, and the query resubscribes when those arguments change.
+
+## Signature
+
+```ts
+function injectQuery<Query extends QueryReference>(
+  query: Query,
+  argsFn: () => Query['_args'] | SkipToken,
+  options?: QueryOptions<Query>,
+): QueryResult<Query>;
+```
+
+`QueryReference` is `FunctionReference<'query'>` — any query from your generated `api`.
+
+Call it in an injection context (a component field initializer, a service constructor, or
+inside `runInInjectionContext`). To create it elsewhere, pass an
+[`injectRef`](#queryoptions).
+
+<Code code={injectQueryExample} lang="ts" title="todo-list.component.ts" />
+
+## `QueryOptions`
+
+| Name              | Type                                                                                              | Default          | Description                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `injectRef`       | `EnvironmentInjector`                                                                             | ambient injector | Injector used to create the query outside the current injection context. Its destruction also tears down the subscription.     |
+| `onSuccess`       | `(data: FunctionReturnType<Query>) => void`                                                       | —                | Invoked for every real emission of the subscription, including the one-shot fetch during server-side rendering.                |
+| `onError`         | `(err: Error) => void`                                                                            | —                | Invoked when the subscription fails.                                                                                           |
+| `placeholderData` | `FunctionReturnType<Query> \| ((args: Query['_args']) => FunctionReturnType<Query> \| undefined)` | —                | Value shown in `data()` while the first result for the current args loads. See [Placeholder data](/queries/placeholder-data/). |
+
+### When `onSuccess` fires
+
+`onSuccess` is a subscription callback, not a "data became available" callback. It runs only
+when the Convex client actually emits a value (or the SSR one-shot fetch resolves). It does
+**not** run for data that merely seeds the pending state:
+
+- a warm client-cache hit for the current args,
+- data transferred from a server render during hydration,
+- `placeholderData`.
+
+In each of those cases the value lands in `data()` immediately and the first live emission
+after the WebSocket syncs is what fires `onSuccess`.
+
+## `QueryResult`
+
+| Name                | Type                                             | Description                                                                                                       |
+| ------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `data`              | `Signal<FunctionReturnType<Query> \| undefined>` | Latest value. `undefined` until something is available; `undefined` while skipped. Preserved across resubscribes. |
+| `error`             | `Signal<Error \| undefined>`                     | Latest subscription error, cleared on the next successful emission.                                               |
+| `isLoading`         | `Signal<boolean>`                                | True while waiting for a result — initial load, args-change resubscribe, or `refetch()`.                          |
+| `isRefetching`      | `Signal<boolean>`                                | True while resubscribing with a previous real value still on screen.                                              |
+| `isPlaceholderData` | `Signal<boolean>`                                | True while `data()` holds `placeholderData` rather than a real value.                                             |
+| `isSkipped`         | `Signal<boolean>`                                | True when the argument function returned `skipToken`.                                                             |
+| `isSuccess`         | `Signal<boolean>`                                | True when a value has been received and the query is neither loading, skipped, nor errored.                       |
+| `status`            | `Signal<QueryStatus>`                            | `'pending' \| 'success' \| 'error' \| 'skipped'`.                                                                 |
+| `refetch`           | `() => void`                                     | Force a resubscribe.                                                                                              |
+
+### Derivations
+
+Three of the signals are computed, so their exact semantics fall out of these formulas:
+
+```ts
+isSuccess = !isLoading() && !isSkipped() && !error();
+
+isRefetching = isLoading() && !isPlaceholderData() && data() !== undefined;
+
+status = isSkipped() ? 'skipped' : isLoading() ? 'pending' : error() ? 'error' : 'success';
+```
+
+Two consequences are worth internalizing:
+
+- `status()` reports `'pending'` **before** it reports `'error'`. A resubscribe after a
+  failure moves the status back to `'pending'` even though `error()` is still set.
+- Warm-cache and preserved values leave `status()` at `'pending'` while `data()` is already
+  populated. That combination is exactly what `isRefetching()` identifies — render a
+  refreshing affordance instead of a skeleton.
+
+<Aside type="tip">
+  Before the first change detection runs the subscription effect, the result is idle rather than loading: `data()`,
+  `error()` are `undefined` and `isLoading()`, `isSkipped()`, `isPlaceholderData()`, `isRefetching()` are all `false`.
+</Aside>
+
+## Reactive arguments
+
+The argument function runs inside an effect. When it re-runs, the helper serializes the
+returned args and compares them against the current subscription's identity:
+
+- **Different args** — the old subscription is torn down and a new one opened.
+- **Identical serialized args** — the live subscription is kept. A signal change that does
+  not change the arguments never causes a resubscribe.
+
+Stale work is guarded by a generation counter, so callbacks from a replaced subscription are
+ignored even if they arrive late.
+
+### `data` survives a resubscribe
+
+An args change does not blank the UI. On resubscribe the helper looks for something local to
+show, in this order:
+
+1. the Convex client's **warm cache** for the new args,
+2. data **transferred from the server render** (hydration only — this one reports success
+   immediately so the hydrated DOM matches the server HTML),
+3. the **previous real value**, left in place while the new subscription loads,
+4. otherwise `placeholderData`.
+
+Only cases 1, 3, and 4 keep `status()` at `'pending'`. In cases 1 and 3 `isRefetching()` is
+true.
+
+## `refetch()`
+
+`refetch()` bumps an internal version counter, which changes the subscription identity and
+forces a teardown/resubscribe even when the arguments serialize identically. It is the escape
+hatch for the args-dedup behavior above.
+
+Existing data is preserved while the refetch is pending, so the sequence for a query that
+already has data is: `isLoading()` goes true, `status()` returns to `'pending'`,
+`isRefetching()` becomes true, `data()` stays put, and the next emission settles everything.
+
+<Aside type="caution">
+  Convex subscriptions are already live. `refetch()` is for forcing a fresh subscription after an error or a connection
+  hiccup — it is not a polling primitive, and calling it on a healthy subscription only costs you a round trip.
+</Aside>
+
+## Errors
+
+`error()` holds the thrown `Error`. Real data is **preserved** alongside it so the UI does
+not blank out; placeholder data is cleared instead (see
+[Placeholder data](/queries/placeholder-data/)). Application errors thrown by your Convex
+function with `ConvexError` carry a typed payload:
+
+```ts
+if (todos.error() instanceof ConvexError) {
+  console.error((todos.error() as ConvexError<{ code: string }>).data.code);
+}
+```
+
+`ConvexError` is re-exported from `convex-angular`.
+
+## Related
+
+- [Conditional queries with `skipToken`](/queries/skip-token/)
+- [Placeholder data](/queries/placeholder-data/)
+- [`injectQueries`](/queries/inject-queries/) for a dynamic keyed group
+- [Prewarming](/queries/prewarming/) and the [route resolver](/queries/route-resolver/) for
+  warming the cache before a component mounts

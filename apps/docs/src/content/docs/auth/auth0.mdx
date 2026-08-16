@@ -1,0 +1,97 @@
+---
+title: Auth0
+description: Wire Auth0 into Convex with the Auth0AuthProvider structural interface, the AUTH0_AUTH token, and provideAuth0Auth().
+sidebar:
+  order: 3
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import auth0Example from '../../../examples/auth-auth0.ts?raw';
+
+`convex-angular` has no dependency on `@auth0/auth0-angular`. You write a small service that
+exposes Auth0's state as signals, register it under the `AUTH0_AUTH` token, and
+`provideAuth0Auth()` bridges it to Convex.
+
+## `Auth0AuthProvider`
+
+```ts
+interface Auth0AuthProvider {
+  isLoading: Signal<boolean>;
+  isAuthenticated: Signal<boolean>;
+  getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }): Promise<string | null>;
+  error?: Signal<Error | undefined>;
+}
+```
+
+| Member                   | Type                                                                   | Required | Purpose                                                                                |
+| ------------------------ | ---------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------- |
+| `isLoading`              | `Signal<boolean>`                                                      | yes      | `true` while Auth0 initializes, `false` once auth state is known. Forwarded unchanged. |
+| `isAuthenticated`        | `Signal<boolean>`                                                      | yes      | Whether Auth0 reports the user as authenticated. Forwarded unchanged.                  |
+| `getAccessTokenSilently` | `(options?: { cacheMode?: 'on' \| 'off' }) => Promise<string \| null>` | yes      | Returns the token for Convex, or `null` when signed out.                               |
+| `error`                  | `Signal<Error \| undefined>`                                           | no       | Provider-owned errors, mirrored onto `injectAuth().error()`.                           |
+
+<Aside type="caution" title="Return the id token, not the access token">
+  Convex validates the **OIDC id token**. Call Auth0's `getAccessTokenSilently` with `detailedResponse: true` and return
+  `response.id_token`. Returning the opaque access token produces a token Convex will reject.
+</Aside>
+
+## `AUTH0_AUTH`
+
+```ts
+const AUTH0_AUTH: InjectionToken<Auth0AuthProvider>;
+```
+
+Register your implementation under this token **before** calling `provideAuth0Auth()`. Prefer
+`useExisting` over `useClass` when the service is also injected elsewhere, so Angular reuses the
+singleton instead of constructing a second instance.
+
+## `provideAuth0Auth()`
+
+```ts
+function provideAuth0Auth(): EnvironmentProviders;
+```
+
+It registers a `CONVEX_AUTH` factory that adapts `AUTH0_AUTH`, and then `provideConvexAuth()`.
+
+<Aside type="danger" title="provideAuth0Auth() already includes provideConvexAuth()">
+  Do not add `provideConvexAuth()` (or `provideConvexAuthFromExisting()`) next to it — two registrations in the same
+  injector throw at bootstrap. All auth providers are root-only and once-only, validated eagerly during bootstrap. See
+  [the overview](/auth/overview/#provideconvexauth) for the exact messages.
+</Aside>
+
+## Token fetching
+
+`forceRefreshToken` maps to Auth0's `cacheMode`:
+
+| Convex asks for            | Call made                                      |
+| -------------------------- | ---------------------------------------------- |
+| `forceRefreshToken: false` | `getAccessTokenSilently({ cacheMode: 'on' })`  |
+| `forceRefreshToken: true`  | `getAccessTokenSilently({ cacheMode: 'off' })` |
+
+Unlike [the Clerk adapter](/auth/clerk/), there is **no `reauthVersion`**. Auth0 has no
+equivalent of a session or organization identity that the adapter can watch, so auth setup re-runs
+only when `isLoading` or `isAuthenticated` change. If your application needs to force a re-auth on
+some other signal, implement a [custom provider](/auth/custom-provider/) and expose your own
+`reauthVersion`.
+
+<Aside type="caution" title="Rejections are swallowed">
+  A `getAccessTokenSilently` that rejects — for example an expired SSO session throwing `login_required` — is caught and
+  turned into `null`, the signed-out outcome. It is **not** reported as an auth error, so `injectAuth().error()` stays
+  `undefined`. Surface those failures yourself through the optional `error` signal if you need them.
+</Aside>
+
+## Example
+
+<Code code={auth0Example} lang="ts" title="auth0-auth.service.ts + app.config.ts" />
+
+In a real application the SDK binding comes from Auth0 directly:
+
+```ts
+import { toSignal } from '@angular/core/rxjs-interop';
+import { AuthService } from '@auth0/auth0-angular';
+```
+
+Then read the state with [`injectAuth()`](/auth/overview/), gate templates with
+[the auth directives](/auth/directives/), and protect routes with
+[the route guards](/auth/route-guards/).

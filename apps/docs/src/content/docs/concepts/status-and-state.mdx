@@ -1,0 +1,131 @@
+---
+title: Status and state
+description: The status unions, the exact formulas that derive them, and why status() reads 'success' before a query has any data.
+sidebar:
+  order: 4
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import statusTemplate from '../../../examples/concepts-status-template.ts?raw';
+
+Every helper exposes a single `status()` Signal alongside its narrower boolean Signals. `status()` is
+the value to branch on in templates: it is a string union, so `@switch` over it is exhaustive and
+type-checked.
+
+## The unions
+
+```typescript
+type QueryStatus = 'pending' | 'success' | 'error' | 'skipped';
+type PaginatedQueryStatus = 'pending' | 'success' | 'error' | 'skipped';
+
+type MutationStatus = 'idle' | 'pending' | 'success' | 'error';
+type ActionStatus = 'idle' | 'pending' | 'success' | 'error';
+```
+
+Queries have no `'idle'` — a query subscribes as soon as it exists, so there is no "not started yet".
+Mutations and actions have no `'skipped'` — you simply do not call them.
+
+| Value       | Queries                                 | Mutations and actions                    |
+| ----------- | --------------------------------------- | ---------------------------------------- |
+| `'idle'`    | —                                       | Not called yet, or `reset()` was called. |
+| `'pending'` | Loading initial data, or resubscribing. | The call is in flight.                   |
+| `'success'` | A result was received.                  | The last call completed successfully.    |
+| `'error'`   | The subscription failed.                | The last call failed.                    |
+| `'skipped'` | The args function returned `skipToken`. | —                                        |
+
+## Derivations
+
+These are the exact formulas, in evaluation order.
+
+### `injectQuery()`
+
+```typescript
+isSuccess = !isLoading() && !isSkipped() && !error();
+isRefetching = isLoading() && !isPlaceholderData() && data() !== undefined;
+
+status = isSkipped() ? 'skipped' : isLoading() ? 'pending' : error() ? 'error' : 'success';
+```
+
+`isLoading` and `isSkipped` are written directly by the subscription effect; `data`, `error`, and
+`isPlaceholderData` are written by the settle/fail callbacks. Their initial values are `false`,
+`false`, `undefined`, `undefined`, and `false`.
+
+### `injectPaginatedQuery()`
+
+```typescript
+isSuccess = !isLoadingFirstPage() && !isSkipped() && !error();
+
+status = isSkipped() ? 'skipped' : isLoadingFirstPage() ? 'pending' : error() ? 'error' : 'success';
+```
+
+`isLoadingMore` is deliberately not part of `status`: loading a later page keeps the status at
+`'success'` so the already-rendered pages stay on screen. Branch on `status()` for the page shell and
+on `isLoadingMore()` for the "load more" affordance.
+
+### `injectMutation()` and `injectAction()`
+
+Both are built on the same internal state:
+
+```typescript
+isSuccess = hasCompleted() && !isLoading() && !error();
+
+status = isLoading() ? 'pending' : error() ? 'error' : hasCompleted() ? 'success' : 'idle';
+```
+
+`hasCompleted` is set on **every** settling path, success and failure alike — the status derivation
+just checks `error()` first, so a failed call reads `'error'`. `reset()` clears `data`, `error`,
+`isLoading`, and `hasCompleted`, returning the status to `'idle'`.
+
+## The pre-change-detection gotcha
+
+<Aside type="danger">
+  For `injectQuery()`, `status()` evaluates to **`'success'` while `data()` is still `undefined`** before the first
+  change detection run. Never treat `status() === 'success'` as proof that data exists.
+</Aside>
+
+The cause is mechanical. `injectQuery()` initializes `isLoading` to `false` and only sets it to
+`true` inside its subscription `effect()`. Angular does not run that effect at creation time — it
+runs during the first change detection pass. In the window between construction and that pass:
+
+| Signal        | Value       |
+| ------------- | ----------- |
+| `isSkipped()` | `false`     |
+| `isLoading()` | `false`     |
+| `error()`     | `undefined` |
+| `data()`      | `undefined` |
+| `status()`    | `'success'` |
+
+Anything that reads the query's state before the first change detection sees this — a `computed()`
+consumed eagerly, a synchronous read in a constructor, an assertion in a unit test that never calls
+`fixture.detectChanges()`. In a normal template it is transient, but a template that assumes
+`'success'` implies data will still throw on the first render pass if it dereferences the value.
+
+Write the success branch so it binds the data rather than assuming it:
+
+<Code code={statusTemplate} lang="ts" title="safe-todo-list.component.ts" />
+
+`@for (todo of todos.data() ?? []; track todo._id)` is equally safe, and `todos.data()?.title` works
+for a single-object query. What is not safe is `todos.data()!.title` or `todos.data().length`.
+
+<Aside type="tip">
+  `injectPaginatedQuery()` does not have this problem: it initializes `isLoadingFirstPage` to `true`, so its status
+  starts at `'pending'` and only leaves it once a result actually arrives.
+</Aside>
+
+## Choosing between the signals
+
+- `status()` — the one value to `@switch` on for the overall shape of the UI.
+- `isLoading()` — true for both the initial load and a resubscribe. Good for disabling a control.
+- `isRefetching()` — true only when a **previous real value is still on screen** while a new one
+  loads. It is false during the initial load and while placeholder data is shown, which is exactly
+  what you want to distinguish a full skeleton from a subtle "refreshing" indicator.
+- `isPlaceholderData()` — true while `data()` holds `placeholderData` rather than a real result. The
+  status stays `'pending'` in that case, and `onSuccess` does not fire.
+- `isSkipped()` — equivalent to `status() === 'skipped'`.
+- `isSuccess()` — equivalent to `status() === 'success'`, and carries the same caveat above.
+
+## Related
+
+- [Reactivity](/concepts/reactivity/) — what causes the transitions between these states.
+- [Error handling](/concepts/error-handling/) — the `'error'` status in detail.

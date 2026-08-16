@@ -1,0 +1,135 @@
+---
+title: Hydration semantics
+description: The exact rules for seeding a query after hydration — precedence, the seeding window, paginated queries, and TransferState key matching.
+sidebar:
+  order: 4
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import hydrationArgs from '../../../examples/ssr-hydration-args.ts?raw';
+
+When a query helper starts a subscription in the browser it first looks for data it can show
+immediately. Where that data comes from decides both what `data()` holds and what `status()` reports
+on the very first change detection — which is what makes hydration flash-free or not.
+
+## Initial-data precedence
+
+| #   | Source                    | Sets `data()` | Resulting status                           | Why                                                                                                                    |
+| --- | ------------------------- | ------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| 1   | Warm client cache         | Yes           | `pending`, with `isRefetching()` true      | The value came from the local Convex cache; the subscription must still confirm it.                                    |
+| 2   | Transferred server result | Yes           | `success` immediately                      | The server already rendered this value into the HTML; reporting anything else would contradict the DOM being hydrated. |
+| 3   | Placeholder data          | Yes           | `pending`, with `isPlaceholderData()` true | Invented data, never treated as a result.                                                                              |
+| 4   | Preserved previous value  | Keeps it      | `pending`, with `isRefetching()` true      | A resubscribe (args change or `refetch()`) keeps the last real value on screen.                                        |
+
+The warm cache is checked first, and only when the client is not disabled — a disabled client's
+`client` getter throws. A cache hit deliberately leaves the query **pending**: unlike a transferred
+result, nothing has yet rendered from it, so waiting for the live subscription to confirm is the
+honest state. Read it as "showing data, refreshing" via `isRefetching()`.
+
+Sources 3 and 4 interact: a real previous value wins over a placeholder. The placeholder is only
+resolved when there is no warm cache entry, no transferred result, and no real previous value to
+preserve.
+
+A transferred `undefined` is a result, not a missing entry — the transfer format distinguishes the
+two, so a query whose server-side result was `undefined` still seeds and still reports `success`.
+(`injectPaginatedQuery()` is the exception: it seeds only a defined first page.)
+
+<Aside type="note" title="onSuccess fires for none of these">
+  `onSuccess` is for results, not for seeds. It does not fire for a warm-cache value, a transferred server result, or
+  placeholder data — the first live emission after the WebSocket syncs fires it instead. It _does_ fire for the
+  server-side one-shot fetch during SSR, which is a real result.
+</Aside>
+
+## The hydration window
+
+Transferred entries are readable only during the bootstrap/hydration window. The window closes
+permanently the first time `ApplicationRef.whenStable()` resolves; after that, reads return nothing
+and the live subscription is the only source of truth. This mirrors Angular's own `HttpClient`
+transfer cache.
+
+Consequences worth planning for:
+
+- A query created **after** stability — a lazily loaded route, a `@defer` block that hydrates later,
+  a component mounted from a user interaction — never seeds, even if a matching entry is still
+  present in `TransferState`. It performs a normal pending load.
+- Entries are **not** deleted when read. Several components mounting the same query with the same
+  args during bootstrap all seed from the same entry, and a component that unmounts and remounts
+  within the window seeds again.
+
+## Paginated queries
+
+`injectPaginatedQuery()` transfers and seeds only its **first page**. The key is built from the full
+first-page arguments — your own args plus `paginationOpts: { numItems: initialNumItems, cursor: null }`
+— so `initialNumItems` is part of the identity: a server render with `initialNumItems: 10` produces
+no seed for a client that mounts with `initialNumItems: 20`.
+
+A seeded first page sets `results()`, clears `error()`, sets `isLoadingFirstPage()` to false, and
+derives `canLoadMore()`/`isExhausted()` from the page's `isDone` flag. `status()` reads `success`
+straight away.
+
+Two behaviors follow from the underlying client:
+
+- **The mandatory `LoadingFirstPage` emission is absorbed.** A fresh paginated subscription always
+  emits `LoadingFirstPage` before any data. While a transferred seed is on screen, that first
+  emission is ignored so it cannot blank out the server-rendered page. The next real emission
+  (`CanLoadMore`, `LoadingMore`, or `Exhausted`) replaces the seed and takes over from there.
+- **`loadMore()` is inert until then.** The `loadMore` function belongs to a live emission, and the
+  seed does not carry one.
+
+<Aside type="caution" title="canLoadMore() can be true while loadMore() does nothing">
+  Between hydration and the first real emission, a seeded paginated query reports `canLoadMore() === true` (the server
+  said the page was not the last) while `loadMore(n)` returns `false` and loads nothing. The gap is short — it closes as
+  soon as the subscription syncs — but a user who clicks instantly gets no response. Check the boolean return value of
+  `loadMore()` and leave the affordance clickable, or debounce the first interaction rather than assuming the call
+  always takes effect.
+</Aside>
+
+## Key matching
+
+A transferred entry is stored under:
+
+```text
+cva:<queryName>:<argsKey>
+```
+
+where `argsKey` is `JSON.stringify(convexToJson(args))`.
+
+<Aside type="caution" title="The args key is property-order sensitive">
+  `JSON.stringify` serializes properties in insertion order, so
+  `{ category: 'work', completed: false }` and `{ completed: false, category: 'work' }` produce
+  **different keys** for identical arguments.
+
+If a route resolver builds the args one way during the server render and the component builds them
+the other way in the browser, the lookup misses. Nothing errors and nothing warns — the query
+silently falls back to a normal pending load, and you get exactly the loading flash SSR was
+supposed to remove.
+
+</Aside>
+
+Build query arguments the same way everywhere. The most reliable form is a single exported builder
+used by the resolver and the component alike:
+
+<Code code={hydrationArgs} lang="ts" title="todo-search.ts" />
+
+The same discipline applies to values, not just order: an argument derived from `Date.now()`, a
+random value, or a locale that differs between server and browser produces a different key and
+misses the seed.
+
+### Debugging a miss
+
+If a query hydrates with a loading flash, check in this order:
+
+1. Was anything transferred at all? Search the served HTML for `cva:` — the state script contains one
+   entry per transferred query. No entry means the fetch failed, was skipped, `fetchOnServer` was
+   `false`, or the transfer was suppressed by `transferAuthenticatedResults: false`.
+2. Does the key match character for character? Compare the `cva:<queryName>:<argsKey>` in the HTML
+   against the args your component builds — property order included.
+3. Is the query created during bootstrap? A component behind a lazy route or a deferred block may
+   only mount after the window has closed.
+4. For paginated queries, does `initialNumItems` match the value used during the server render?
+
+## Next
+
+- [Configuration](/ssr/configuration/) — what gets transferred in the first place.
+- [Authenticated SSR](/ssr/authenticated-ssr/) — the one case where you deliberately transfer nothing.

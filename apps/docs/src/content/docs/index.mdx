@@ -1,0 +1,44 @@
+---
+title: convex-angular
+description: The Angular client for Convex — Signals, dependency injection, authentication, pagination, and server-side rendering.
+template: splash
+hero:
+  tagline: Build real-time Angular applications on Convex with Signals, dependency injection, and automatic subscription cleanup.
+  actions:
+    - text: Get started
+      link: /start/introduction/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/azhukaudev/convex-angular
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+  <Card title="Signal-first" icon="seti:typescript">
+    Queries, mutations, actions, pagination, auth, and connection state are all exposed as readonly Signals that
+    integrate directly with Angular's reactivity and change detection.
+  </Card>
+  <Card title="Fully typed" icon="approve-check">
+    Argument and return types are inferred from your generated Convex function references. A renamed field is a compile
+    error, not a runtime surprise.
+  </Card>
+  <Card title="Reactive arguments" icon="random">
+    Any Signal read inside a query's argument function is tracked. Change it and the query resubscribes automatically —
+    or return `skipToken` to not subscribe at all.
+  </Card>
+  <Card title="Cleans up after itself" icon="trash">
+    Every helper ties its subscriptions to the owning Angular scope through `DestroyRef`, and guards stale asynchronous
+    work so a slow response can never overwrite a newer one.
+  </Card>
+  <Card title="SSR and hydration" icon="laptop">
+    Queries fetch over HTTP during server rendering and transfer through Angular's `TransferState`, so the hydrated
+    client renders instantly without a loading flash.
+  </Card>
+  <Card title="Testable without a backend" icon="puzzle">
+    `convex-angular/testing` ships a `MockConvexClient` that lets tests drive query emissions, settle mutations, and
+    simulate connection state.
+  </Card>
+</CardGrid>

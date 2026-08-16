@@ -1,0 +1,173 @@
+---
+title: Pagination
+description: Load a growing list from a paginated Convex query with injectPaginatedQuery.
+sidebar:
+  order: 5
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import paginationExample from '../../../examples/queries-pagination.ts?raw';
+
+`injectPaginatedQuery()` subscribes to a Convex paginated query and accumulates pages into a
+single growing `results()` array — the primitive behind "load more" buttons and infinite
+scroll.
+
+## Signature
+
+```ts
+function injectPaginatedQuery<Query extends PaginatedQueryReference>(
+  query: Query,
+  argsFn: () => PaginatedQueryArgs<Query> | SkipToken,
+  options: PaginatedQueryOptions<Query>,
+): PaginatedQueryResult<Query>;
+```
+
+<Aside type="caution">
+  `options` is **required** here, unlike every other query helper, because `initialNumItems` is a required option.
+</Aside>
+
+```ts
+type PaginatedQueryReference = FunctionReference<
+  'query',
+  'public',
+  { paginationOpts: PaginationOptions },
+  PaginationResult<any>
+>;
+
+type PaginatedQueryArgs<Query> = Omit<FunctionArgs<Query>, 'paginationOpts'>;
+type PaginatedQueryItem<Query> = FunctionReturnType<Query>['page'][number];
+```
+
+The argument function returns your query's arguments **without** `paginationOpts` — the
+helper supplies those.
+
+<Code code={paginationExample} lang="ts" title="paginated-todos.component.ts" />
+
+## `PaginatedQueryOptions`
+
+| Name              | Type                                             | Default          | Description                                                                                 |
+| ----------------- | ------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------- |
+| `initialNumItems` | `number \| Signal<number>`                       | — (required)     | Page size for the first page. A signal is read reactively; changing it restarts pagination. |
+| `injectRef`       | `EnvironmentInjector`                            | ambient injector | Injector used to create the query outside the current injection context.                    |
+| `onSuccess`       | `(results: PaginatedQueryItem<Query>[]) => void` | —                | Invoked with the accumulated results on every emission except `LoadingFirstPage`.           |
+| `onError`         | `(err: Error) => void`                           | —                | Invoked when the subscription fails.                                                        |
+
+`initialNumItems` is part of the subscription identity. A different page size means a
+different subscription, so changing the signal tears the current one down and reloads from
+the first page.
+
+`onSuccess` is skipped for `LoadingFirstPage` emissions because the results are not complete
+yet, and — like the other helpers — it does not fire for a first page seeded from a server
+render during hydration.
+
+## `PaginatedQueryResult`
+
+| Name                 | Type                                  | Description                                                                              |
+| -------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `results`            | `Signal<PaginatedQueryItem<Query>[]>` | Accumulated items across all loaded pages. `[]` before the first page and while skipped. |
+| `error`              | `Signal<Error \| undefined>`          | Latest error. Cleared on the next successful emission.                                   |
+| `isLoadingFirstPage` | `Signal<boolean>`                     | True while the first page is loading.                                                    |
+| `isLoadingMore`      | `Signal<boolean>`                     | True while an additional page is loading.                                                |
+| `canLoadMore`        | `Signal<boolean>`                     | True when the client reports more items are available.                                   |
+| `isExhausted`        | `Signal<boolean>`                     | True when every item has been loaded.                                                    |
+| `isSkipped`          | `Signal<boolean>`                     | True when the argument function returned `skipToken`.                                    |
+| `isSuccess`          | `Signal<boolean>`                     | `!isLoadingFirstPage() && !isSkipped() && !error()`.                                     |
+| `status`             | `Signal<PaginatedQueryStatus>`        | `'pending' \| 'success' \| 'error' \| 'skipped'`.                                        |
+| `loadMore`           | `(numItems: number) => boolean`       | Request more items. Returns whether loading was actually initiated.                      |
+| `reset`              | `() => void`                          | Discard loaded pages and reload from the first page.                                     |
+
+`status()` is derived exactly as for a single query:
+
+```ts
+status = isSkipped() ? 'skipped' : isLoadingFirstPage() ? 'pending' : error() ? 'error' : 'success';
+```
+
+Note that `'success'` covers "first page loaded" — the list may still have more pages to
+fetch. Use `canLoadMore()` / `isExhausted()` for that distinction, not `status()`.
+
+## Client status mapping
+
+The Convex client reports one of four pagination statuses on every emission. The helper maps
+each to a fixed combination of signals:
+
+| Client status      | `isLoadingFirstPage` | `isLoadingMore` | `canLoadMore` | `isExhausted` | `status()`  |
+| ------------------ | -------------------- | --------------- | ------------- | ------------- | ----------- |
+| `LoadingFirstPage` | `true`               | `false`         | `false`       | `false`       | `'pending'` |
+| `LoadingMore`      | `false`              | `true`          | `false`       | `false`       | `'success'` |
+| `CanLoadMore`      | `false`              | `false`         | `true`        | `false`       | `'success'` |
+| `Exhausted`        | `false`              | `false`         | `false`       | `true`        | `'success'` |
+
+Exactly one of the four booleans is true at a time. In particular `canLoadMore()` is `false`
+_during_ a `LoadingMore` round trip, so a button disabled on `!canLoadMore()` is
+automatically disabled while the next page is in flight.
+
+`results()` is updated on every emission, including `LoadingFirstPage`.
+
+Two other states fall outside the table:
+
+- **Before the first change detection**, the result reads as an empty first page still
+  loading: `results()` is `[]`, `isLoadingFirstPage()` is `true`, `status()` is `'pending'`.
+- **Skipped**: `results()` is `[]`, all four booleans are `false`, `isSkipped()` is `true`,
+  and `loadMore()` returns `false`.
+
+## Errors
+
+On failure the helper keeps what you already have:
+
+- `results()` is **preserved** — a failed `loadMore()` does not empty the list.
+- `error()` is set and `status()` becomes `'error'`.
+- `isLoadingFirstPage()` and `isLoadingMore()` go `false`.
+- `isExhausted()` flips back to `false`, even if the list had been exhausted.
+- `canLoadMore()` becomes `true` only if a subscription had previously handed the helper a
+  `loadMore` function; a first-page failure leaves it `false`.
+
+<Aside type="caution">
+  Because `isExhausted()` is cleared on error, a template that renders "That's everything" from `isExhausted()` will
+  silently swap back to a load-more affordance when the subscription fails. Check `error()` first.
+</Aside>
+
+`reset()` is the recovery path after a first-page error: it bumps the reset version, which
+changes the subscription identity and resubscribes from the first page even when the
+arguments are unchanged.
+
+## `loadMore()` returns a boolean — check it
+
+```ts
+loadMore: (numItems: number) => boolean;
+```
+
+It returns `false` when no request was started: nothing is subscribed yet, the query is
+skipped, a load is already in flight, the list is exhausted, or the live subscription has not
+synced.
+
+<Aside type="danger">
+**SSR/hydration gotcha.** After a server render, the first page is seeded from the
+transferred data so the hydrated DOM matches the server HTML — which means `canLoadMore()`
+can already be `true` while `loadMore()` still returns `false`, because the live subscription
+has not delivered a real emission yet and the helper has no `loadMore` handle to call.
+
+A button gated only on `canLoadMore()` therefore looks enabled but does nothing for a brief
+window right after hydration. Use the return value: if `loadMore()` returns `false`, keep the
+button in a pending state and let the user retry, or drive the enabled state from your own
+"has synced" signal.
+
+</Aside>
+
+## Experimental client requirement
+
+The helper is built on Convex's experimental paginated subscription API
+(`onPaginatedUpdate_experimental`). If the injected client does not expose it, the
+subscription effect throws:
+
+```text
+[convex-angular] `injectPaginatedQuery()` requires a Convex client with experimental paginated query support.
+```
+
+This surfaces during change detection, not at injection time. If you see it in a test, the
+mock client provided for `CONVEX` is missing `onPaginatedUpdate_experimental`.
+
+## Related
+
+- [Optimistic updates for paginated queries](/queries/paginated-optimistic-updates/)
+- [Conditional queries with `skipToken`](/queries/skip-token/)

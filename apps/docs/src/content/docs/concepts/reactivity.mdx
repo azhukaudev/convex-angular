@@ -1,0 +1,120 @@
+---
+title: Reactivity
+description: How reactive arguments drive resubscription, why identical args do not resubscribe, what is tracked and what is captured once, and how stale work is discarded.
+sidebar:
+  order: 3
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import reactiveArgs from '../../../examples/concepts-reactive-args.ts?raw';
+
+Query helpers do not take an arguments _object_ — they take an arguments _function_. That function
+runs inside an Angular `effect()`, so any Signal it reads becomes a dependency of the subscription.
+
+```typescript
+readonly count = signal(20);
+readonly todos = injectQuery(api.todos.list, () => ({ count: this.count() }));
+```
+
+Setting `count` to a new value re-runs the effect, which tears down the old subscription and opens a
+new one for the new arguments.
+
+<Code code={reactiveArgs} lang="ts" title="category-todos.component.ts" />
+
+## Subscription identity is the serialized args
+
+Re-running the effect does not by itself resubscribe. The helper computes a **subscription key** and
+skips the work when the key has not changed:
+
+```
+key = `${refetchVersion}:${JSON.stringify(convexToJson(args))}`
+```
+
+Two consequences follow directly:
+
+- **A new object with identical content does not resubscribe.** `{ count: 20 }` created fresh on
+  every effect run serializes to the same string as the previous one, so the live subscription is
+  kept open. Structural identity is what matters, not reference identity — you never need
+  `computed()` memoization or a custom equality function to avoid churn.
+- **Key order matters, because `JSON.stringify` preserves it.** `{ a: 1, b: 2 }` and `{ b: 2, a: 1 }`
+  serialize differently and therefore count as different subscriptions. Build args objects with a
+  stable key order; literal object expressions in source naturally have one.
+
+Arguments are encoded with `convexToJson` before stringifying, so Convex value types (`Id`, `Bytes`,
+`Int64`, …) round-trip to a stable representation rather than to `{}`.
+
+<Aside type="tip">
+  Reading a signal inside the args function that does not change the args — a UI toggle, a theme — still re-runs the
+  effect, but the identical key means no network work happens. It is cheap, not free: keep the args function small and
+  side-effect free.
+</Aside>
+
+## What is tracked, and what is not
+
+<Aside type="caution">
+  Only the **arguments function** and the internal **refetch version** are reactive. The `options` object is read once,
+  when the helper is created. Passing a signal-derived `onSuccess`, `placeholderData`, or `optimisticUpdate` does not
+  make it reactive — the value captured at creation time is the one that is used forever.
+</Aside>
+
+| Input                              | Reactive?                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Signals read inside the args fn    | Yes — tracked, and resubscribe when the serialized args change.                                              |
+| `refetch()`                        | Yes — bumps an internal version signal, changing the subscription key.                                       |
+| The function reference (`api.x.y`) | No — captured once.                                                                                          |
+| `options.onSuccess` / `onError`    | No — captured once.                                                                                          |
+| `options.placeholderData`          | No — captured once. Factories run `untracked`, so signals read inside one do not retrigger the subscription. |
+| `options.injectRef`                | No — captured once, and it also changes ownership. See [Injection context](/concepts/injection-context/).    |
+
+If a query genuinely needs different callbacks over time, keep the callback stable and read the
+changing part from a signal inside it.
+
+## `refetch()` and `skipToken`
+
+`refetch()` increments a version signal. Because the version is part of the subscription key, the
+key changes even when the args are byte-identical, forcing a real teardown and resubscribe. The
+previous value stays in `data()` while the new subscription settles, so the UI does not flash empty —
+`isRefetching()` is true during that window.
+
+Returning `skipToken` from the args function takes a different path entirely: it clears `data` and
+`error`, sets `isSkipped`, tears down the subscription, and forgets the subscription key. The next
+non-skip args value therefore always opens a fresh subscription.
+
+## Stale asynchronous work is discarded
+
+Every subscription run takes the next value of an internal generation counter. Both the success and
+failure callbacks compare their captured generation against the current one and return early if it
+no longer matches.
+
+That means a slow response for old arguments can never overwrite a newer result — a real risk when
+a user types quickly into a filter, or when a server-side fetch resolves after the args have moved
+on. The same guard applies during teardown: destroying the scope bumps the generation, so a callback
+already in flight becomes a no-op.
+
+Mutations and actions use the equivalent mechanism with a version counter: only the most recent
+invocation may write `data`, `error`, or `isLoading`, and only it fires `onSuccess`/`onError`.
+`reset()` also bumps that version, so an in-flight call that resolves after a reset is ignored.
+
+## Cleanup
+
+Every helper registers its teardown on the owning scope's `DestroyRef`:
+
+- Query helpers unsubscribe from the live subscription and bump the generation counter.
+- Mutation and action helpers mark themselves destroyed and reset their state. A `mutate()`/`run()`
+  promise issued before destruction still settles — the underlying call is not cancelled — but it no
+  longer writes reactive state and no longer fires callbacks.
+- `provideConvex()` closes the `ConvexClient` when its injector is destroyed.
+
+You never call an unsubscribe function by hand.
+
+<Aside type="danger">
+  The owning scope is the injection context the helper was created in — unless you passed `injectRef`, which moves
+  ownership to that injector. Read [Injection context](/concepts/injection-context/) before using it: it is the one way
+  to make a component's destruction *not* unsubscribe.
+</Aside>
+
+## Related
+
+- [Status and state](/concepts/status-and-state/) — what the signals read during these transitions.
+- [Error handling](/concepts/error-handling/) — where failures from a subscription surface.

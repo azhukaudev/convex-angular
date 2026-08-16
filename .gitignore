@@ -49,6 +49,9 @@ Thumbs.db
 
 .angular
 
+# Astro generated types for the docs site
+apps/docs/.astro
+
 .env.local
 
 .claude/worktrees

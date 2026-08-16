@@ -1,0 +1,184 @@
+---
+title: API reference
+description: A complete index of every public symbol exported by convex-angular, convex-angular/testing, and convex-angular/better-auth.
+sidebar:
+  order: 1
+---
+
+The library ships three entry points. Everything listed on this page is part of
+the public API; nothing else is.
+
+| Entry point                  | Contents                                                                                                                                                                                            |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `convex-angular`             | The main surface: providers, injection tokens, the `inject*` helpers for queries, mutations and actions, authentication, structural directives, route guards, and the route resolver.               |
+| `convex-angular/testing`     | `MockConvexClient` and `provideConvexTesting()` — an in-memory stand-in for `ConvexClient` so components and services can be unit-tested without a Convex deployment. Import it in test files only. |
+| `convex-angular/better-auth` | The Better Auth integration: `provideBetterAuth()`, `injectBetterAuth()`, and the structurally-typed client contract. Kept separate so the main entry point carries no Better Auth types.           |
+
+The tables below index every export by category. `Kind` distinguishes runtime
+values (function, const, class, InjectionToken, directive) from type-only
+exports (type, interface) that disappear at compile time.
+
+## Providers & tokens
+
+| Symbol                               | Kind           | Entry point      | Description                                                                                                     | Reference                                         |
+| ------------------------------------ | -------------- | ---------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `provideConvex`                      | function       | `convex-angular` | Creates the `ConvexClient` and registers it, plus the SSR services, in the root injector. Call it exactly once. | [Providers](/concepts/providers/)                 |
+| `ProvideConvexOptions`               | interface      | `convex-angular` | Options for `provideConvex()`: every `ConvexClientOptions` field plus an `ssr` section.                         | [Providers](/concepts/providers/)                 |
+| `CONVEX`                             | InjectionToken | `convex-angular` | The `InjectionToken<ConvexClient>` under which the client is registered. Override it to substitute a client.    | [Providers](/concepts/providers/)                 |
+| `injectConvex`                       | function       | `convex-angular` | Returns the `ConvexClient` instance for direct, low-level use.                                                  | [ConvexClient](/reference/convex-client/)         |
+| `InjectConvexOptions`                | interface      | `convex-angular` | Options for `injectConvex()`; carries only `injectRef`.                                                         | [Injection context](/concepts/injection-context/) |
+| `injectConvexConnectionState`        | function       | `convex-angular` | A readonly `Signal<ConnectionState>` that tracks WebSocket connectivity and in-flight request counts.           | [Connection state](/reference/connection-state/)  |
+| `InjectConvexConnectionStateOptions` | interface      | `convex-angular` | Options for `injectConvexConnectionState()`; carries only `injectRef`.                                          | [Connection state](/reference/connection-state/)  |
+| `ConvexSsrOptions`                   | interface      | `convex-angular` | The `ssr` section of `ProvideConvexOptions`: `fetchOnServer`, `authToken`, `transferAuthenticatedResults`.      | [SSR configuration](/ssr/configuration/)          |
+
+## Queries
+
+| Symbol                    | Kind      | Entry point      | Description                                                                                                                                                                                    | Reference                                      |
+| ------------------------- | --------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `injectQuery`             | function  | `convex-angular` | Subscribes to a Convex query and exposes its data, error, and status as Signals. Resubscribes when the reactive args change.                                                                   | [injectQuery](/queries/inject-query/)          |
+| `QueryOptions`            | interface | `convex-angular` | Options for `injectQuery()`: `injectRef`, `onSuccess`, `onError`, `placeholderData`.                                                                                                           | [injectQuery](/queries/inject-query/)          |
+| `QueryResult`             | interface | `convex-angular` | The object `injectQuery()` returns: `data`, `error`, `isLoading`, `isRefetching`, `isPlaceholderData`, `isSkipped`, `isSuccess`, `status`, `refetch`.                                          | [injectQuery](/queries/inject-query/)          |
+| `QueryReference`          | type      | `convex-angular` | `FunctionReference<'query'>` — the type of any query on your generated `api` object.                                                                                                           | [injectQuery](/queries/inject-query/)          |
+| `QueryPlaceholderData`    | type      | `convex-angular` | The `placeholderData` option's type: a plain value, or a factory taking the current args.                                                                                                      | [Placeholder data](/queries/placeholder-data/) |
+| `skipToken`               | const     | `convex-angular` | A unique symbol returned from an args function to suspend a query without unmounting the helper.                                                                                               | [skipToken](/queries/skip-token/)              |
+| `SkipToken`               | type      | `convex-angular` | `typeof skipToken`, for typing args functions that may skip.                                                                                                                                   | [skipToken](/queries/skip-token/)              |
+| `injectQueries`           | function  | `convex-angular` | Subscribes to a dynamic, keyed map of queries and exposes keyed `results`, `errors`, and `statuses` Signals.                                                                                   | [injectQueries](/queries/inject-queries/)      |
+| `QueriesDefinition`       | type      | `convex-angular` | `Record<string, QueryRequest \| SkipToken>` — the shape the definitions function returns.                                                                                                      | [injectQueries](/queries/inject-queries/)      |
+| `QueryRequest`            | interface | `convex-angular` | One entry in a `QueriesDefinition`: a `query` reference plus its `args`.                                                                                                                       | [injectQueries](/queries/inject-queries/)      |
+| `QueriesOptions`          | interface | `convex-angular` | Options for `injectQueries()`: `injectRef`, and key-aware `onSuccess` / `onError`.                                                                                                             | [injectQueries](/queries/inject-queries/)      |
+| `QueriesResult`           | interface | `convex-angular` | The object `injectQueries()` returns: `results`, `errors`, `statuses`, `isLoading`, `refetch`.                                                                                                 | [injectQueries](/queries/inject-queries/)      |
+| `injectPaginatedQuery`    | function  | `convex-angular` | Loads a paginated query as a growing list, for infinite-scroll UIs. Uses Convex's experimental paginated subscription client.                                                                  | [Pagination](/queries/pagination/)             |
+| `PaginatedQueryOptions`   | interface | `convex-angular` | Options for `injectPaginatedQuery()`: the required `initialNumItems` (a number or a Signal), plus `injectRef`, `onSuccess`, `onError`.                                                         | [Pagination](/queries/pagination/)             |
+| `PaginatedQueryResult`    | interface | `convex-angular` | The object `injectPaginatedQuery()` returns: `results`, `error`, `isLoadingFirstPage`, `isLoadingMore`, `canLoadMore`, `isExhausted`, `isSkipped`, `isSuccess`, `status`, `loadMore`, `reset`. | [Pagination](/queries/pagination/)             |
+| `PaginatedQueryReference` | type      | `convex-angular` | A public query taking a `paginationOpts` argument and returning a `PaginationResult`.                                                                                                          | [Pagination](/queries/pagination/)             |
+| `PaginatedQueryArgs`      | type      | `convex-angular` | A paginated query's args with `paginationOpts` removed — what you return from the args function.                                                                                               | [Pagination](/queries/pagination/)             |
+| `PaginatedQueryItem`      | type      | `convex-angular` | The element type of a paginated query's `page` array.                                                                                                                                          | [Pagination](/queries/pagination/)             |
+| `injectPrewarmQuery`      | function  | `convex-angular` | Returns a `prewarm(args)` function that opens a short-lived subscription to warm the local query cache ahead of navigation.                                                                    | [Prewarming](/queries/prewarming/)             |
+| `PrewarmQueryOptions`     | interface | `convex-angular` | Options for `injectPrewarmQuery()`: `injectRef`, `extendSubscriptionFor` (default 5000ms), `onError`.                                                                                          | [Prewarming](/queries/prewarming/)             |
+| `PrewarmQueryResult`      | interface | `convex-angular` | The object `injectPrewarmQuery()` returns; carries only `prewarm`.                                                                                                                             | [Prewarming](/queries/prewarming/)             |
+| `PrewarmQueryReference`   | type      | `convex-angular` | `FunctionReference<'query'>`, as accepted by `injectPrewarmQuery()`.                                                                                                                           | [Prewarming](/queries/prewarming/)             |
+
+## Mutations & actions
+
+| Symbol              | Kind      | Entry point      | Description                                                                                                    | Reference                                            |
+| ------------------- | --------- | ---------------- | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `injectMutation`    | function  | `convex-angular` | Creates a reactive mutation caller: a `mutate()` method plus Signals describing the latest call.               | [injectMutation](/mutations/inject-mutation/)        |
+| `MutationOptions`   | interface | `convex-angular` | Options for `injectMutation()`: `injectRef`, `onSuccess`, `onError`, `optimisticUpdate`.                       | [Optimistic updates](/mutations/optimistic-updates/) |
+| `MutationResult`    | interface | `convex-angular` | The object `injectMutation()` returns: `mutate`, `data`, `error`, `isLoading`, `isSuccess`, `status`, `reset`. | [injectMutation](/mutations/inject-mutation/)        |
+| `MutationReference` | type      | `convex-angular` | `FunctionReference<'mutation'>`.                                                                               | [injectMutation](/mutations/inject-mutation/)        |
+| `injectAction`      | function  | `convex-angular` | Creates a reactive action caller: a `run()` method plus Signals describing the latest call.                    | [injectAction](/mutations/inject-action/)            |
+| `ActionOptions`     | interface | `convex-angular` | Options for `injectAction()`: `injectRef`, `onSuccess`, `onError`. Actions have no optimistic updates.         | [injectAction](/mutations/inject-action/)            |
+| `ActionResult`      | interface | `convex-angular` | The object `injectAction()` returns: `run`, `data`, `error`, `isLoading`, `isSuccess`, `status`, `reset`.      | [injectAction](/mutations/inject-action/)            |
+| `ActionReference`   | type      | `convex-angular` | `FunctionReference<'action'>`.                                                                                 | [injectAction](/mutations/inject-action/)            |
+
+## Auth
+
+| Symbol                          | Kind           | Entry point      | Description                                                                                                                               | Reference                                         |
+| ------------------------------- | -------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `injectAuth`                    | function       | `convex-angular` | Returns the reactive Convex auth state registered by `provideConvexAuth()` or a provider-specific helper.                                 | [Auth overview](/auth/overview/)                  |
+| `InjectAuthOptions`             | interface      | `convex-angular` | Options for `injectAuth()`; carries only `injectRef`.                                                                                     | [Injection context](/concepts/injection-context/) |
+| `provideConvexAuth`             | function       | `convex-angular` | Wires a `CONVEX_AUTH` provider into the Convex client's auth sync. Root-only; call it exactly once.                                       | [Custom auth provider](/auth/custom-provider/)    |
+| `provideConvexAuthFromExisting` | function       | `convex-angular` | Registers an existing injectable service as `CONVEX_AUTH` and calls `provideConvexAuth()` in one step.                                    | [Custom auth provider](/auth/custom-provider/)    |
+| `CONVEX_AUTH`                   | InjectionToken | `convex-angular` | The token a `ConvexAuthProvider` implementation is registered under.                                                                      | [Custom auth provider](/auth/custom-provider/)    |
+| `ConvexAuthProvider`            | interface      | `convex-angular` | The contract a custom auth provider implements: `isLoading`, `isAuthenticated`, `fetchAccessToken`, optional `reauthVersion` and `error`. | [Custom auth provider](/auth/custom-provider/)    |
+| `ConvexAuthState`               | interface      | `convex-angular` | What `injectAuth()` returns: `isLoading`, `isAuthenticated`, `isRefreshing`, `error`, `status`, and the `getAuth()` snapshot.             | [Auth overview](/auth/overview/)                  |
+| `ConvexAuthStatus`              | type           | `convex-angular` | `'loading'`, `'authenticated'`, `'refreshing'`, or `'unauthenticated'`.                                                                   | [Status and state](/concepts/status-and-state/)   |
+| `AuthTokenFetcher`              | type           | `convex-angular` | The async token-fetching function signature, called with `{ forceRefreshToken }`.                                                         | [Custom auth provider](/auth/custom-provider/)    |
+
+## Auth integrations
+
+| Symbol              | Kind           | Entry point      | Description                                                                                                                            | Reference             |
+| ------------------- | -------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `provideClerkAuth`  | function       | `convex-angular` | Bridges a `CLERK_AUTH` service into Convex auth. Includes `provideConvexAuth()` — do not register that separately.                     | [Clerk](/auth/clerk/) |
+| `CLERK_AUTH`        | InjectionToken | `convex-angular` | The token your `ClerkAuthProvider` implementation is registered under.                                                                 | [Clerk](/auth/clerk/) |
+| `ClerkAuthProvider` | interface      | `convex-angular` | The Clerk-shaped contract: `isLoaded`, `isSignedIn`, `getToken`, optional `sessionId`, `orgId`, `orgRole`, `sessionAudience`, `error`. | [Clerk](/auth/clerk/) |
+| `provideAuth0Auth`  | function       | `convex-angular` | Bridges an `AUTH0_AUTH` service into Convex auth. Includes `provideConvexAuth()`.                                                      | [Auth0](/auth/auth0/) |
+| `AUTH0_AUTH`        | InjectionToken | `convex-angular` | The token your `Auth0AuthProvider` implementation is registered under.                                                                 | [Auth0](/auth/auth0/) |
+| `Auth0AuthProvider` | interface      | `convex-angular` | The Auth0-shaped contract: `isLoading`, `isAuthenticated`, `getAccessTokenSilently`, optional `error`.                                 | [Auth0](/auth/auth0/) |
+
+## Directives
+
+All four are standalone structural directives driven by `injectAuth()`.
+
+| Symbol                        | Kind      | Entry point      | Description                                                                                                                | Reference                            |
+| ----------------------------- | --------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `CvaAuthenticatedDirective`   | directive | `convex-angular` | `*cvaAuthenticated` — renders while the user is authenticated and auth is not loading.                                     | [Auth directives](/auth/directives/) |
+| `CvaUnauthenticatedDirective` | directive | `convex-angular` | `*cvaUnauthenticated` — renders while the user is not authenticated and auth is not loading.                               | [Auth directives](/auth/directives/) |
+| `CvaAuthLoadingDirective`     | directive | `convex-angular` | `*cvaAuthLoading` — renders while auth state is still being determined.                                                    | [Auth directives](/auth/directives/) |
+| `CvaAuthRefreshingDirective`  | directive | `convex-angular` | `*cvaAuthRefreshing` — renders while Convex is replacing a server-rejected token. The user stays authenticated throughout. | [Auth directives](/auth/directives/) |
+
+## Guards
+
+| Symbol                     | Kind           | Entry point      | Description                                                                                                            | Reference                           |
+| -------------------------- | -------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `convexAuthGuard`          | const          | `convex-angular` | A ready-made `CanActivateFn & CanMatchFn` requiring authentication, redirecting to the login route with a `returnUrl`. | [Route guards](/auth/route-guards/) |
+| `convexUnauthGuard`        | const          | `convex-angular` | A `CanActivateFn & CanMatchFn` for signed-out-only routes; redirects authenticated users to `authenticatedRoute`.      | [Route guards](/auth/route-guards/) |
+| `createConvexAuthGuard`    | function       | `convex-angular` | Builds a guard with an optional claims-based `allow` check for role- or permission-gated routes.                       | [Route guards](/auth/route-guards/) |
+| `ConvexAuthGuardOptions`   | interface      | `convex-angular` | Options for `createConvexAuthGuard()`: `allow`, `forbiddenRoute`, `loginRoute`.                                        | [Route guards](/auth/route-guards/) |
+| `CONVEX_AUTH_GUARD_CONFIG` | InjectionToken | `convex-angular` | Application-wide guard configuration token.                                                                            | [Route guards](/auth/route-guards/) |
+| `ConvexAuthGuardConfig`    | interface      | `convex-angular` | The config shape: `loginRoute` (default `'/login'`) and `authenticatedRoute` (default `'/'`).                          | [Route guards](/auth/route-guards/) |
+
+## Resolvers
+
+| Symbol                       | Kind      | Entry point      | Description                                                                                                                                                      | Reference                                  |
+| ---------------------------- | --------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| `convexQueryResolver`        | function  | `convex-angular` | Builds an Angular `ResolveFn` that blocks navigation until a query's first result is available locally, so the routed component renders without a loading state. | [Route resolver](/queries/route-resolver/) |
+| `ConvexQueryResolverOptions` | interface | `convex-angular` | Options for `convexQueryResolver()`: `keepSubscribedFor` (default 5000ms).                                                                                       | [Route resolver](/queries/route-resolver/) |
+
+## Optimistic-update helpers
+
+These operate on the `OptimisticLocalStore` handed to a mutation's
+`optimisticUpdate`, and understand Convex's cursor-pagination page layout.
+
+| Symbol                                      | Kind     | Entry point      | Description                                                                                             | Reference                                                              |
+| ------------------------------------------- | -------- | ---------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `optimisticallyUpdateValueInPaginatedQuery` | function | `convex-angular` | Applies an update function to every matching item across all locally cached pages of a paginated query. | [Paginated optimistic updates](/queries/paginated-optimistic-updates/) |
+| `insertAtTop`                               | function | `convex-angular` | Prepends an item to the first page (the page whose cursor is `null`).                                   | [Paginated optimistic updates](/queries/paginated-optimistic-updates/) |
+| `insertAtBottomIfLoaded`                    | function | `convex-angular` | Appends an item to the final page, but only when that page is already loaded.                           | [Paginated optimistic updates](/queries/paginated-optimistic-updates/) |
+| `insertAtPosition`                          | function | `convex-angular` | Inserts an item into the correct page and offset using the same sort key and order as the server query. | [Paginated optimistic updates](/queries/paginated-optimistic-updates/) |
+| `sortByField`                               | function | `convex-angular` | Builds a `sortKeyFromItem` callback from one or more item fields, for use with `insertAtPosition`.      | [Paginated optimistic updates](/queries/paginated-optimistic-updates/) |
+
+## Types & utilities
+
+| Symbol                 | Kind  | Entry point      | Description                                                                                                                                       | Reference                                       |
+| ---------------------- | ----- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `QueryStatus`          | type  | `convex-angular` | `'pending'`, `'success'`, `'error'`, or `'skipped'`.                                                                                              | [Status and state](/concepts/status-and-state/) |
+| `PaginatedQueryStatus` | type  | `convex-angular` | The same four states, for a paginated query's first page.                                                                                         | [Status and state](/concepts/status-and-state/) |
+| `MutationStatus`       | type  | `convex-angular` | `'idle'`, `'pending'`, `'success'`, or `'error'`.                                                                                                 | [Status and state](/concepts/status-and-state/) |
+| `ActionStatus`         | type  | `convex-angular` | `'idle'`, `'pending'`, `'success'`, or `'error'`.                                                                                                 | [Status and state](/concepts/status-and-state/) |
+| `ConvexError`          | class | `convex-angular` | Re-exported from `convex/values` so `err instanceof ConvexError` narrowing (and reading `err.data`) works without importing from Convex directly. | [Error handling](/concepts/error-handling/)     |
+
+## Testing
+
+| Symbol                      | Kind      | Entry point              | Description                                                                                                                                                                  | Reference                                        |
+| --------------------------- | --------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `MockConvexClient`          | class     | `convex-angular/testing` | In-memory stand-in for `ConvexClient`. Captures every subscription and invocation so a test can emit results, settle calls, seed the warm cache, and push connection states. | [MockConvexClient](/testing/mock-convex-client/) |
+| `provideConvexTesting`      | function  | `convex-angular/testing` | Registers a `MockConvexClient` under the `CONVEX` token for a TestBed. Creates a fresh mock when no instance is passed.                                                      | [Testing overview](/testing/overview/)           |
+| `MockConvexClientOptions`   | interface | `convex-angular/testing` | Options for the mock; `disabled` mirrors a server-side-rendering client.                                                                                                     | [MockConvexClient](/testing/mock-convex-client/) |
+| `MockQuerySubscription`     | interface | `convex-angular/testing` | A captured live-query subscription, with `emit`, `emitError`, and `unsubscribed`.                                                                                            | [Driving state](/testing/driving-state/)         |
+| `MockPaginatedSubscription` | interface | `convex-angular/testing` | A captured paginated subscription; `emit` takes the client-shaped `{ results, status, loadMore }`.                                                                           | [Driving state](/testing/driving-state/)         |
+| `MockCallableCall`          | interface | `convex-angular/testing` | A captured mutation or action invocation, settled with `resolve` or `reject`.                                                                                                | [Driving state](/testing/driving-state/)         |
+
+## Better Auth
+
+| Symbol                    | Kind      | Entry point                  | Description                                                                                                                                         | Reference                                         |
+| ------------------------- | --------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `provideBetterAuth`       | function  | `convex-angular/better-auth` | Takes a factory returning your Better Auth client and wires session tracking, Convex token exchange, and auth sync. Includes `provideConvexAuth()`. | [Better Auth](/auth/better-auth/)                 |
+| `injectBetterAuth`        | function  | `convex-angular/better-auth` | Returns the Better Auth session state registered by `provideBetterAuth()`.                                                                          | [Better Auth](/auth/better-auth/)                 |
+| `InjectBetterAuthOptions` | interface | `convex-angular/better-auth` | Options for `injectBetterAuth()`; carries only `injectRef`.                                                                                         | [Injection context](/concepts/injection-context/) |
+| `BetterAuthState`         | interface | `convex-angular/better-auth` | What `injectBetterAuth()` returns: `session`, `isLoading`, `isAuthenticated`, `error`, `refreshSession()`, `clearSession()`.                        | [Better Auth](/auth/better-auth/)                 |
+| `BetterAuthClientLike`    | interface | `convex-angular/better-auth` | The minimal structurally-typed client surface the integration needs: `getSession`, `convex.token`, and the optional cross-domain extras.            | [Better Auth](/auth/better-auth/)                 |
+| `BetterAuthSessionData`   | interface | `convex-angular/better-auth` | The session snapshot shape: a `session` with `id`, and a `user` with `id` plus arbitrary extra fields.                                              | [Better Auth](/auth/better-auth/)                 |
+| `BetterAuthFetchResult`   | interface | `convex-angular/better-auth` | Better Auth's `{ data, error }` fetch envelope.                                                                                                     | [Better Auth](/auth/better-auth/)                 |
+
+## Where to go next
+
+New to the library? Start with the [introduction](/start/introduction/) and
+[providers](/concepts/providers/). If a helper is throwing at runtime, the
+[error message catalogue](/reference/errors/) explains every error the library
+raises. The cross-cutting behavior shared by all helpers is documented under
+[reactivity](/concepts/reactivity/), [injection
+context](/concepts/injection-context/), and [error
+handling](/concepts/error-handling/); server-side rendering has its own
+[overview](/ssr/overview/), [authenticated SSR](/ssr/authenticated-ssr/), and
+[hydration semantics](/ssr/hydration-semantics/) pages.

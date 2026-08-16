@@ -1,0 +1,125 @@
+---
+title: Prewarming queries
+description: Warm the local Convex cache on user intent so the next view renders without a loading state.
+sidebar:
+  order: 7
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import prewarmExample from '../../../examples/queries-prewarming.ts?raw';
+
+`injectPrewarmQuery()` opens a short-lived background subscription for a query and its
+arguments. Nothing is rendered from it — the point is that the result lands in the Convex
+client's local cache, so an `injectQuery()` for the same query and args a moment later reads
+a warm value instead of waiting for a round trip.
+
+The natural trigger is intent: a hover, a focus, a pointerdown on a link.
+
+## Signature
+
+```ts
+function injectPrewarmQuery<Query extends PrewarmQueryReference>(
+  query: Query,
+  options?: PrewarmQueryOptions<Query>,
+): PrewarmQueryResult<Query>;
+```
+
+```ts
+interface PrewarmQueryResult<Query extends PrewarmQueryReference> {
+  prewarm: (args: Query['_args']) => Promise<boolean>;
+}
+```
+
+Note the shape: the query is bound once, and `prewarm()` is called with the arguments. One
+helper covers every row in a list.
+
+<Code code={prewarmExample} lang="ts" title="user-list.component.ts" />
+
+## `PrewarmQueryOptions`
+
+| Name                    | Type                                         | Default          | Description                                                                                                              |
+| ----------------------- | -------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `injectRef`             | `EnvironmentInjector`                        | ambient injector | Injector used to create the helper outside the current injection context. Its destruction disposes every active prewarm. |
+| `extendSubscriptionFor` | `number`                                     | `5000`           | Milliseconds to keep the background subscription alive after `prewarm()` is called.                                      |
+| `onError`               | `(err: Error, args: Query['_args']) => void` | —                | Invoked when a background subscription fails. Receives the args that were prewarmed.                                     |
+
+<Aside type="tip">
+  `extendSubscriptionFor` is read **per `prewarm()` call**, from the options object, at the moment the call is made.
+  Each in-flight prewarm gets its own expiry timer, so several concurrent prewarms for different arguments expire
+  independently.
+</Aside>
+
+The window is a trade-off. Too short and the cache is already cold by the time the user
+clicks; too long and you hold subscriptions for rows the user never visits. The 5 second
+default covers a normal hover-then-click. For a list where hovering is incidental, shorten
+it; for a deliberate "open in a moment" flow, lengthen it.
+
+`onError` receiving the args matters for a shared helper: without them you cannot tell which
+row's prewarm failed.
+
+## The `prewarm()` contract
+
+```ts
+prewarm(args: Query['_args']): Promise<boolean>;
+```
+
+| Resolves | When                                                                                                                                      |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `true`   | The background subscription received its first result. A subsequent `injectQuery()` for the same query and args will read the warm cache. |
+| `false`  | The subscription failed.                                                                                                                  |
+| `false`  | The `extendSubscriptionFor` window expired before any result arrived.                                                                     |
+| `false`  | The owning scope (component or `injectRef` injector) was destroyed before a result arrived.                                               |
+| `false`  | Server-side rendering — the client is disabled and prewarming is a no-op.                                                                 |
+
+The promise settles once, at whichever of those happens first. A subscription that expires
+_after_ a result already arrived leaves the promise resolved `true`.
+
+The promise never rejects, so `void prewarm(...)` is a safe fire-and-forget call. On the
+error path the subscription is disposed immediately rather than waiting out the timer.
+
+<Aside type="caution">
+  `prewarm()` resolving `true` means the value was cached, not that it is still cached. Once the window expires the
+  subscription is dropped and the entry may be evicted. Treat prewarming as an optimization, never as a precondition —
+  the routed component must still handle its own pending state.
+</Aside>
+
+## The hover-or-intent pattern
+
+```ts
+readonly prewarmProfile = injectPrewarmQuery(api.users.getProfile);
+
+onIntent(userId: string): void {
+  void this.prewarmProfile.prewarm({ userId });
+}
+
+async open(userId: string): Promise<void> {
+  await this.prewarmProfile.prewarm({ userId });
+  await this.router.navigate(['/users', userId]);
+}
+```
+
+Wire `onIntent` to `mouseenter` and `focus` so keyboard users get the same benefit, and let
+the click handler either navigate immediately (the cache is probably warm already) or await
+the prewarm for a guaranteed-instant render. Because `prewarm()` resolves `false` rather than
+rejecting, the `await` form degrades to a normal loading state instead of blocking
+navigation.
+
+Server-side rendering needs no guard: `prewarm()` short-circuits on a disabled client and
+resolves `false` immediately, so it never registers a timer that would delay SSR stability.
+
+## Prewarming vs. the route resolver
+
+Both warm the cache before a component renders; they differ in who waits.
+
+|                   | `injectPrewarmQuery`                  | [`convexQueryResolver`](/queries/route-resolver/) |
+| ----------------- | ------------------------------------- | ------------------------------------------------- |
+| Trigger           | user intent, anywhere                 | route activation                                  |
+| Blocks navigation | no (unless you `await` it yourself)   | yes, until the first result                       |
+| Bounded           | yes, `extendSubscriptionFor`          | no timeout on resolution                          |
+| Best for          | hover preloading, speculative warming | routes that must never render empty               |
+
+## Related
+
+- [`injectQuery`](/queries/inject-query/)
+- [Route resolver](/queries/route-resolver/)

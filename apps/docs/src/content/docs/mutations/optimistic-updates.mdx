@@ -1,0 +1,92 @@
+---
+title: Optimistic updates
+description: Apply a temporary local update while a mutation is in flight with the optimisticUpdate option.
+sidebar:
+  order: 2
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import optimisticAll from '../../../examples/mutations-optimistic-all-queries.ts?raw';
+import optimistic from '../../../examples/mutations-optimistic.ts?raw';
+
+A mutation normally repaints the UI only once the server has confirmed the write
+and the affected queries have pushed new values. The `optimisticUpdate` option on
+[`injectMutation()`](/mutations/inject-mutation/) closes that gap: it rewrites
+the client's local query results the moment `mutate()` is called, so the UI
+reacts instantly.
+
+```ts
+optimisticUpdate?: OptimisticUpdate<FunctionArgs<Mutation>>;
+
+type OptimisticUpdate<Args extends Record<string, Value>> = (
+  localQueryStore: OptimisticLocalStore,
+  args: Args,
+) => void;
+```
+
+The callback receives the client's local query store and the exact arguments
+passed to `mutate()`. It returns nothing; all it may do is read and write query
+results through the store.
+
+## How Convex applies it
+
+`convex-angular` forwards the callback to `convex.mutation(mutation, args, {
+optimisticUpdate })` — the lifecycle is Convex's:
+
+1. `mutate()` runs the update against the local query store and immediately
+   publishes the modified results to every subscriber.
+2. The mutation is sent to the server. While it is in flight the update stays
+   applied.
+3. When the mutation completes, the local overlay is dropped and the queries fall
+   back to server data. A successful write means the server values already
+   reflect the change; a failed write means the UI simply reverts.
+
+Rollback is automatic and unconditional — you never write undo logic.
+
+<Aside type="caution" title="Updates can run more than once">
+  If the client receives new query data while the mutation is still in flight, Convex replays the update on top of the
+  fresh values. Write it as a pure function of `(store, args)`: no counters, no timestamps, no random ids generated
+  inside the callback, and never mutate the objects you read. Query results must be treated as immutable — always build
+  new arrays and objects.
+</Aside>
+
+## Worked example
+
+`localStore.getQuery(query, args)` returns the locally cached result for one
+query/arguments pair, or `undefined` when this client has no subscription to it.
+`localStore.setQuery(query, args, value)` replaces it — passing `undefined`
+removes the entry and puts that query back into its loading state.
+
+<Code code={optimistic} lang="ts" title="todo-list.component.ts" />
+
+Because the update runs synchronously inside `mutate()`, the checkbox flips
+before the request leaves the browser, and un-flips by itself if the mutation
+rejects.
+
+## Updating every argument variant
+
+`getQuery` only reaches the exact arguments you name. When the same document
+appears in several subscriptions of one query — different filters, different
+page sizes — use `localStore.getAllQueries(query)`, which returns
+`{ args, value }` for every locally cached result of that query, and write each
+one back with its own `args`.
+
+<Code code={optimisticAll} lang="ts" title="complete-todo.component.ts" />
+
+## Paginated queries
+
+Paginated queries are stored as many independent page subscriptions, so
+hand-rolling `getAllQueries` over them means reimplementing cursor and sort-order
+rules. The library ships helpers for this — `insertAtTop`,
+`insertAtBottomIfLoaded`, `insertAtPosition`, and
+`optimisticallyUpdateValueInPaginatedQuery`. See
+[Paginated optimistic updates](/queries/paginated-optimistic-updates/).
+
+## Actions have no optimistic updates
+
+<Aside type="caution">
+  `ActionOptions` has no `optimisticUpdate` field. Actions are not transactions over the database, so Convex has nothing
+  to commit or roll back locally. To give an action optimistic feedback, have it call a mutation, and put the optimistic
+  update on that mutation. See [`injectAction()`](/mutations/inject-action/).
+</Aside>

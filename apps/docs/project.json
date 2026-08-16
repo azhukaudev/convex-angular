@@ -1,0 +1,52 @@
+{
+  "name": "docs",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/docs/src",
+  "tags": [],
+  "implicitDependencies": ["convex-angular"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "dependsOn": ["check"],
+      "outputs": ["{workspaceRoot}/dist/apps/docs"],
+      "options": {
+        "cwd": "apps/docs",
+        "command": "astro build --outDir ../../dist/apps/docs"
+      }
+    },
+    "check": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "options": {
+        "cwd": "apps/docs",
+        "commands": [
+          "astro check",
+          "ngc -p tsconfig.examples.json --noEmit",
+          "node scripts/check-examples-referenced.mjs"
+        ],
+        "parallel": false
+      }
+    },
+    "serve": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "cwd": "apps/docs",
+        "command": "astro dev"
+      }
+    },
+    "preview": {
+      "executor": "nx:run-commands",
+      "continuous": true,
+      "options": {
+        "cwd": "apps/docs",
+        "command": "astro preview --outDir ../../dist/apps/docs"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    }
+  }
+}

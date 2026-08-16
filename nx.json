@@ -61,6 +61,7 @@
     }
   },
   "release": {
+    "projects": ["convex-angular"],
     "version": {
       "preVersionCommand": "pnpm dlx nx run-many -t build"
     }

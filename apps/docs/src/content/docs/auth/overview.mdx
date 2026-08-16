@@ -1,0 +1,201 @@
+---
+title: Authentication overview
+description: How injectAuth() derives Convex authentication state, what each status means, and how provideConvexAuth() is wired.
+sidebar:
+  order: 1
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import authOverview from '../../../examples/auth-overview.ts?raw';
+
+`convex-angular` keeps a single, reactive picture of authentication in the root injector. An
+external identity provider (Clerk, Auth0, Better Auth, or your own service) reports whether a
+user is signed in and hands over a JWT; the Convex client validates that JWT against your
+deployment. Only when **both** sides agree does the library report the user as authenticated.
+
+`injectAuth()` is how you read that picture.
+
+## `injectAuth()`
+
+```ts
+function injectAuth(options?: InjectAuthOptions): ConvexAuthState;
+
+interface InjectAuthOptions {
+  /**
+   * Environment injector used to create the auth helper outside the current
+   * injection context.
+   */
+  injectRef?: EnvironmentInjector;
+}
+```
+
+The state object is created once per root injector and shared: repeated `injectAuth()` calls
+return the same `ConvexAuthState` instance, including from child injectors.
+
+<Code code={authOverview} lang="ts" title="auth-status.component.ts" />
+
+## `ConvexAuthStatus`
+
+```ts
+type ConvexAuthStatus = 'loading' | 'authenticated' | 'refreshing' | 'unauthenticated';
+```
+
+| Status              | Meaning                                                                                                                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'loading'`         | Auth state is not yet known. Either the upstream provider is still initializing, or the provider reports the user as signed in and Convex has not yet confirmed or rejected the token. |
+| `'authenticated'`   | The provider reports the user as signed in **and** the Convex backend confirmed the token. Queries and mutations run with an identity.                                                 |
+| `'refreshing'`      | The server rejected a previously-confirmed token and Convex paused the socket while it fetches a replacement. The user remains authenticated throughout.                               |
+| `'unauthenticated'` | Auth has settled and there is no confirmed identity — the provider reports signed out, no token was available, or Convex rejected the token.                                           |
+
+<Aside type="tip" title="'refreshing' is not routine rotation">
+  Convex refreshes tokens in the background well before they expire, and that ordinary rotation never enters
+  `'refreshing'`. The state is entered only when the server rejects a token it had previously accepted, which forces
+  Convex to pause the WebSocket until a replacement arrives. Treat it as "briefly reconnecting", not as "signing in
+  again".
+</Aside>
+
+## `ConvexAuthState`
+
+```ts
+interface ConvexAuthState {
+  isLoading: Signal<boolean>;
+  isAuthenticated: Signal<boolean>;
+  isRefreshing: Signal<boolean>;
+  error: Signal<Error | undefined>;
+  status: Signal<ConvexAuthStatus>;
+  getAuth: () => { token: string; decoded: Record<string, unknown> } | undefined;
+}
+```
+
+Two inputs feed every member: the upstream provider's own `isLoading` / `isAuthenticated`
+signals, and Convex's backend confirmation, which is internally tri-state — `null` while a
+decision is pending, `true` once confirmed, `false` once rejected or absent.
+
+| Member            | Type                                    | Exact derivation                                                                                                                                                                                                                                              |
+| ----------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `isLoading`       | `Signal<boolean>`                       | `provider.isLoading() \|\| (provider.isAuthenticated() && backendConfirmation === null)`. True while the provider initializes, and also while the provider says "signed in" but Convex has not answered yet.                                                  |
+| `isAuthenticated` | `Signal<boolean>`                       | `provider.isAuthenticated() && backendConfirmation === true`. Requires both sides. Stays `true` while `isRefreshing()` is `true`.                                                                                                                             |
+| `isRefreshing`    | `Signal<boolean>`                       | `isAuthenticated() && backendRefreshing`. Can only ever be `true` while `isAuthenticated()` is `true`.                                                                                                                                                        |
+| `error`           | `Signal<Error \| undefined>`            | The most recent of two independently tracked sources — the optional provider-owned `error` signal, and internal token/sync failures — ordered by a shared monotonic sequence so the newer one wins. Normal signed-out outcomes (a `null` token) never set it. |
+| `status`          | `Signal<ConvexAuthStatus>`              | `isLoading()` → `'loading'`; else `isAuthenticated()` → `isRefreshing() ? 'refreshing' : 'authenticated'`; else `'unauthenticated'`.                                                                                                                          |
+| `getAuth`         | `() => { token, decoded } \| undefined` | Delegates to the Convex client. Returns the JWT currently held by the client together with its decoded claims, or `undefined` when no token is set.                                                                                                           |
+
+### `isAuthenticated` does not flicker during a refresh
+
+Because `isRefreshing()` is gated on `isAuthenticated()`, a refresh never drops the user out of
+the authenticated branch of your template. Content rendered for signed-in users stays mounted;
+you layer a "reconnecting" affordance on top of it rather than swapping the whole view. See
+[the auth directives](/auth/directives/) for the `*cvaAuthRefreshing` pattern.
+
+### `getAuth()` is a snapshot, not a signal
+
+The Convex client emits no token-change events, so `getAuth()` cannot be a signal. Call it on
+demand — typically right before handing the Convex token to an external API. It returns
+`undefined` when no token is set, **and during server-side rendering**, where the WebSocket
+client is disabled. Never read it in a `computed()` and expect it to update.
+
+## State transitions
+
+`provider` is the upstream `ConvexAuthProvider`; "backend" is Convex's confirmation of the
+current token.
+
+| `provider.isLoading()` | `provider.isAuthenticated()` | Backend                  | `isLoading()` | `isAuthenticated()` | `isRefreshing()` | `status()`          |
+| ---------------------- | ---------------------------- | ------------------------ | ------------- | ------------------- | ---------------- | ------------------- |
+| `true`                 | any                          | reset to pending         | `true`        | `false`             | `false`          | `'loading'`         |
+| `false`                | `false`                      | rejected                 | `false`       | `false`             | `false`          | `'unauthenticated'` |
+| `false`                | `true`                       | pending                  | `true`        | `false`             | `false`          | `'loading'`         |
+| `false`                | `true`                       | confirmed                | `false`       | `true`              | `false`          | `'authenticated'`   |
+| `false`                | `true`                       | confirmed, socket paused | `false`       | `true`              | `true`           | `'refreshing'`      |
+| `false`                | `true`                       | rejected                 | `false`       | `false`             | `false`          | `'unauthenticated'` |
+
+Notable edges:
+
+- **Sign-in.** `'loading'` → (provider confirms, Convex pending) `'loading'` → `'authenticated'`.
+  There is no intermediate `'authenticated'` before the backend answers.
+- **Token rejected mid-session.** `'authenticated'` → `'refreshing'` → `'authenticated'` when the
+  replacement token is accepted, or → `'unauthenticated'` when it is not.
+- **Sign-out.** Any state → `'unauthenticated'`. The library also clears auth on the Convex
+  client and resets the refreshing flag.
+- **Context switch.** When the provider exposes `reauthVersion` and it changes, auth setup re-runs:
+  the backend confirmation resets to pending, so `status()` returns to `'loading'` and then settles
+  again. Callbacks from the superseded attempt are ignored.
+
+## Errors
+
+`error()` is deliberately quiet. A `fetchAccessToken` that resolves to `null` or `undefined` is
+the ordinary signed-out outcome and sets nothing. What does set it:
+
+| Source                                             | Message                                                    |
+| -------------------------------------------------- | ---------------------------------------------------------- |
+| Your `fetchAccessToken` threw                      | `[convex-angular auth] Token fetch failed: <message>`      |
+| Wiring or clearing auth on the Convex client threw | `[convex-angular auth] Convex auth sync failed: <message>` |
+| The provider's optional `error` signal is set      | Mirrored verbatim                                          |
+
+Internal errors are cleared when Convex confirms a token, when a new auth attempt starts, and
+when the provider signs out.
+
+<Aside type="caution">
+  The bundled Clerk and Auth0 adapters swallow a rejected `getToken`/`getAccessTokenSilently` and treat it as signed
+  out, so `error()` stays `undefined` for those. Only a [custom provider](/auth/custom-provider/) surfaces its own
+  token-fetch throw.
+</Aside>
+
+## `provideConvexAuth()`
+
+```ts
+function provideConvexAuth(): EnvironmentProviders;
+function provideConvexAuthFromExisting(authProviderType: Type<ConvexAuthProvider>): EnvironmentProviders;
+```
+
+`provideConvexAuth()` reads a `ConvexAuthProvider` from the `CONVEX_AUTH` token and the client
+from `CONVEX`, then keeps the two in sync. It is **root-only and once-only**, and it validates
+that eagerly at bootstrap through an environment initializer — a misplaced registration fails
+immediately rather than on first use.
+
+<Aside type="danger" title="Do not register provideConvexAuth() twice">
+  `provideClerkAuth()`, `provideAuth0Auth()`, and `provideBetterAuth()` **each already include `provideConvexAuth()`
+  internally.** Adding `provideConvexAuth()` alongside any of them puts two registrations in the same injector and
+  throws at bootstrap. The same applies to `provideConvexAuthFromExisting()`, which also includes it.
+</Aside>
+
+### Exact error messages
+
+**Two registrations in the same injector:**
+
+```text
+`provideConvexAuth()` was registered more than once in the same injector. Register it exactly once in your root application providers (for example, in `app.config.ts`).
+```
+
+**Registered in a child or route-level injector below an existing registration:**
+
+```text
+`provideConvexAuth()` must be configured only in your root application providers (for example, in `app.config.ts`). Remove nested or route-level registrations.
+```
+
+**No `CONVEX_AUTH` provider was registered:**
+
+```text
+Could not find `CONVEX_AUTH`. Make sure to provide an auth provider using `CONVEX_AUTH`, `provideClerkAuth()`, or `provideAuth0Auth()` before calling `provideConvexAuth()`.
+```
+
+**No Convex client — `provideConvex(...)` is missing:**
+
+```text
+Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers before calling `provideConvexAuth()`.
+```
+
+**`injectAuth()` called with no auth configured at all:**
+
+```text
+Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, or `provideAuth0Auth()` in your application providers.
+```
+
+## Next steps
+
+- [Clerk](/auth/clerk/)
+- [Auth0](/auth/auth0/)
+- [Better Auth](/auth/better-auth/)
+- [Custom providers](/auth/custom-provider/)
+- [Auth directives](/auth/directives/)
+- [Route guards](/auth/route-guards/)

@@ -1,0 +1,234 @@
+---
+title: Testing overview
+description: Test Angular code that uses convex-angular without a live Convex deployment, using MockConvexClient and provideConvexTesting().
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Every helper in this library reads its data through the `CONVEX` injection token. The
+`convex-angular/testing` entry point exists so a test can put something else behind that token: an
+in-memory `MockConvexClient` that captures every subscription and invocation the helpers make, and
+hands the test the controls to drive them.
+
+That means no deployment, no WebSocket, and no network. A query does not resolve until your test
+emits a value; a mutation's promise does not settle until your test settles it. Timing is entirely
+yours, so loading states, error states, and out-of-order responses are all reachable deterministically.
+
+```typescript
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+```
+
+The entry point exports exactly two runtime values — `MockConvexClient` and `provideConvexTesting` —
+plus the four types describing what it captures. See
+[Mock reference](/testing/mock-convex-client/) for the full API and
+[Driving state](/testing/driving-state/) for the how-to matrix.
+
+## Setting up a TestBed
+
+`provideConvexTesting(client)` returns providers registering your mock under the `CONVEX` token.
+Drop it into `TestBed.configureTestingModule`. You do **not** call `provideConvex()` in tests — the
+testing provider replaces it.
+
+```typescript
+import { TestBed } from '@angular/core/testing';
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+
+let convex: MockConvexClient;
+
+beforeEach(() => {
+  convex = new MockConvexClient();
+  TestBed.configureTestingModule({
+    providers: [provideConvexTesting(convex)],
+  });
+});
+
+afterEach(() => {
+  TestBed.resetTestingModule();
+});
+```
+
+Keep the mock in a variable. The argument is optional — `provideConvexTesting()` creates a fresh
+mock — but then the test has no handle to drive it with.
+
+<Aside type="caution">
+  `MockConvexClient` has no reset method, and its capture arrays (`querySubscriptions`, `paginatedSubscriptions`,
+  `mutationCalls`, `actionCalls`) are never cleared. Construct a new `MockConvexClient` in `beforeEach` so index-based
+  assertions such as `convex.mutationCalls[0]` refer to the current test's call and not a leftover from the previous
+  one.
+</Aside>
+
+## A complete component test
+
+Take an ordinary standalone component that reads a live query and runs a mutation:
+
+```typescript title="todo-list.ts"
+import { Component } from '@angular/core';
+import { injectMutation, injectQuery } from 'convex-angular';
+
+import { api } from '../convex/_generated/api';
+
+@Component({
+  selector: 'app-todo-list',
+  template: `
+    @switch (todos.status()) {
+      @case ('pending') {
+        <p>Loading…</p>
+      }
+      @case ('error') {
+        <p role="alert">{{ todos.error()?.message }}</p>
+      }
+      @case ('success') {
+        <ul>
+          @for (todo of todos.data(); track todo._id) {
+            <li>{{ todo.title }}</li>
+          }
+        </ul>
+      }
+    }
+
+    <button type="button" [disabled]="addTodo.isLoading()" (click)="add()">Add</button>
+  `,
+})
+export class TodoList {
+  readonly todos = injectQuery(api.todos.list, () => ({}));
+  readonly addTodo = injectMutation(api.todos.create);
+
+  add(): void {
+    void this.addTodo.mutate({ title: 'New todo' });
+  }
+}
+```
+
+The test drives both sides of it:
+
+```typescript title="todo-list.spec.ts"
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+
+import { TodoList } from './todo-list';
+
+describe('TodoList', () => {
+  let convex: MockConvexClient;
+
+  beforeEach(() => {
+    convex = new MockConvexClient();
+    TestBed.configureTestingModule({
+      imports: [TodoList],
+      providers: [provideConvexTesting(convex)],
+    });
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+  });
+
+  it('renders the todos pushed by the subscription', fakeAsync(() => {
+    const fixture = TestBed.createComponent(TodoList);
+    fixture.detectChanges();
+    tick();
+
+    // The subscription exists, with the args the component built.
+    expect(convex.querySubscriptions).toHaveLength(1);
+    expect(convex.lastQuerySubscription()!.args).toEqual({});
+    expect(fixture.componentInstance.todos.status()).toBe('pending');
+
+    convex.lastQuerySubscription()!.emit([{ _id: '1', title: 'Write docs' }]);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.todos.status()).toBe('success');
+    expect(fixture.nativeElement.textContent).toContain('Write docs');
+  }));
+
+  it('keeps the button disabled until the mutation settles', fakeAsync(() => {
+    const fixture = TestBed.createComponent(TodoList);
+    fixture.detectChanges();
+    tick();
+
+    fixture.componentInstance.add();
+    tick();
+    fixture.detectChanges();
+
+    expect(convex.mutationCalls).toHaveLength(1);
+    expect(convex.mutationCalls[0].args).toEqual({ title: 'New todo' });
+    expect(fixture.componentInstance.addTodo.status()).toBe('pending');
+
+    convex.mutationCalls[0].resolve('todo-id');
+    tick();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.addTodo.status()).toBe('success');
+    expect(fixture.componentInstance.addTodo.data()).toBe('todo-id');
+  }));
+
+  it('unsubscribes when the fixture is destroyed', fakeAsync(() => {
+    const fixture = TestBed.createComponent(TodoList);
+    fixture.detectChanges();
+    tick();
+
+    fixture.destroy();
+
+    expect(convex.lastQuerySubscription()!.unsubscribed).toBe(true);
+  }));
+});
+```
+
+The library's own tests use Jest with `jest-preset-angular` and a zone-based `TestBed`. Nothing in
+the mock depends on that choice — it is a plain object graph — but the change-detection rhythm below
+assumes a zone-based fixture.
+
+## The rhythm: subscribe, emit, detect
+
+Query helpers do not subscribe when they are injected. `injectQuery()`, `injectQueries()`, and
+`injectPaginatedQuery()` each open their subscription inside an `effect()`, and effects do not run
+until change detection runs. This has one concrete consequence for tests:
+
+```typescript
+const fixture = TestBed.createComponent(TodoList);
+
+// Nothing has subscribed yet — the effect has not run.
+expect(convex.querySubscriptions).toHaveLength(0);
+
+fixture.detectChanges();
+
+// Now the subscription exists and can be driven.
+expect(convex.querySubscriptions).toHaveLength(1);
+```
+
+The same applies after any change to a signal the argument function reads. Setting the signal marks
+the effect dirty; it does not run it. Run change detection again, and the effect re-subscribes:
+
+```typescript
+fixture.componentInstance.category.set('work');
+fixture.detectChanges();
+tick();
+
+// A second subscription was captured; the first was unsubscribed.
+expect(convex.querySubscriptions).toHaveLength(2);
+expect(convex.querySubscriptions[0].unsubscribed).toBe(true);
+expect(convex.lastQuerySubscription()!.args).toEqual({ category: 'work' });
+```
+
+Inside `fakeAsync`, follow `detectChanges()` with `tick()` to flush the microtasks the helpers
+schedule. Emissions themselves are synchronous: `emit()` calls the helper's callback directly, so the
+signals update on the spot and can be asserted without another `tick()`. Change detection is still
+needed before asserting rendered DOM.
+
+<Aside type="tip">
+  A short checklist for any Convex-backed component test:
+
+1. Fresh `MockConvexClient` in `beforeEach`.
+2. `createComponent` then `detectChanges()` (and `tick()` under `fakeAsync`) — this is what
+   subscribes.
+3. Assert the captured subscription's `args`, so a wrong argument fails loudly instead of silently
+   querying nothing.
+4. `emit()` / `resolve()` to drive, then `detectChanges()` before asserting the DOM.
+5. `detectChanges()` again after every signal change that feeds an argument function.
+
+</Aside>
+
+## Next
+
+[Driving state](/testing/driving-state/) is the practical matrix: results, errors, pages, mutation
+settlement, warm-cache prefill, connection state, and the disabled (SSR) mock.

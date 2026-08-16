@@ -1,0 +1,259 @@
+---
+title: Error messages
+description: Every error convex-angular throws, quoted verbatim, with what triggers it and how to fix it.
+sidebar:
+  order: 20
+---
+
+This page catalogues the errors the library itself raises. Each entry quotes the
+message exactly as it appears at runtime, so you can search this page for the
+text in your console.
+
+Errors that originate in your Convex backend functions are a different category:
+they surface through the reactive `error()` Signals rather than being thrown by
+the library, and are covered in [error handling](/concepts/error-handling/).
+
+## Setup and placement errors
+
+### `<helper>() must be called from an injection context …`
+
+```text
+injectQuery() must be called from an injection context (for example, a component or service field initializer or constructor), or be given an explicit injector via the `injectRef` option to create it later from plain code.
+```
+
+The message is templated with the name of the helper you called, so the leading
+identifier varies: `injectConvex()`, `injectQuery()`, `injectQueries()`,
+`injectPaginatedQuery()`, `injectPrewarmQuery()`, `injectMutation()`,
+`injectAction()`, `injectConvexConnectionState()`, and `injectAuth()` each
+produce their own version of it. The rest of the sentence is identical.
+
+**When it happens.** Every `inject*` helper needs an Angular injector to resolve
+the Convex client, register a `DestroyRef` cleanup, and create effects. Angular
+only makes an ambient injection context available during field initialization
+and inside constructors. Calling a helper from a method, an event handler, a
+route callback, an RxJS operator, a `setTimeout`, or module top-level code
+leaves no ambient context, and the helper reports it instead of failing with
+Angular's generic `assertInInjectionContext` message.
+
+**How to fix.** Either move the call into a field initializer or constructor, or
+keep it where it is and pass an explicit `EnvironmentInjector` through the
+`injectRef` option — that injector then owns the helper's lifecycle. See
+[injection context](/concepts/injection-context/) for both patterns.
+
+### Could not find `CONVEX`
+
+```text
+Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers (for example, in `app.config.ts`).
+```
+
+**When it happens.** `injectConvex()` — which every query, mutation, action,
+pagination and prewarm helper calls internally — looked up the `CONVEX` token
+optionally and found nothing. The library injects optionally on purpose so it
+can raise this focused setup error rather than Angular's generic
+`NullInjectorError`. The usual causes are a missing `provideConvex(...)` call, a
+helper resolved from an injector that is not a descendant of the one holding the
+providers, or a test bed configured without a Convex provider.
+
+**How to fix.** Add `provideConvex(convexUrl)` to your application's root
+providers, as described in [providers](/concepts/providers/). In unit tests,
+register `provideConvexTesting()` from `convex-angular/testing` instead — see
+[testing overview](/testing/overview/).
+
+### `provideConvex(...)` registered more than once in the same injector
+
+```text
+`provideConvex(...)` was registered more than once in the same injector. Register it exactly once in your root application providers (for example, in `app.config.ts`).
+```
+
+**When it happens.** `provideConvex(...)` registers an internal multi-token
+marker, and a guard counts the markers visible in the current injector. Two or
+more entries mean the same providers array contains `provideConvex(...)` twice —
+typically because a shared "core providers" helper already includes it and the
+application config adds it again. The guard runs from an environment
+initializer, so it fires while the injector is being created, before any client
+is constructed.
+
+**How to fix.** Remove the duplicate so exactly one `provideConvex(...)` call
+survives in the root providers array.
+
+### `provideConvex(...)` configured outside the root injector
+
+```text
+`provideConvex(...)` must be configured only in your root application providers (for example, in `app.config.ts`). Remove nested or route-level registrations.
+```
+
+**When it happens.** The same guard also looks up the registration marker with
+`skipSelf`. Finding one in a parent injector means Convex was already configured
+higher up and this is a nested registration — for example `provideConvex(...)`
+placed in a lazy route's `providers`, a child environment injector, or a
+component-level `providers` array. A second client in a child scope would open
+its own WebSocket and keep a separate query cache, so the library refuses it.
+
+**How to fix.** Keep a single root-level registration and delete the nested one.
+Components and lazy routes inherit the root client automatically.
+
+### Could not find `CONVEX_AUTH`
+
+```text
+Could not find `CONVEX_AUTH`. Make sure to provide an auth provider using `CONVEX_AUTH`, `provideClerkAuth()`, or `provideAuth0Auth()` before calling `provideConvexAuth()`.
+```
+
+**When it happens.** `provideConvexAuth()` was registered, but no
+`ConvexAuthProvider` implementation is bound to the `CONVEX_AUTH` token in the
+same injector tree. This surfaces during injector initialization, because
+`provideConvexAuth()` eagerly creates the auth state.
+
+**How to fix.** Register your provider implementation before, or alongside,
+`provideConvexAuth()` — as `{ provide: CONVEX_AUTH, useExisting: MyAuthService }`,
+or via `provideConvexAuthFromExisting(MyAuthService)`. See [custom auth
+provider](/auth/custom-provider/).
+
+Note that `provideClerkAuth()`, `provideAuth0Auth()`, and `provideBetterAuth()`
+already register a `CONVEX_AUTH` provider _and_ call `provideConvexAuth()`
+internally. If you are using one of them, do not call `provideConvexAuth()`
+yourself — see [Clerk](/auth/clerk/), [Auth0](/auth/auth0/), and [Better
+Auth](/auth/better-auth/).
+
+### Could not find `CONVEX` (from `provideConvexAuth()`)
+
+```text
+Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers before calling `provideConvexAuth()`.
+```
+
+**When it happens.** Auth sync needs the Convex client to install its token
+fetcher on. This variant of the missing-client error is raised while building the
+auth state, which means `provideConvexAuth()` (or an integration helper that
+includes it) is registered but `provideConvex(...)` is not.
+
+**How to fix.** Add `provideConvex(convexUrl)` to the root providers, ahead of
+the auth providers in the same array.
+
+### `provideConvexAuth()` registered more than once in the same injector
+
+```text
+`provideConvexAuth()` was registered more than once in the same injector. Register it exactly once in your root application providers (for example, in `app.config.ts`).
+```
+
+**When it happens.** The auth providers use the same duplicate-registration guard
+as `provideConvex(...)`. The most common cause is calling `provideConvexAuth()`
+manually _in addition to_ `provideClerkAuth()`, `provideAuth0Auth()`, or
+`provideBetterAuth()` — each of those already includes it.
+
+**How to fix.** Keep exactly one registration. When using an integration helper,
+remove the standalone `provideConvexAuth()` call.
+
+### `provideConvexAuth()` configured outside the root injector
+
+```text
+`provideConvexAuth()` must be configured only in your root application providers (for example, in `app.config.ts`). Remove nested or route-level registrations.
+```
+
+**When it happens.** The auth registration marker was found in a parent injector,
+meaning auth is already configured higher up and this is a nested or route-level
+registration. A second auth state in a child scope would race the root one for
+control of the client's token.
+
+**How to fix.** Move the auth providers to the root providers array and remove
+the nested registration.
+
+### Could not find Convex auth state
+
+```text
+Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, or `provideAuth0Auth()` in your application providers.
+```
+
+**When it happens.** `injectAuth()` ran but no auth state was registered.
+Everything that depends on auth hits this: the `*cvaAuthenticated`,
+`*cvaUnauthenticated`, `*cvaAuthLoading`, and `*cvaAuthRefreshing` directives all
+call `injectAuth()` in their constructor, and `convexAuthGuard`,
+`convexUnauthGuard`, and guards built with `createConvexAuthGuard()` call it on
+every evaluation. So an unconfigured app typically sees this the first time a
+guarded route is navigated to or a template using an auth directive renders,
+rather than at startup.
+
+**How to fix.** Register one of the auth provider functions in your root
+providers. See [auth overview](/auth/overview/), [auth
+directives](/auth/directives/), and [route guards](/auth/route-guards/).
+
+### Could not find BetterAuthService
+
+```text
+Could not find BetterAuthService. Call provideBetterAuth(...) in your providers, or pass { injectRef } when calling injectBetterAuth() outside an injection context.
+```
+
+**When it happens.** `injectBetterAuth()` resolves `BetterAuthService`
+optionally and found nothing. Either `provideBetterAuth(...)` was never
+registered, or it was registered in an injector that is not an ancestor of the
+one the call resolved from. Unlike the other helpers, `injectBetterAuth()` does
+not go through the shared injection-context guard, so this single message covers
+both the missing-provider case and calls made from plain code with no ambient
+injector.
+
+**How to fix.** Register `provideBetterAuth(() => authClient)` in your root
+providers. When calling from outside an injection context, pass an explicit
+injector: `injectBetterAuth({ injectRef })`. See [Better
+Auth](/auth/better-auth/) and [injection
+context](/concepts/injection-context/).
+
+## Runtime errors
+
+### Paginated queries require experimental client support
+
+```text
+[convex-angular] `injectPaginatedQuery()` requires a Convex client with experimental paginated query support.
+```
+
+**When it happens.** `injectPaginatedQuery()` is built on the Convex client's
+`onPaginatedUpdate_experimental` method. Before subscribing, the helper checks
+that the method exists on the injected client and throws when it does not. In
+practice this means the `convex` package is older than the release that
+introduced the experimental paginated subscription API, or the `CONVEX` token has
+been overridden with a stand-in that does not implement the method.
+
+**How to fix.** Upgrade the `convex` dependency to a version that exposes
+`onPaginatedUpdate_experimental`. If you replaced the client for testing, use
+`MockConvexClient` from `convex-angular/testing`, which implements the method —
+see [MockConvexClient](/testing/mock-convex-client/). Non-paginated helpers
+(`injectQuery()`, `injectQueries()`) are unaffected. See
+[pagination](/queries/pagination/) for the helper's full contract.
+
+### ConvexClient is disabled
+
+```text
+ConvexClient is disabled
+```
+
+**When it happens.** `MockConvexClient` was constructed with
+`{ disabled: true }`, and the code under test reached its `client` getter or its
+`connectionState()` method. This deliberately mirrors the real `ConvexClient`,
+whose low-level accessors throw when the client is disabled — which is exactly
+the state `provideConvex(...)` puts it in during server-side rendering, where no
+WebSocket is opened.
+
+**How to fix.** If you are testing the server-side-rendering path, the throw is
+the behavior under test: assert that your code handles it, the way the library's
+own helpers do (`injectConvexConnectionState()` returns a static disconnected
+state, and `injectAuth()` skips token wiring, when the client is disabled). If
+you are not testing that path, construct the mock without options —
+`new MockConvexClient()` — so it behaves like a connected client. See
+[MockConvexClient](/testing/mock-convex-client/) and [hydration
+semantics](/ssr/hydration-semantics/).
+
+## Errors reported through Signals
+
+The following are not thrown. The library constructs them, prefixes them, and
+publishes them on an `error()` Signal, so they appear in your UI or logs rather
+than in a stack trace. Each keeps the original error's message after the prefix.
+
+| Prefix                                                         | Surfaced on                  | Cause                                                                                       |
+| -------------------------------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------- |
+| `[convex-angular auth] Token fetch failed: …`                  | `injectAuth().error()`       | Your provider's `fetchAccessToken` rejected. The auth state also drops to unauthenticated.  |
+| `[convex-angular auth] Convex auth sync failed: …`             | `injectAuth().error()`       | Installing or clearing the token on the Convex client threw.                                |
+| `[convex-angular better-auth] Session refresh failed: …`       | `injectBetterAuth().error()` | The Better Auth client's `getSession()` returned an error envelope or rejected.             |
+| `[convex-angular better-auth] Convex token exchange failed: …` | `injectBetterAuth().error()` | The `convexClient()` plugin's `convex.token()` call returned an error envelope or rejected. |
+
+Routine signed-out outcomes are not errors: a `fetchAccessToken` that resolves
+`null`, and the Clerk and Auth0 adapters' internal token-fetch failures, are all
+treated as "not signed in" and leave `error()` undefined. See [auth
+overview](/auth/overview/) and [status and
+state](/concepts/status-and-state/).

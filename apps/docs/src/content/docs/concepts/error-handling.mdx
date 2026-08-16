@@ -1,0 +1,129 @@
+---
+title: Error handling
+description: Where failures surface, how mutate() and run() reject, how non-Error throws are normalized, and how to read a ConvexError payload.
+sidebar:
+  order: 5
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import errorHandling from '../../../examples/concepts-error-handling.ts?raw';
+
+Every helper exposes failures as an `error: Signal<Error | undefined>` and moves `status()` to
+`'error'`. Imperative helpers do that **and** reject their promise, so you can handle a failure
+declaratively in the template, imperatively at the call site, or both.
+
+## Queries
+
+A query has no call site, so its only failure channel is reactive:
+
+```typescript
+readonly todos = injectQuery(api.todos.list, () => ({ count: 20 }), {
+  onError: (err) => console.error(err),
+});
+```
+
+| Surface    | Behavior on failure                                                 |
+| ---------- | ------------------------------------------------------------------- |
+| `error()`  | Holds the `Error`. Cleared when a later result succeeds.            |
+| `status()` | `'error'`.                                                          |
+| `data()`   | The last real value is **preserved**, so the UI does not blank out. |
+| `onError`  | Called with the `Error`.                                            |
+
+<Aside type="caution">
+  One exception to preserving `data()`: if the query was showing `placeholderData`, that placeholder is cleared on error
+  and `isPlaceholderData()` goes false. Invented data next to an error message would be misleading, so it is removed.
+  Real values — live, warm-cache, or server-transferred — are kept.
+</Aside>
+
+## Mutations and actions
+
+`mutate()` and `run()` update the reactive state **and then reject**. The rejection carries the same
+`Error` instance that lands on `error()`.
+
+```typescript
+readonly completeTodo = injectMutation(api.todos.complete);
+
+async complete(id: TodoId) {
+  await this.completeTodo.mutate({ id }); // rejects on failure
+}
+```
+
+Because the promise rejects, an unhandled call produces an unhandled rejection. Choose a channel
+deliberately:
+
+- **Reactive only** — render `error()` in the template and swallow the rejection at the call site
+  with `try`/`catch`, or `void promise.catch(() => {})`.
+- **Imperative only** — `catch` and handle it, ignoring the signal.
+- **Both** — the common case: `catch` for control flow (stay on the form, focus a field) and
+  `error()` for display.
+
+| Surface     | Behavior on failure                                   |
+| ----------- | ----------------------------------------------------- |
+| `error()`   | Holds the `Error`.                                    |
+| `status()`  | `'error'`.                                            |
+| `data()`    | Cleared at the start of the call and not repopulated. |
+| `onError`   | Called with the `Error`, before the promise rejects.  |
+| the promise | Rejects with the same `Error` instance.               |
+
+`reset()` clears `data`, `error`, and returns the status to `'idle'` — useful after navigating away
+from a failed form.
+
+<Aside type="tip">
+  Only the **latest** invocation writes state. If a call is superseded by a newer one, or by `reset()`, or the owning
+  scope is destroyed, its rejection still propagates to its own `await` but no longer touches `error()` and no longer
+  fires `onError`. See [Reactivity](/concepts/reactivity/#stale-asynchronous-work-is-discarded).
+</Aside>
+
+## Non-`Error` throws are normalized
+
+Convex functions can throw anything. Imperative helpers normalize whatever comes back before it
+touches your code:
+
+```typescript
+const errorObj = err instanceof Error ? err : new Error(String(err));
+```
+
+So `error()` is always an `Error` (never a string, `null`, or a bare object), `onError` always
+receives an `Error`, and the promise always rejects with an `Error`. A thrown `'boom'` becomes
+`new Error('boom')`; the original value survives only as the message text.
+
+## Narrowing with `ConvexError`
+
+Convex distinguishes an _application_ error — thrown deliberately by your function with
+`new ConvexError(payload)` — from a transport or unexpected error. `ConvexError` extends `Error` and
+carries the payload on `.data`.
+
+`convex-angular` re-exports `ConvexError` so you can narrow helper errors without reaching into
+`convex/values`:
+
+```typescript
+import { ConvexError } from 'convex-angular';
+```
+
+```typescript title="convex/todos.ts"
+import { ConvexError } from 'convex/values';
+
+export const complete = mutation({
+  args: { id: v.id('todos') },
+  handler: async (ctx, args) => {
+    const todo = await ctx.db.get(args.id);
+    if (!todo) {
+      throw new ConvexError({ code: 'NOT_FOUND', id: args.id });
+    }
+    await ctx.db.patch(args.id, { completed: true });
+    return null;
+  },
+});
+```
+
+<Code code={errorHandling} lang="ts" title="todo-errors.component.ts" />
+
+`instanceof ConvexError` is the only reliable narrowing — do not parse `error.message`. An error that
+is _not_ a `ConvexError` is a transport failure, an argument-validation failure, or an uncaught
+exception in your function, and should generally be reported rather than shown verbatim to the user.
+
+## Related
+
+- [Status and state](/concepts/status-and-state/) — how `'error'` is derived and what it hides.
+- [Reactivity](/concepts/reactivity/) — generation and version guarding of stale failures.

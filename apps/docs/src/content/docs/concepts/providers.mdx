@@ -1,0 +1,170 @@
+---
+title: Providers
+description: What provideConvex() registers, every option it accepts, and the placement rules it enforces at startup.
+sidebar:
+  order: 1
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`provideConvex()` is the single entry point that makes every other helper in the library work. It
+returns `EnvironmentProviders`, so it belongs in an `ApplicationConfig['providers']` array or a
+route's `providers` array — not in a component's `providers`.
+
+## Signature
+
+```typescript
+function provideConvex(convexUrl: string, options?: ProvideConvexOptions): EnvironmentProviders;
+```
+
+```typescript title="app.config.ts"
+import { ApplicationConfig } from '@angular/core';
+import { provideConvex } from 'convex-angular';
+
+export const appConfig: ApplicationConfig = {
+  providers: [provideConvex('https://<your-deployment>.convex.cloud')],
+};
+```
+
+## Options
+
+`ProvideConvexOptions` extends Convex's own `ConvexClientOptions` and adds one Angular-specific key.
+
+### Angular-specific
+
+| Name  | Type               | Default | Description                                                                                                |
+| ----- | ------------------ | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `ssr` | `ConvexSsrOptions` | `{}`    | Server-side rendering behavior. Stripped from the object before it reaches the `ConvexClient` constructor. |
+
+`ConvexSsrOptions` has three fields:
+
+| Name                           | Type                                                                        | Default | Description                                                                                                                                                                                     |
+| ------------------------------ | --------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fetchOnServer`                | `boolean`                                                                   | `true`  | Fetch query results over HTTP during the server render and transfer them to the browser through `TransferState`.                                                                                |
+| `authToken`                    | `() => string \| null \| undefined \| Promise<string \| null \| undefined>` | —       | Factory producing a JWT for authenticated server-side fetches, resolved once per server render. Returning `null`/`undefined` fetches unauthenticated.                                           |
+| `transferAuthenticatedResults` | `boolean`                                                                   | `true`  | Embed authenticated results in the rendered HTML. Such responses **must** be served `Cache-Control: private` (or `no-store`). Set `false` to opt out and let the hydrated client re-fetch live. |
+
+### Inherited from `ConvexClientOptions`
+
+These are passed straight through to the `ConvexClient` constructor. The most useful ones:
+
+| Name                            | Type                        | Default            | Description                                                                                        |
+| ------------------------------- | --------------------------- | ------------------ | -------------------------------------------------------------------------------------------------- |
+| `disabled`                      | `boolean`                   | `false`            | Makes `onUpdate` registration a no-op and throws on actions, mutations, and one-shot queries.      |
+| `unsavedChangesWarning`         | `boolean`                   | `true` in browsers | Prompt on navigating away with queued or in-flight mutations.                                      |
+| `verbose`                       | `boolean`                   | `false`            | Extra logging for debugging.                                                                       |
+| `logger`                        | `Logger \| boolean`         | `true`             | Custom logger, or `false` to silence logging entirely.                                             |
+| `webSocketConstructor`          | `typeof WebSocket`          | global `WebSocket` | Alternate WebSocket implementation.                                                                |
+| `skipConvexDeploymentUrlCheck`  | `boolean`                   | `false`            | Skip validation that the URL looks like a Convex deployment. Needed for some self-hosted backends. |
+| `authRefreshTokenLeewaySeconds` | `number`                    | `10`               | How many seconds before expiry to refresh the auth token.                                          |
+| `reportDebugInfoToConvex`       | `boolean`                   | `false`            | Send additional metrics to Convex.                                                                 |
+| `onServerDisconnectError`       | `(message: string) => void` | —                  | Experimental. Called on abnormal WebSocket close messages.                                         |
+| `expectAuth`                    | `boolean`                   | `false`            | Experimental. Hold requests back until the first auth token can be sent.                           |
+| `initialAuthTokenReuse`         | `boolean`                   | `false`            | Experimental. Reuse the initial cached auth token instead of immediately fetching a fresh one.     |
+
+<Aside type="caution">
+  Do not set `disabled` yourself for server-side rendering. On the server platform `provideConvex()` already constructs
+  the client with `disabled: true`, because no WebSocket should be opened during a render — server-side data is fetched
+  over HTTP by the query loader instead.
+</Aside>
+
+## What it registers
+
+A single call provides all of the following into the injector:
+
+| Provided                        | Purpose                                                                            |
+| ------------------------------- | ---------------------------------------------------------------------------------- |
+| `CONVEX`                        | The `ConvexClient` instance. `injectConvex()` reads this token.                    |
+| An internal registration marker | A `multi` token used to count registrations per injector scope.                    |
+| An internal guard token         | Runs the placement validation described below before the client is constructed.    |
+| `CONVEX_SSR_CONFIG`             | The resolved `{ url, ssr }` configuration.                                         |
+| `CONVEX_HTTP_CLIENT`            | A `ConvexHttpClient` pointed at the same deployment, used for server-side fetches. |
+| `ConvexServerQueryLoader`       | Performs and tracks server-side query fetches so SSR serialization waits for them. |
+| `ConvexHydrationState`          | Browser-side reader for results transferred from the server render.                |
+| An environment initializer      | Forces the guard to run eagerly during injector initialization.                    |
+
+The SSR services are inert until injected. The client is closed automatically when the owning
+injector is destroyed — `provideConvex()` registers `client.close()` on that injector's `DestroyRef`.
+
+## Placement rules
+
+Two rules are enforced, and both throw.
+
+### Once per injector
+
+Registering `provideConvex()` twice in the same providers array throws:
+
+```text
+`provideConvex(...)` was registered more than once in the same injector. Register it exactly once in your root application providers (for example, in `app.config.ts`).
+```
+
+### Not below an injector that already registered it
+
+Registering it in a child injector when a parent injector already registered it throws:
+
+```text
+`provideConvex(...)` must be configured only in your root application providers (for example, in `app.config.ts`). Remove nested or route-level registrations.
+```
+
+### When validation runs
+
+Validation is eager, not lazy. `provideConvex()` includes a `provideEnvironmentInitializer()` that
+injects the guard, so the check runs while the injector initializes — at application bootstrap for
+root registration, and at `createEnvironmentInjector()` time for a child injector such as a lazily
+created route injector. You get the error at startup or at navigation, not on the first
+`injectQuery()` call. The `CONVEX` provider also depends on the guard, so an invalid setup can never
+produce a client even if the initializer is bypassed.
+
+## Root registration, or route-scoped — pick one
+
+<Aside type="tip">
+  **Recommended default: register once at the application root**, in `app.config.ts`. One client, one WebSocket, one
+  warm query cache shared by the whole application.
+</Aside>
+
+The nesting guard checks whether a **parent** injector already registered `provideConvex()`. It does
+not require the root injector specifically. That means a route-scoped registration is legal and
+works — provided the root does **not** register it:
+
+```typescript title="examples.routes.ts"
+import { Route } from '@angular/router';
+import { provideConvex } from 'convex-angular';
+
+import { environment } from '../../environments/environment';
+
+export const EXAMPLE_ROUTES: Route[] = [
+  {
+    path: '',
+    // Legal only because the root application providers do not call provideConvex().
+    providers: [provideConvex(environment.convexUrl)],
+    children: [
+      { path: 'basic', loadComponent: () => import('../pages/todo-list/todo-list') },
+      { path: 'paginated', loadComponent: () => import('../pages/paginated-todo-list/paginated-todo-list') },
+    ],
+  },
+];
+```
+
+This is a deliberate alternative for an application where Convex is confined to one lazily loaded
+section: the client is not constructed — and no WebSocket is opened — until a user navigates into
+that route, and it is closed when the route injector is destroyed.
+
+<Aside type="danger">
+  The two placements are mutually exclusive. If the root registers `provideConvex()` and a route registers it too,
+  creating the route injector throws the "must be configured only in your root application providers" error. Choose one
+  placement for the whole application.
+</Aside>
+
+Route-scoped registration also has consequences worth accepting on purpose:
+
+- Helpers used **outside** that route subtree have no `CONVEX` token and throw the
+  `Could not find CONVEX` error from `injectConvex()`.
+- Leaving the route destroys the injector, closes the client, and discards the local query cache.
+  Re-entering opens a fresh WebSocket and re-fetches.
+- Two sibling route subtrees each registering `provideConvex()` are legal (neither is the other's
+  parent) but produce two independent clients with two WebSockets and no shared cache.
+
+## Related
+
+- [Injection context](/concepts/injection-context/) — where the helpers themselves may be called.
+- [Installation](/start/installation/) — package setup and entry points.
