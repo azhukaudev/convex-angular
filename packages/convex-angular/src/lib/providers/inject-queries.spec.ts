@@ -149,6 +149,101 @@ describe('injectQueries', () => {
     expect(fixture.componentInstance.queries.isLoading()).toBe(false);
   }));
 
+  it('lists every active key in the results record while still pending', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly includeStats = signal(false);
+      readonly queries = injectQueries(() => ({
+        user: { query: mockUserQuery, args: { userId: 'user-1' } },
+        ...(this.includeStats() ? { stats: { query: mockStatsQuery, args: { teamId: 'team-1' } } } : {}),
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    // A pending key is present with an undefined value rather than absent, so
+    // templates can iterate the record before any data has arrived.
+    expect(Object.keys(fixture.componentInstance.queries.results())).toEqual(['user']);
+    expect('user' in fixture.componentInstance.queries.results()).toBe(true);
+
+    fixture.componentInstance.includeStats.set(true);
+    fixture.detectChanges();
+    tick();
+
+    expect(Object.keys(fixture.componentInstance.queries.results()).sort()).toEqual(['stats', 'user']);
+    expect('stats' in fixture.componentInstance.queries.results()).toBe(true);
+  }));
+
+  it('ignores callbacks from a subscription replaced by an args change', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly userId = signal('user-1');
+      readonly queries = injectQueries(() => ({
+        user: { query: mockUserQuery, args: { userId: this.userId() } },
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const staleUpdate = onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))!;
+    const staleFail = onErrorByKey.get(keyFor('users:get', { userId: 'user-1' }))!;
+
+    fixture.componentInstance.userId.set('user-2');
+    fixture.detectChanges();
+    tick();
+
+    onUpdateByKey.get(keyFor('users:get', { userId: 'user-2' }))?.({ name: 'Latest' });
+
+    staleUpdate({ name: 'Stale' });
+    staleFail(new Error('stale failure'));
+
+    expect(fixture.componentInstance.queries.results().user).toEqual({ name: 'Latest' });
+    expect(fixture.componentInstance.queries.errors().user).toBeUndefined();
+    expect(fixture.componentInstance.queries.statuses().user).toBe('success');
+  }));
+
+  it('does not resurrect a removed key from a late callback', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly includeStats = signal(true);
+      readonly queries = injectQueries(() => ({
+        user: { query: mockUserQuery, args: { userId: 'user-1' } },
+        ...(this.includeStats() ? { stats: { query: mockStatsQuery, args: { teamId: 'team-1' } } } : {}),
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const removedUpdate = onUpdateByKey.get(keyFor('stats:get', { teamId: 'team-1' }))!;
+    const removedFail = onErrorByKey.get(keyFor('stats:get', { teamId: 'team-1' }))!;
+
+    fixture.componentInstance.includeStats.set(false);
+    fixture.detectChanges();
+    tick();
+
+    removedUpdate({ total: 7 });
+    removedFail(new Error('late failure'));
+
+    expect('stats' in fixture.componentInstance.queries.results()).toBe(false);
+    expect('stats' in fixture.componentInstance.queries.errors()).toBe(false);
+    expect('stats' in fixture.componentInstance.queries.statuses()).toBe(false);
+  }));
+
   it('seeds cached results per key before the first update', fakeAsync(() => {
     localResultsByKey.set(keyFor('users:get', { userId: 'user-1' }), {
       name: 'Cached user',
@@ -292,6 +387,71 @@ describe('injectQueries', () => {
     expect('stats' in fixture.componentInstance.queries.results()).toBe(false);
     expect('stats' in fixture.componentInstance.queries.errors()).toBe(false);
     expect('stats' in fixture.componentInstance.queries.statuses()).toBe(false);
+  }));
+
+  it('removes a deleted skipped key from the keyed records', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly includeStats = signal(true);
+      readonly queries = injectQueries(() => ({
+        user: { query: mockUserQuery, args: { userId: 'user-1' } },
+        ...(this.includeStats() ? { stats: skipToken } : {}),
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    // A skipped key is reported even though it never owns a subscription.
+    expect('stats' in fixture.componentInstance.queries.results()).toBe(true);
+    expect('stats' in fixture.componentInstance.queries.errors()).toBe(true);
+    expect('stats' in fixture.componentInstance.queries.statuses()).toBe(true);
+    expect(fixture.componentInstance.queries.statuses().stats).toBe('skipped');
+
+    fixture.componentInstance.includeStats.set(false);
+    fixture.detectChanges();
+    tick();
+
+    // `in` rather than toEqual: toEqual treats `{}` and `{stats: undefined}`
+    // as equal, so it cannot tell a removed key from a stale one.
+    expect('stats' in fixture.componentInstance.queries.results()).toBe(false);
+    expect('stats' in fixture.componentInstance.queries.errors()).toBe(false);
+    expect('stats' in fixture.componentInstance.queries.statuses()).toBe(false);
+    expect(Object.keys(fixture.componentInstance.queries.statuses())).toEqual(['user']);
+  }));
+
+  it('keeps a skipped key in every record while it stays in the definition', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly userId = signal<string | null>(null);
+      readonly queries = injectQueries(() => ({
+        user: this.userId() ? { query: mockUserQuery, args: { userId: this.userId()! } } : skipToken,
+        todos: { query: mockTodosQuery, args: { count: 10 } },
+      }));
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    // Repeated reconciliations must not drop a key that is merely skipped.
+    fixture.componentInstance.queries.refetch();
+    fixture.detectChanges();
+    tick();
+
+    expect(Object.keys(fixture.componentInstance.queries.results()).sort()).toEqual(['todos', 'user']);
+    expect(Object.keys(fixture.componentInstance.queries.errors()).sort()).toEqual(['todos', 'user']);
+    expect(Object.keys(fixture.componentInstance.queries.statuses()).sort()).toEqual(['todos', 'user']);
+    expect(fixture.componentInstance.queries.results().user).toBeUndefined();
+    expect(fixture.componentInstance.queries.errors().user).toBeUndefined();
+    expect(fixture.componentInstance.queries.statuses().user).toBe('skipped');
   }));
 
   it('only resubscribes the changed key when args change', fakeAsync(() => {

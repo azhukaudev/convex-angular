@@ -123,10 +123,6 @@ export interface QueriesResult<Definitions extends QueriesDefinition> {
 }
 
 function cloneWithoutKey<T extends Record<string, unknown>>(source: T, key: string): T {
-  if (!(key in source)) {
-    return source;
-  }
-
   const next = { ...source };
   delete next[key];
   return next;
@@ -211,6 +207,12 @@ export function injectQueries<Definitions extends QueriesDefinition>(
     const refetchVersion = signal(0);
     let lastRefetchVersion = 0;
 
+    // The definition keys reported by the previous reconciliation. It is a
+    // plain Set rather than a read of the record signals so the effect takes
+    // no reactive dependency on its own output. It is a superset of
+    // activeSubscriptions: skipped keys are reported but never subscribed.
+    let reportedKeys = new Set<string>();
+
     effect(() => {
       const definitions = definitionsFn();
       const nextKeys = new Set(Object.keys(definitions));
@@ -218,7 +220,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
       const forceResubscribe = currentRefetchVersion !== lastRefetchVersion;
       lastRefetchVersion = currentRefetchVersion;
 
-      for (const key of Array.from(activeSubscriptions.keys())) {
+      for (const key of reportedKeys) {
         if (!nextKeys.has(key)) {
           removeKey(key);
         }
@@ -308,6 +310,8 @@ export function injectQueries<Definitions extends QueriesDefinition>(
         subscription.unsubscribe = convex.onUpdate(definition.query, definition.args, settle, fail);
         activeSubscriptions.set(key, subscription);
       }
+
+      reportedKeys = nextKeys;
     });
 
     destroyRef.onDestroy(() => cleanupAll());
