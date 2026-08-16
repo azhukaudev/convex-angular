@@ -5,8 +5,13 @@
 ### 🐛 Bug Fixes
 
 - `injectPaginatedQuery()` no longer duplicates items across pages when the server splits a non-first page: the upstream fix (get-convex/convex-js#54981, `7ceee3e`) makes the first split page resume from the split page's own cursor instead of restarting from `null`. `injectPaginatedQuery()` delegates to `ConvexClient.onPaginatedUpdate_experimental`, so no convex-angular code changed — upgrade the `convex` peer dependency to `>=1.43.0` to pick it up (the declared peer floor stays at `>=1.42.1`).
+- `injectQueries()`: a key removed from the definition while it was using `skipToken` no longer leaves a stale `'skipped'` entry in `results`, `errors`, and `statuses`. `isLoading()` was unaffected, but consumers iterating `Object.keys(results())` saw a key that no longer existed.
+- `convex-angular/better-auth`: a superseded token exchange no longer writes shared error state — a stale failure could surface through `injectAuth().error()` even though the current request had already succeeded, and a stale success could clear an error the current request had just recorded. 1.10.0 scoped the token cache this way; the error state now matches.
 
-## [1.10.0](https://github.com/azhukaudev/convex-angular/compare/v1.9.0...v1.10.0) (2026-07-11)
+### 🏡 Chore
+
+- Swap the library test toolchain from Vitest to Jest (`jest-preset-angular`).
+- Add Stryker mutation testing over the published entry points (`pnpm test:mutation`).
 
 ### ✨ Features
 
