@@ -14,14 +14,21 @@ const fail = <T>(status: number, message = 'denied'): BetterAuthFetchResult<T> =
 interface Deferred<T> {
   promise: Promise<T>;
   resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
 }
 
 function createDeferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((res) => {
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
     resolve = res;
+    reject = rej;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
+}
+
+interface FetchOptions {
+  fetchOptions?: { throw?: boolean };
 }
 
 class FakeBetterAuthClient implements BetterAuthClientLike {
@@ -31,21 +38,36 @@ class FakeBetterAuthClient implements BetterAuthClientLike {
   sessionCalls = 0;
   updateSessionCalls = 0;
   sessionDataFallback: BetterAuthSessionData | null = null;
+  lastSessionOptions: FetchOptions | undefined;
+  lastTokenOptions: FetchOptions | undefined;
+
+  // A value the next call should reject with, as opposed to resolving with an
+  // `{ error }` envelope. `undefined` means "resolve normally".
+  sessionRejection: unknown;
+  tokenRejection: unknown;
 
   // Queued per-call overrides so race tests can control resolution order;
   // consumed in call order, falling back to sessionResult/tokenResult.
   sessionQueue: Array<Promise<BetterAuthFetchResult<BetterAuthSessionData>>> = [];
   tokenQueue: Array<Promise<BetterAuthFetchResult<{ token?: string | null }>>> = [];
 
-  async getSession() {
+  async getSession(options?: FetchOptions) {
     this.sessionCalls += 1;
-    return this.sessionQueue.shift() ?? this.sessionResult;
+    this.lastSessionOptions = options;
+    if (this.sessionRejection !== undefined) {
+      throw this.sessionRejection;
+    }
+    return this.envelope(await (this.sessionQueue.shift() ?? this.sessionResult), options);
   }
 
   convex = {
-    token: async () => {
+    token: async (options?: FetchOptions) => {
       this.tokenCalls += 1;
-      return this.tokenQueue.shift() ?? this.tokenResult;
+      this.lastTokenOptions = options;
+      if (this.tokenRejection !== undefined) {
+        throw this.tokenRejection;
+      }
+      return this.envelope(await (this.tokenQueue.shift() ?? this.tokenResult), options);
     },
   };
 
@@ -53,6 +75,15 @@ class FakeBetterAuthClient implements BetterAuthClientLike {
   updateSession = () => {
     this.updateSessionCalls += 1;
   };
+
+  // Better Auth semantics: with `fetchOptions.throw` the client rejects with
+  // the error instead of handing back the `{ data, error }` envelope.
+  private envelope<T>(result: BetterAuthFetchResult<T>, options?: FetchOptions): BetterAuthFetchResult<T> {
+    if (options?.fetchOptions?.throw && result.error) {
+      throw result.error;
+    }
+    return result;
+  }
 }
 
 describe('BetterAuthService', () => {
@@ -107,12 +138,40 @@ describe('BetterAuthService', () => {
     expect(service.error()).toBeUndefined();
   }));
 
+  it('treats a 403 session response as signed out, not an error', fakeAsync(() => {
+    client.sessionResult = fail(403);
+    const service = setup();
+    tick();
+
+    expect(service.isAuthenticated()).toBe(false);
+    expect(service.session()).toBeNull();
+    expect(service.error()).toBeUndefined();
+  }));
+
   it('surfaces non-auth session failures through error()', fakeAsync(() => {
     client.sessionResult = fail(500, 'boom');
     const service = setup();
     tick();
 
-    expect(service.error()?.message).toContain('boom');
+    // Anchored on the prefix only: consumers rely on it to tell a library error
+    // from their own. The prose after it is not contract.
+    expect(service.error()?.message).toMatch(/^\[convex-angular better-auth]/);
+    expect(service.error()?.message).toMatch(/Session refresh failed/);
+    expect(service.error()?.message).toMatch(/boom/);
+  }));
+
+  it('clears a standing session error once a later refresh succeeds', fakeAsync(() => {
+    client.sessionResult = fail(500, 'boom');
+    const service = setup();
+    tick();
+    expect(service.error()).toBeDefined();
+
+    client.sessionResult = ok(session('s1'));
+    void service.refreshSession();
+    tick();
+
+    expect(service.error()).toBeUndefined();
+    expect(service.isAuthenticated()).toBe(true);
   }));
 
   it('falls back to getSessionData() when getSession returns no data', fakeAsync(() => {
@@ -184,10 +243,63 @@ describe('BetterAuthService', () => {
     tick();
     expect(service.error()).toBeUndefined();
 
+    client.tokenResult = fail(403);
+    void service.fetchAccessToken({ forceRefreshToken: true });
+    tick();
+    expect(service.error()).toBeUndefined();
+
     client.tokenResult = fail(500, 'exchange exploded');
     void service.fetchAccessToken({ forceRefreshToken: true });
     tick();
-    expect(service.error()?.message).toContain('exchange exploded');
+    expect(service.error()?.message).toMatch(/Convex token exchange failed/);
+    expect(service.error()?.message).toMatch(/exchange exploded/);
+  }));
+
+  it('drops the cached token when the current exchange fails', fakeAsync(() => {
+    const service = setup();
+    tick();
+
+    void service.fetchAccessToken({ forceRefreshToken: false });
+    tick();
+    expect(client.tokenCalls).toBe(1);
+
+    client.tokenResult = fail(500, 'exchange exploded');
+    void service.fetchAccessToken({ forceRefreshToken: true });
+    tick();
+
+    client.tokenResult = ok({ token: 'jwt-2' });
+    let retried: string | null = null;
+    void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (retried = t));
+    tick();
+
+    expect(retried).toBe('jwt-2'); // the failed exchange invalidated the cache
+    expect(client.tokenCalls).toBe(3);
+  }));
+
+  it('re-requests a token after a rejected exchange instead of replaying it', fakeAsync(() => {
+    const service = setup();
+    tick();
+
+    void service.fetchAccessToken({ forceRefreshToken: false });
+    tick();
+
+    client.tokenRejection = new Error('socket closed');
+    let failed: string | null = 'sentinel' as never;
+    void service.fetchAccessToken({ forceRefreshToken: true }).then((t) => (failed = t));
+    tick();
+
+    expect(failed).toBeNull();
+    expect(service.error()?.message).toMatch(/Convex token exchange failed/);
+    expect(service.error()?.message).toMatch(/socket closed/);
+
+    client.tokenRejection = undefined;
+    client.tokenResult = ok({ token: 'jwt-2' });
+    let retried: string | null = null;
+    void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (retried = t));
+    tick();
+
+    expect(retried).toBe('jwt-2'); // a fresh request, not the settled failed one
+    expect(client.tokenCalls).toBe(3);
   }));
 
   it('bumps reauthVersion and invalidates the token cache when the session id changes', fakeAsync(() => {
@@ -208,6 +320,27 @@ describe('BetterAuthService', () => {
     void service.fetchAccessToken({ forceRefreshToken: false });
     tick();
     expect(client.tokenCalls).toBe(2); // cache was invalidated
+  }));
+
+  it('leaves reauthVersion and the token cache alone when the session id is unchanged', fakeAsync(() => {
+    const service = setup();
+    tick();
+    const initialVersion = service.reauthVersion();
+
+    void service.fetchAccessToken({ forceRefreshToken: false });
+    tick();
+    expect(client.tokenCalls).toBe(1);
+
+    void service.refreshSession(); // same session id
+    tick();
+
+    expect(service.reauthVersion()).toBe(initialVersion);
+
+    let cached: string | null = null;
+    void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (cached = t));
+    tick();
+    expect(cached).toBe('jwt-1');
+    expect(client.tokenCalls).toBe(1); // still served from the untouched cache
   }));
 
   it('clearSession() signs out locally and notifies the client', fakeAsync(() => {
@@ -234,6 +367,59 @@ describe('BetterAuthService', () => {
     tick();
     expect(factoryCalls).toBe(0);
   }));
+
+  describe('client boundary', () => {
+    it('names the missing client factory token when provideBetterAuth() was not registered', () => {
+      TestBed.configureTestingModule({
+        providers: [BetterAuthService, { provide: PLATFORM_ID, useValue: 'browser' }],
+      });
+
+      expect(() => TestBed.inject(BetterAuthService)).toThrow(/BETTER_AUTH_CLIENT_FACTORY/);
+    });
+
+    it('asks for the session and the Convex token without throwing on failure', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick();
+
+      // `throw: false` is what makes a 401 arrive as an `{ error }` envelope —
+      // a clean signed-out outcome — rather than a rejection.
+      expect(client.lastSessionOptions).toEqual({ fetchOptions: { throw: false } });
+      expect(client.lastTokenOptions).toEqual({ fetchOptions: { throw: false } });
+    }));
+  });
+
+  describe('error normalisation', () => {
+    it('clears the session and surfaces the failure when the session request throws', fakeAsync(() => {
+      const service = setup();
+      tick();
+      expect(service.isAuthenticated()).toBe(true);
+
+      client.sessionRejection = new Error('network down');
+      void service.refreshSession();
+      tick();
+
+      expect(service.error()?.message).toMatch(/Session refresh failed/);
+      expect(service.error()?.message).toMatch(/network down/);
+      expect(service.session()).toBeNull();
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.isLoading()).toBe(false);
+    }));
+
+    it('surfaces a non-Error rejection', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      client.tokenRejection = 'network offline';
+      void service.fetchAccessToken({ forceRefreshToken: true });
+      tick();
+
+      expect(service.error()?.message).toMatch(/Convex token exchange failed/);
+      expect(service.error()?.message).toMatch(/network offline/);
+    }));
+  });
 
   describe('session refresh / sign-out race', () => {
     it('discards a stale refreshSession() result after a concurrent clearSession()', fakeAsync(() => {
@@ -278,6 +464,72 @@ describe('BetterAuthService', () => {
       expect(service.session()).toEqual(session('s-second'));
       expect(service.isLoading()).toBe(false);
     }));
+
+    it('discards every refresh already in flight when clearSession() supersedes them', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const first = createDeferred<BetterAuthFetchResult<BetterAuthSessionData>>();
+      const second = createDeferred<BetterAuthFetchResult<BetterAuthSessionData>>();
+      client.sessionQueue = [first.promise, second.promise];
+
+      void service.refreshSession();
+      void service.refreshSession();
+      service.clearSession();
+
+      first.resolve(ok(session('s-first')));
+      tick();
+      expect(service.session()).toBeNull();
+
+      second.resolve(ok(session('s-second')));
+      tick();
+
+      expect(service.session()).toBeNull();
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.isLoading()).toBe(false);
+    }));
+
+    it('stays loading while a newer refresh is still in flight', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const first = createDeferred<BetterAuthFetchResult<BetterAuthSessionData>>();
+      const second = createDeferred<BetterAuthFetchResult<BetterAuthSessionData>>();
+      client.sessionQueue = [first.promise, second.promise];
+
+      void service.refreshSession();
+      void service.refreshSession();
+
+      first.resolve(ok(session('s-first')));
+      tick();
+
+      expect(service.isLoading()).toBe(true); // superseded result must not settle the state
+      expect(service.session()).toEqual(session('s1'));
+
+      second.resolve(ok(session('s-second')));
+      tick();
+
+      expect(service.isLoading()).toBe(false);
+      expect(service.session()).toEqual(session('s-second'));
+    }));
+
+    it('ignores a rejection from a refresh that a sign-out superseded', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const pending = createDeferred<BetterAuthFetchResult<BetterAuthSessionData>>();
+      client.sessionQueue = [pending.promise];
+
+      void service.refreshSession();
+      service.clearSession();
+
+      pending.reject(new Error('late network failure'));
+      tick();
+
+      expect(service.error()).toBeUndefined();
+      expect(service.session()).toBeNull();
+      expect(service.isLoading()).toBe(false);
+    }));
   });
 
   describe('token cache race', () => {
@@ -308,6 +560,218 @@ describe('BetterAuthService', () => {
       expect(cached).toBe('jwt-B'); // cache still holds the fresher forced token
       expect(client.tokenCalls).toBe(2); // served from cache, no extra client call
     }));
+
+    it('keeps the fresher cached token when a superseded exchange fails', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick(); // caches jwt-1
+
+      const stale = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      const fresh = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue = [stale.promise, fresh.promise];
+
+      void service.fetchAccessToken({ forceRefreshToken: true });
+      void service.fetchAccessToken({ forceRefreshToken: true });
+
+      fresh.resolve(ok({ token: 'jwt-fresh' }));
+      tick();
+
+      stale.resolve(fail(500, 'late failure')); // the superseded request fails afterwards
+      tick();
+
+      let cached: string | null = null;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (cached = t));
+      tick();
+
+      expect(cached).toBe('jwt-fresh');
+      expect(client.tokenCalls).toBe(3); // cache untouched by the superseded failure
+    }));
+
+    it('keeps the fresher cached token when a superseded exchange rejects', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick(); // caches jwt-1
+
+      const stale = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      const fresh = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue = [stale.promise, fresh.promise];
+
+      void service.fetchAccessToken({ forceRefreshToken: true });
+      void service.fetchAccessToken({ forceRefreshToken: true });
+
+      fresh.resolve(ok({ token: 'jwt-fresh' }));
+      tick();
+
+      stale.reject(new Error('late failure'));
+      tick();
+
+      let cached: string | null = null;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (cached = t));
+      tick();
+
+      expect(cached).toBe('jwt-fresh');
+      expect(client.tokenCalls).toBe(3);
+    }));
+
+    it('keeps a newer in-flight request available for dedup when a superseded one settles', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const stale = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      const fresh = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue = [stale.promise, fresh.promise];
+
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      void service.fetchAccessToken({ forceRefreshToken: true });
+
+      stale.resolve(ok({ token: 'jwt-stale' }));
+      tick();
+
+      let deduped: string | null = null;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (deduped = t));
+      tick();
+
+      expect(client.tokenCalls).toBe(2); // joined the forced request still in flight
+
+      fresh.resolve(ok({ token: 'jwt-fresh' }));
+      tick();
+
+      expect(deduped).toBe('jwt-fresh');
+    }));
+
+    it('drops a token response that lands after the session changed', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const late = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue = [late.promise];
+
+      let stale: string | null = 'sentinel' as never;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (stale = t));
+
+      client.sessionResult = ok(session('s2'));
+      void service.refreshSession();
+      tick();
+
+      late.resolve(ok({ token: 'jwt-for-s1' }));
+      tick();
+
+      expect(stale).toBeNull(); // belongs to the previous session, never surfaced
+
+      client.tokenResult = ok({ token: 'jwt-for-s2' });
+      let next: string | null = null;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (next = t));
+      tick();
+
+      expect(next).toBe('jwt-for-s2');
+      expect(client.tokenCalls).toBe(2);
+    }));
+
+    it('drops a token rejection that lands after the session changed', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const late = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue = [late.promise];
+
+      let stale: string | null = 'sentinel' as never;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (stale = t));
+
+      client.sessionResult = ok(session('s2'));
+      void service.refreshSession();
+      tick();
+
+      late.reject(new Error('late failure'));
+      tick();
+
+      expect(stale).toBeNull();
+      expect(service.error()).toBeUndefined(); // failure of a superseded exchange is not surfaced
+    }));
+  });
+
+  describe('token error race', () => {
+    it('does not surface a superseded exchange failure once the current exchange succeeded', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const stale = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      const fresh = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue = [stale.promise, fresh.promise];
+
+      void service.fetchAccessToken({ forceRefreshToken: true });
+      void service.fetchAccessToken({ forceRefreshToken: true });
+
+      fresh.resolve(ok({ token: 'jwt-fresh' }));
+      tick();
+      expect(service.error()).toBeUndefined();
+
+      stale.resolve(fail(500, 'late failure')); // the superseded request fails afterwards
+      tick();
+
+      expect(service.error()).toBeUndefined(); // a valid token is cached; nothing is broken
+
+      let cached: string | null = null;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (cached = t));
+      tick();
+      expect(cached).toBe('jwt-fresh');
+    }));
+
+    it('does not surface a superseded exchange rejection once the current exchange succeeded', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const stale = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      const fresh = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue = [stale.promise, fresh.promise];
+
+      void service.fetchAccessToken({ forceRefreshToken: true });
+      void service.fetchAccessToken({ forceRefreshToken: true });
+
+      fresh.resolve(ok({ token: 'jwt-fresh' }));
+      tick();
+
+      stale.reject(new Error('late failure')); // the superseded request rejects afterwards
+      tick();
+
+      expect(service.error()).toBeUndefined();
+
+      let cached: string | null = null;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (cached = t));
+      tick();
+      expect(cached).toBe('jwt-fresh');
+    }));
+
+    it('keeps the current exchange failure standing when a superseded exchange succeeds later', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      const stale = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      const fresh = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue = [stale.promise, fresh.promise];
+
+      void service.fetchAccessToken({ forceRefreshToken: true });
+      void service.fetchAccessToken({ forceRefreshToken: true });
+
+      fresh.resolve(fail(500, 'exchange exploded'));
+      tick();
+      expect(service.error()?.message).toMatch(/token exchange failed: exchange exploded/);
+
+      stale.resolve(ok({ token: 'jwt-stale' })); // the superseded request succeeds afterwards
+      tick();
+
+      // The stale token was refused by the cache, so it cannot count as recovery.
+      expect(service.error()?.message).toMatch(/token exchange failed: exchange exploded/);
+
+      client.tokenResult = ok({ token: 'jwt-next' });
+      let next: string | null = null;
+      void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (next = t));
+      tick();
+      expect(next).toBe('jwt-next'); // never served the stale token
+    }));
   });
 
   describe('error sequencing', () => {
@@ -327,6 +791,43 @@ describe('BetterAuthService', () => {
       tick();
 
       expect(service.error()?.message).toContain('session boom');
+    }));
+
+    it('keeps a token error visible after a subsequent successful session refresh', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      client.tokenResult = fail(500, 'token boom');
+      void service.fetchAccessToken({ forceRefreshToken: true });
+      tick();
+      expect(service.error()?.message).toContain('token boom');
+
+      void service.refreshSession();
+      tick();
+
+      expect(service.error()?.message).toContain('token boom');
+    }));
+
+    it('reports the most recent failure when both sources are failing', fakeAsync(() => {
+      const service = setup();
+      tick();
+
+      client.sessionResult = fail(500, 'session boom');
+      client.sessionDataFallback = session('s1'); // keeps the user authenticated
+      void service.refreshSession();
+      tick();
+      expect(service.error()?.message).toContain('session boom');
+
+      client.tokenResult = fail(500, 'token boom');
+      void service.fetchAccessToken({ forceRefreshToken: true });
+      tick();
+      expect(service.error()?.message).toContain('token boom');
+
+      client.sessionResult = fail(500, 'session boom again');
+      void service.refreshSession();
+      tick();
+
+      expect(service.error()?.message).toContain('session boom again');
     }));
   });
 

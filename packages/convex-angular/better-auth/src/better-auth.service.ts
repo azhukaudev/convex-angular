@@ -176,35 +176,37 @@ export class BetterAuthService implements ConvexAuthProvider {
           return null;
         }
 
-        // Only the request that's still current may write the shared cache;
-        // a superseded (e.g. non-forced) request resolving after a forced one
-        // must not clobber a fresher token that already landed.
+        // Only the request that's still current may write the shared cache or
+        // the shared token error; a superseded (e.g. non-forced) request
+        // resolving after a forced one must not clobber a fresher token that
+        // already landed, nor rewrite the error state that came with it. Its
+        // own caller still gets its own result.
         const isCurrent = this.pendingToken === request;
         const token = data?.token ?? null;
 
         if (error) {
+          if (!isCurrent) {
+            return null;
+          }
           if (!isExpectedAuthStatus(error.status)) {
             this.setError('token', normalizeError(error, '[convex-angular better-auth] Convex token exchange failed'));
           }
-          if (isCurrent) {
-            this.cachedToken = null;
-          }
+          this.cachedToken = null;
           return null;
         }
 
-        this.clearError('token');
         if (isCurrent) {
+          this.clearError('token');
           this.cachedToken = token;
         }
         return token;
       })
       .catch((error: unknown) => {
-        if (tokenGeneration !== this.tokenGeneration) {
-          return null;
-        }
-
-        this.setError('token', normalizeError(error, '[convex-angular better-auth] Convex token exchange failed'));
+        // No generation guard here: `tokenGeneration` only changes in
+        // applySession(), which clears `pendingToken` in the same block, so a
+        // generation change already implies this request is no longer current.
         if (this.pendingToken === request) {
+          this.setError('token', normalizeError(error, '[convex-angular better-auth] Convex token exchange failed'));
           this.cachedToken = null;
         }
         return null;
