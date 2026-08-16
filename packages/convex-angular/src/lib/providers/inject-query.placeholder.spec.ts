@@ -161,6 +161,49 @@ describe('injectQuery placeholder and refetch states', () => {
   });
 
   describe('placeholderData', () => {
+    it('should not report placeholder data when no placeholder is configured', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(false);
+    }));
+
+    it('should treat a factory returning undefined as no placeholder', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          placeholderData: () => undefined,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(false);
+
+      // Nothing invented was shown, so the error path has no placeholder to clear.
+      const error = new Error('Query failed');
+      onErrorCallback(error);
+
+      expect(fixture.componentInstance.todos.error()).toBe(error);
+      expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(false);
+    }));
+
     it('should show a static placeholder while the first result loads, without success', fakeAsync(() => {
       const placeholder = [{ _id: 'p', title: 'Placeholder' }];
 

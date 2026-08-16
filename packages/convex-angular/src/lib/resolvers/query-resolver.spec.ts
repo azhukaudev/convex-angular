@@ -1,5 +1,5 @@
 import { PLATFORM_ID } from '@angular/core';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
@@ -173,6 +173,34 @@ describe('convexQueryResolver', () => {
 
     expect(resolved).toBeUndefined();
     expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    // A scope destroyed before the first result has nothing to keep warm, so
+    // it must not schedule a keep-warm timer on its way out. `flush` reports
+    // the virtual time it had to advance to drain the queue: zero means the
+    // resolver left no pending work behind.
+    expect(flush()).toBe(0);
+  }));
+
+  it('keeps a single keep-warm timer when further results arrive', fakeAsync(() => {
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+
+    let resolved: unknown = 'sentinel';
+    void Promise.resolve(runResolver(resolver)).then((value) => (resolved = value));
+    tick();
+
+    onUpdateCallback?.({ name: 'Ada' });
+    tick(1000);
+    // Live updates keep flowing while the subscription is warm; they must not
+    // re-resolve the navigation or stack up another keep-warm timer.
+    onUpdateCallback?.({ name: 'Ada Lovelace' });
+    tick(1000);
+
+    expect(resolved).toEqual({ name: 'Ada' });
+
+    TestBed.resetTestingModule();
+    tick();
+
+    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(flush()).toBe(0);
   }));
 
   it('resolves undefined on a disabled client instead of hanging', fakeAsync(() => {

@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, Directive, TemplateRef, ViewContainerRef, inject, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 
@@ -384,6 +384,40 @@ describe('Auth Helper Directives', () => {
       fixture.detectChanges();
 
       expect(fixture.nativeElement.textContent).not.toContain('Reconnecting…');
+    }));
+  });
+
+  describe('view ownership', () => {
+    // Renders the template it is attached to, unconditionally, into the same
+    // view container the auth directive uses.
+    @Directive({
+      selector: '[cvaTestSibling]',
+      standalone: true,
+    })
+    class SiblingViewDirective {
+      constructor() {
+        const templateRef = inject(TemplateRef);
+        inject(ViewContainerRef).createEmbeddedView(templateRef);
+      }
+    }
+
+    it('should leave views it did not create alone while hidden', fakeAsync(() => {
+      isLoading.set(false);
+      isAuthenticated.set(false);
+      setupTestBed();
+
+      @Component({
+        template: `<ng-template cvaAuthenticated cvaTestSibling>Sibling content</ng-template>`,
+        standalone: true,
+        imports: [CvaAuthenticatedDirective, SiblingViewDirective],
+      })
+      class TestComponent {}
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(fixture.nativeElement.textContent).toContain('Sibling content');
     }));
   });
 

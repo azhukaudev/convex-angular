@@ -85,41 +85,42 @@ function setupPages<Query extends PaginatedQueryReference>(options: {
   pages: Array<Array<PaginatedQueryItem<Query>>>;
   isDone: boolean;
   instanceId?: string;
+  /** Cursor of the very first stored page. Defaults to `null`, Convex's marker for the first page of a stream. */
+  initialCursor?: string;
+  /** Stores the pages back-to-front, so store order no longer matches the cursor chain. */
+  storeReversed?: boolean;
 }) {
-  let currentCursor: string | null = null;
-
-  for (let index = 0; index < options.pages.length; index += 1) {
-    const page = options.pages[index];
-    const nextCursor = `cursor${index}`;
-
-    options.localQueryStore.setQuery(
-      options.paginatedQuery,
-      {
-        ...options.args,
-        paginationOpts: {
-          cursor: currentCursor,
-          id: options.instanceId ?? JSON.stringify(options.args),
-          numItems: 10,
-        },
+  const instanceId = options.instanceId ?? JSON.stringify(options.args);
+  const entries = options.pages.map((page, index) => ({
+    args: {
+      ...options.args,
+      paginationOpts: {
+        cursor: index === 0 ? (options.initialCursor ?? null) : `cursor${index - 1}`,
+        id: instanceId,
+        numItems: 10,
       },
-      {
-        page,
-        continueCursor: nextCursor,
-        isDone: index === options.pages.length - 1 ? options.isDone : false,
-      },
-    );
+    },
+    value: {
+      page,
+      continueCursor: `cursor${index}`,
+      isDone: index === options.pages.length - 1 ? options.isDone : false,
+    },
+  }));
 
-    currentCursor = nextCursor;
+  for (const entry of options.storeReversed === true ? [...entries].reverse() : entries) {
+    options.localQueryStore.setQuery(options.paginatedQuery, entry.args, entry.value);
   }
 }
 
-function getPaginatedQueryResults<Query extends PaginatedQueryReference>(options: {
+function getPaginatedPages<Query extends PaginatedQueryReference>(options: {
   localQueryStore: LocalQueryStoreFake;
   query: Query;
   argsToMatch?: Partial<PaginatedQueryArgs<Query>>;
   instanceId?: string;
+  initialCursor?: string;
 }) {
   const { localQueryStore, query, argsToMatch, instanceId } = options;
+  const initialCursor = options.initialCursor ?? null;
   const allQueries = localQueryStore.getAllQueries(query);
   const relevantQueries = allQueries.filter(
     (queryResult) =>
@@ -139,13 +140,13 @@ function getPaginatedQueryResults<Query extends PaginatedQueryReference>(options
     }
   }
 
-  const firstPage = loadedQueries.find((queryResult) => queryResult.args.paginationOpts.cursor === null);
+  const firstPage = loadedQueries.find((queryResult) => queryResult.args.paginationOpts.cursor === initialCursor);
 
   if (firstPage === undefined) {
     return [];
   }
 
-  const results = [...firstPage.value.page];
+  const pages = [[...firstPage.value.page]];
   let currentCursor = firstPage.value.continueCursor;
 
   while (currentCursor !== null) {
@@ -155,14 +156,56 @@ function getPaginatedQueryResults<Query extends PaginatedQueryReference>(options
       break;
     }
 
-    results.push(...nextPage.value.page);
+    pages.push([...nextPage.value.page]);
     if (nextPage.value.isDone) {
       break;
     }
     currentCursor = nextPage.value.continueCursor;
   }
 
-  return results;
+  return pages;
+}
+
+function getPaginatedQueryResults<Query extends PaginatedQueryReference>(options: {
+  localQueryStore: LocalQueryStoreFake;
+  query: Query;
+  argsToMatch?: Partial<PaginatedQueryArgs<Query>>;
+  instanceId?: string;
+  initialCursor?: string;
+}) {
+  return getPaginatedPages(options).flat();
+}
+
+type InsertAtPositionScenario = {
+  sortOrder: 'asc' | 'desc';
+  pages: Message[][];
+  item: Message;
+  expectedPages: Message[][];
+  isDone?: boolean;
+  initialCursor?: string;
+};
+
+function insertAtPositionAndReadPages(scenario: InsertAtPositionScenario) {
+  const localQueryStore = new LocalQueryStoreFake();
+
+  setupPages({
+    localQueryStore,
+    paginatedQuery: mockPaginatedQuery,
+    args: {},
+    pages: scenario.pages,
+    isDone: scenario.isDone ?? false,
+    initialCursor: scenario.initialCursor,
+  });
+
+  insertAtPosition({
+    paginatedQuery: mockPaginatedQuery,
+    localQueryStore,
+    item: scenario.item,
+    sortOrder: scenario.sortOrder,
+    sortKeyFromItem: (element) => element.rank ?? 0,
+  });
+
+  return getPaginatedPages({ localQueryStore, query: mockPaginatedQuery, initialCursor: scenario.initialCursor });
 }
 
 describe('paginated optimistic updates', () => {
@@ -225,6 +268,94 @@ describe('paginated optimistic updates', () => {
         }),
       ).toEqual([{ author: 'Dana', read: false }]);
     });
+
+    it('leaves pages belonging to a different argument set untouched', () => {
+      const localQueryStore = new LocalQueryStoreFake();
+
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: { channel: 'general' },
+        pages: [[{ author: 'Alice', read: false }], [{ author: 'Bob', read: false }]],
+        isDone: true,
+      });
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: { channel: 'marketing' },
+        pages: [[{ author: 'Dana', read: false }]],
+        isDone: true,
+      });
+
+      optimisticallyUpdateValueInPaginatedQuery(
+        localQueryStore,
+        mockPaginatedQuery,
+        { channel: 'general' },
+        (currentValue) => ({ ...currentValue, read: true }),
+      );
+
+      expect(
+        getPaginatedQueryResults({
+          localQueryStore,
+          query: mockPaginatedQuery,
+          argsToMatch: { channel: 'general' },
+        }),
+      ).toEqual([
+        { author: 'Alice', read: true },
+        { author: 'Bob', read: true },
+      ]);
+      expect(
+        getPaginatedQueryResults({
+          localQueryStore,
+          query: mockPaginatedQuery,
+          argsToMatch: { channel: 'marketing' },
+        }),
+      ).toEqual([{ author: 'Dana', read: false }]);
+    });
+
+    it('skips cached results that are not paginated pages', () => {
+      const localQueryStore = new LocalQueryStoreFake();
+      const nullValuedArgs = {
+        channel: 'general',
+        paginationOpts: { cursor: 'null-valued', id: 'general', numItems: 10 },
+      };
+      const pagelessArgs = {
+        channel: 'general',
+        paginationOpts: { cursor: 'pageless', id: 'general', numItems: 10 },
+      };
+
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: { channel: 'general' },
+        pages: [[{ author: 'Alice', read: false }]],
+        isDone: true,
+      });
+      localQueryStore.setQuery(mockPaginatedQuery, nullValuedArgs, null);
+      localQueryStore.setQuery(mockPaginatedQuery, pagelessArgs, { continueCursor: 'next', isDone: true });
+
+      expect(() =>
+        optimisticallyUpdateValueInPaginatedQuery(
+          localQueryStore,
+          mockPaginatedQuery,
+          { channel: 'general' },
+          (currentValue) => ({ ...currentValue, read: true }),
+        ),
+      ).not.toThrow();
+
+      expect(
+        getPaginatedQueryResults({
+          localQueryStore,
+          query: mockPaginatedQuery,
+          argsToMatch: { channel: 'general' },
+        }),
+      ).toEqual([{ author: 'Alice', read: true }]);
+      expect(localQueryStore.getQuery(mockPaginatedQuery, nullValuedArgs)).toBeNull();
+      expect(localQueryStore.getQuery(mockPaginatedQuery, pagelessArgs)).toEqual({
+        continueCursor: 'next',
+        isDone: true,
+      });
+    });
   });
 
   describe('insertAtTop', () => {
@@ -280,6 +411,72 @@ describe('paginated optimistic updates', () => {
         }),
       ).toEqual([{ author: 'Charlie' }]);
     });
+
+    it('requires every argument in argsToMatch to match, even when an earlier stream matches some of them', () => {
+      const localQueryStore = new LocalQueryStoreFake();
+
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: { channel: 'general', listId: 'list-2' },
+        pages: [[{ author: 'Charlie' }]],
+        isDone: true,
+      });
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: { channel: 'general', listId: 'list-1' },
+        pages: [[{ author: 'Alice' }, { author: 'Bob' }]],
+        isDone: true,
+      });
+
+      insertAtTop({
+        paginatedQuery: mockPaginatedQuery,
+        localQueryStore,
+        argsToMatch: { channel: 'general', listId: 'list-1' },
+        item: { author: 'Sarah' },
+      });
+
+      expect(
+        getPaginatedQueryResults({
+          localQueryStore,
+          query: mockPaginatedQuery,
+          argsToMatch: { channel: 'general', listId: 'list-1' },
+        }),
+      ).toEqual([{ author: 'Sarah' }, { author: 'Alice' }, { author: 'Bob' }]);
+      expect(
+        getPaginatedQueryResults({
+          localQueryStore,
+          query: mockPaginatedQuery,
+          argsToMatch: { channel: 'general', listId: 'list-2' },
+        }),
+      ).toEqual([{ author: 'Charlie' }]);
+    });
+
+    it('inserts into the first page even when a later page was cached first', () => {
+      const localQueryStore = new LocalQueryStoreFake();
+
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: { channel: 'general' },
+        pages: [[{ author: 'Alice' }, { author: 'Bob' }], [{ author: 'Charlie' }]],
+        isDone: true,
+        storeReversed: true,
+      });
+
+      insertAtTop({
+        paginatedQuery: mockPaginatedQuery,
+        localQueryStore,
+        argsToMatch: { channel: 'general' },
+        item: { author: 'Sarah' },
+      });
+
+      expect(getPaginatedPages({ localQueryStore, query: mockPaginatedQuery })).toEqual([
+        [{ author: 'Sarah' }, { author: 'Alice' }, { author: 'Bob' }],
+        [{ author: 'Charlie' }],
+      ]);
+    });
   });
 
   describe('insertAtBottomIfLoaded', () => {
@@ -325,6 +522,39 @@ describe('paginated optimistic updates', () => {
         { author: 'Bob' },
         { author: 'Sarah' },
       ]);
+    });
+
+    it('appends to the final page of the matching stream, not to another stream that is already complete', () => {
+      const localQueryStore = new LocalQueryStoreFake();
+
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: { listId: 'list-2' },
+        pages: [[{ author: 'Charlie' }]],
+        isDone: true,
+      });
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: { listId: 'list-1' },
+        pages: [[{ author: 'Alice' }], [{ author: 'Bob' }]],
+        isDone: true,
+      });
+
+      insertAtBottomIfLoaded({
+        paginatedQuery: mockPaginatedQuery,
+        localQueryStore,
+        argsToMatch: { listId: 'list-1' },
+        item: { author: 'Sarah' },
+      });
+
+      expect(
+        getPaginatedPages({ localQueryStore, query: mockPaginatedQuery, argsToMatch: { listId: 'list-1' } }),
+      ).toEqual([[{ author: 'Alice' }], [{ author: 'Bob' }, { author: 'Sarah' }]]);
+      expect(
+        getPaginatedQueryResults({ localQueryStore, query: mockPaginatedQuery, argsToMatch: { listId: 'list-2' } }),
+      ).toEqual([{ author: 'Charlie' }]);
     });
   });
 
@@ -435,6 +665,472 @@ describe('paginated optimistic updates', () => {
           instanceId: 'stream-c',
         }),
       ).toEqual([{ author: 'Eve', rank: 50 }]);
+    });
+
+    it.each<InsertAtPositionScenario>([
+      {
+        sortOrder: 'asc',
+        pages: [
+          [
+            { author: 'Alice', rank: 20 },
+            { author: 'Bob', rank: 30 },
+          ],
+          [
+            { author: 'Charlie', rank: 40 },
+            { author: 'Dave', rank: 50 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 10 },
+        expectedPages: [
+          [
+            { author: 'Sarah', rank: 10 },
+            { author: 'Alice', rank: 20 },
+            { author: 'Bob', rank: 30 },
+          ],
+          [
+            { author: 'Charlie', rank: 40 },
+            { author: 'Dave', rank: 50 },
+          ],
+        ],
+      },
+      {
+        sortOrder: 'desc',
+        pages: [
+          [
+            { author: 'Dave', rank: 50 },
+            { author: 'Charlie', rank: 40 },
+          ],
+          [
+            { author: 'Bob', rank: 30 },
+            { author: 'Alice', rank: 20 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 60 },
+        expectedPages: [
+          [
+            { author: 'Sarah', rank: 60 },
+            { author: 'Dave', rank: 50 },
+            { author: 'Charlie', rank: 40 },
+          ],
+          [
+            { author: 'Bob', rank: 30 },
+            { author: 'Alice', rank: 20 },
+          ],
+        ],
+      },
+    ])('prepends to the first page when the item sorts before every loaded item ($sortOrder)', (scenario) => {
+      expect(insertAtPositionAndReadPages(scenario)).toEqual(scenario.expectedPages);
+    });
+
+    it.each<InsertAtPositionScenario>([
+      {
+        sortOrder: 'asc',
+        initialCursor: 'earlier-page',
+        pages: [
+          [
+            { author: 'Alice', rank: 20 },
+            { author: 'Bob', rank: 30 },
+          ],
+          [
+            { author: 'Charlie', rank: 40 },
+            { author: 'Dave', rank: 50 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 20 },
+        expectedPages: [
+          [
+            { author: 'Alice', rank: 20 },
+            { author: 'Bob', rank: 30 },
+          ],
+          [
+            { author: 'Charlie', rank: 40 },
+            { author: 'Dave', rank: 50 },
+          ],
+        ],
+      },
+      {
+        sortOrder: 'desc',
+        initialCursor: 'earlier-page',
+        pages: [
+          [
+            { author: 'Dave', rank: 50 },
+            { author: 'Charlie', rank: 40 },
+          ],
+          [
+            { author: 'Bob', rank: 30 },
+            { author: 'Alice', rank: 20 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 50 },
+        expectedPages: [
+          [
+            { author: 'Dave', rank: 50 },
+            { author: 'Charlie', rank: 40 },
+          ],
+          [
+            { author: 'Bob', rank: 30 },
+            { author: 'Alice', rank: 20 },
+          ],
+        ],
+      },
+    ])(
+      'does not insert ahead of the earliest loaded page when earlier pages are still missing ($sortOrder)',
+      (scenario) => {
+        expect(insertAtPositionAndReadPages(scenario)).toEqual(scenario.expectedPages);
+      },
+    );
+
+    it.each<InsertAtPositionScenario>([
+      {
+        sortOrder: 'asc',
+        isDone: true,
+        pages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+          ],
+          [
+            { author: 'Charlie', rank: 30 },
+            { author: 'Dave', rank: 40 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 40 },
+        expectedPages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+          ],
+          [
+            { author: 'Charlie', rank: 30 },
+            { author: 'Dave', rank: 40 },
+            { author: 'Sarah', rank: 40 },
+          ],
+        ],
+      },
+      {
+        sortOrder: 'desc',
+        isDone: true,
+        pages: [
+          [
+            { author: 'Dave', rank: 40 },
+            { author: 'Charlie', rank: 30 },
+          ],
+          [
+            { author: 'Bob', rank: 20 },
+            { author: 'Alice', rank: 10 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 10 },
+        expectedPages: [
+          [
+            { author: 'Dave', rank: 40 },
+            { author: 'Charlie', rank: 30 },
+          ],
+          [
+            { author: 'Bob', rank: 20 },
+            { author: 'Alice', rank: 10 },
+            { author: 'Sarah', rank: 10 },
+          ],
+        ],
+      },
+    ])('appends behind an item with the same sort key when the final page is loaded ($sortOrder)', (scenario) => {
+      expect(insertAtPositionAndReadPages(scenario)).toEqual(scenario.expectedPages);
+    });
+
+    it.each<InsertAtPositionScenario>([
+      {
+        sortOrder: 'asc',
+        isDone: false,
+        pages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+          ],
+          [
+            { author: 'Charlie', rank: 30 },
+            { author: 'Dave', rank: 40 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 40 },
+        expectedPages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+          ],
+          [
+            { author: 'Charlie', rank: 30 },
+            { author: 'Dave', rank: 40 },
+          ],
+        ],
+      },
+      {
+        sortOrder: 'desc',
+        isDone: false,
+        pages: [
+          [
+            { author: 'Dave', rank: 40 },
+            { author: 'Charlie', rank: 30 },
+          ],
+          [
+            { author: 'Bob', rank: 20 },
+            { author: 'Alice', rank: 10 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 10 },
+        expectedPages: [
+          [
+            { author: 'Dave', rank: 40 },
+            { author: 'Charlie', rank: 30 },
+          ],
+          [
+            { author: 'Bob', rank: 20 },
+            { author: 'Alice', rank: 10 },
+          ],
+        ],
+      },
+    ])('does not insert past the last loaded page while more pages remain ($sortOrder)', (scenario) => {
+      expect(insertAtPositionAndReadPages(scenario)).toEqual(scenario.expectedPages);
+    });
+
+    it.each<InsertAtPositionScenario>([
+      {
+        sortOrder: 'asc',
+        pages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+          ],
+          [
+            { author: 'Charlie', rank: 30 },
+            { author: 'Dave', rank: 40 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 25 },
+        expectedPages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+            { author: 'Sarah', rank: 25 },
+          ],
+          [
+            { author: 'Charlie', rank: 30 },
+            { author: 'Dave', rank: 40 },
+          ],
+        ],
+      },
+      {
+        sortOrder: 'desc',
+        pages: [
+          [
+            { author: 'Dave', rank: 40 },
+            { author: 'Charlie', rank: 30 },
+          ],
+          [
+            { author: 'Bob', rank: 20 },
+            { author: 'Alice', rank: 10 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 25 },
+        expectedPages: [
+          [
+            { author: 'Dave', rank: 40 },
+            { author: 'Charlie', rank: 30 },
+            { author: 'Sarah', rank: 25 },
+          ],
+          [
+            { author: 'Bob', rank: 20 },
+            { author: 'Alice', rank: 10 },
+          ],
+        ],
+      },
+    ])('appends to the page that precedes the first page sorting after the item ($sortOrder)', (scenario) => {
+      expect(insertAtPositionAndReadPages(scenario)).toEqual(scenario.expectedPages);
+    });
+
+    it.each<InsertAtPositionScenario>([
+      {
+        sortOrder: 'asc',
+        pages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+          ],
+          [
+            { author: 'Charlie', rank: 25 },
+            { author: 'Dave', rank: 30 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 25 },
+        expectedPages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+          ],
+          [
+            { author: 'Sarah', rank: 25 },
+            { author: 'Charlie', rank: 25 },
+            { author: 'Dave', rank: 30 },
+          ],
+        ],
+      },
+      {
+        sortOrder: 'desc',
+        pages: [
+          [
+            { author: 'Dave', rank: 40 },
+            { author: 'Charlie', rank: 30 },
+          ],
+          [
+            { author: 'Bob', rank: 25 },
+            { author: 'Alice', rank: 10 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 25 },
+        expectedPages: [
+          [
+            { author: 'Dave', rank: 40 },
+            { author: 'Charlie', rank: 30 },
+          ],
+          [
+            { author: 'Sarah', rank: 25 },
+            { author: 'Bob', rank: 25 },
+            { author: 'Alice', rank: 10 },
+          ],
+        ],
+      },
+    ])('keeps a page whose leading item ties with the item as the insertion page ($sortOrder)', (scenario) => {
+      expect(insertAtPositionAndReadPages(scenario)).toEqual(scenario.expectedPages);
+    });
+
+    it.each<InsertAtPositionScenario>([
+      {
+        sortOrder: 'asc',
+        pages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+            { author: 'Charlie', rank: 30 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 20 },
+        expectedPages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Sarah', rank: 20 },
+            { author: 'Bob', rank: 20 },
+            { author: 'Charlie', rank: 30 },
+          ],
+        ],
+      },
+      {
+        sortOrder: 'desc',
+        pages: [
+          [
+            { author: 'Charlie', rank: 30 },
+            { author: 'Bob', rank: 20 },
+            { author: 'Alice', rank: 10 },
+          ],
+        ],
+        item: { author: 'Sarah', rank: 20 },
+        expectedPages: [
+          [
+            { author: 'Charlie', rank: 30 },
+            { author: 'Sarah', rank: 20 },
+            { author: 'Bob', rank: 20 },
+            { author: 'Alice', rank: 10 },
+          ],
+        ],
+      },
+    ])('inserts ahead of the first item within a page that ties with the item ($sortOrder)', (scenario) => {
+      expect(insertAtPositionAndReadPages(scenario)).toEqual(scenario.expectedPages);
+    });
+
+    it('ignores empty and unloaded pages when choosing the insertion point', () => {
+      const localQueryStore = new LocalQueryStoreFake();
+      const unloadedTailArgs = { paginationOpts: { cursor: 'cursor2', id: 'stream-a', numItems: 10 } };
+      const unloadedStreamArgs = { paginationOpts: { cursor: null, id: 'stream-b', numItems: 10 } };
+
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: {},
+        pages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+          ],
+          [],
+          [{ author: 'Charlie', rank: 30 }],
+        ],
+        isDone: false,
+        instanceId: 'stream-a',
+      });
+      localQueryStore.setQuery(mockPaginatedQuery, unloadedTailArgs, undefined);
+      localQueryStore.setQuery(mockPaginatedQuery, unloadedStreamArgs, undefined);
+
+      expect(() =>
+        insertAtPosition({
+          paginatedQuery: mockPaginatedQuery,
+          localQueryStore,
+          item: { author: 'Sarah', rank: 25 },
+          sortOrder: 'asc',
+          sortKeyFromItem: (item) => item.rank ?? 0,
+        }),
+      ).not.toThrow();
+
+      expect(getPaginatedPages({ localQueryStore, query: mockPaginatedQuery, instanceId: 'stream-a' })).toEqual([
+        [
+          { author: 'Alice', rank: 10 },
+          { author: 'Bob', rank: 20 },
+          { author: 'Sarah', rank: 25 },
+        ],
+        [],
+        [{ author: 'Charlie', rank: 30 }],
+      ]);
+      expect(localQueryStore.getQuery(mockPaginatedQuery, unloadedTailArgs)).toBeUndefined();
+      expect(localQueryStore.getQuery(mockPaginatedQuery, unloadedStreamArgs)).toBeUndefined();
+    });
+
+    it('orders loaded pages by their leading item rather than by cache insertion order', () => {
+      const localQueryStore = new LocalQueryStoreFake();
+
+      setupPages({
+        localQueryStore,
+        paginatedQuery: mockPaginatedQuery,
+        args: {},
+        pages: [
+          [
+            { author: 'Alice', rank: 10 },
+            { author: 'Bob', rank: 20 },
+          ],
+          [
+            { author: 'Charlie', rank: 30 },
+            { author: 'Dave', rank: 40 },
+          ],
+        ],
+        isDone: true,
+        storeReversed: true,
+      });
+
+      insertAtPosition({
+        paginatedQuery: mockPaginatedQuery,
+        localQueryStore,
+        item: { author: 'Sarah', rank: 25 },
+        sortOrder: 'asc',
+        sortKeyFromItem: (item) => item.rank ?? 0,
+      });
+
+      expect(getPaginatedPages({ localQueryStore, query: mockPaginatedQuery })).toEqual([
+        [
+          { author: 'Alice', rank: 10 },
+          { author: 'Bob', rank: 20 },
+          { author: 'Sarah', rank: 25 },
+        ],
+        [
+          { author: 'Charlie', rank: 30 },
+          { author: 'Dave', rank: 40 },
+        ],
+      ]);
     });
   });
 

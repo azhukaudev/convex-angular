@@ -62,6 +62,28 @@ describe('injectQuery', () => {
   });
 
   describe('initial state', () => {
+    it('should expose an idle state until the subscription effect first runs', () => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+
+      // Before the first change detection the effect has not established a
+      // subscription, so nothing is loading, skipped or placeholder-backed.
+      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isLoading()).toBe(false);
+      expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+      expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(false);
+      expect(fixture.componentInstance.todos.isRefetching()).toBe(false);
+    });
+
     it('should initialize with local query result if available', fakeAsync(() => {
       const cachedData = [{ _id: '1', title: 'Cached todo' }];
       mockLocalQueryResult.mockReturnValue(cachedData);
@@ -676,6 +698,43 @@ describe('injectQuery', () => {
       expect(fixture.componentInstance.todos.status()).toBe('success');
     }));
 
+    it('should ignore callbacks from a subscription that predates a skip and resume', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly shouldSkip = signal(false);
+        readonly todos = injectQuery(mockQuery, () => (this.shouldSkip() ? skipToken : { count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const firstSubscription = subscriptions[0];
+
+      fixture.componentInstance.shouldSkip.set(true);
+      fixture.detectChanges();
+      tick();
+
+      fixture.componentInstance.shouldSkip.set(false);
+      fixture.detectChanges();
+      tick();
+
+      const latestData = [{ _id: '2', title: 'Latest todo' }];
+      subscriptions[1].onUpdate(latestData);
+
+      // The skip in between advanced the staleness guard too, so the very
+      // first subscription must stay stale even though its args match again.
+      firstSubscription.onUpdate([{ _id: '1', title: 'Stale todo' }]);
+      firstSubscription.onError(new Error('stale failure'));
+
+      expect(fixture.componentInstance.todos.data()).toEqual(latestData);
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+    }));
+
     it('should hydrate from local cache when args change to a warm query', fakeAsync(() => {
       @Component({
         template: '',
@@ -841,6 +900,42 @@ describe('injectQuery', () => {
       fixture.destroy();
 
       expect(mockUnsubscribe).toHaveBeenCalled();
+    }));
+
+    it('should ignore callbacks from every subscription after destroy', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly count = signal(10);
+        readonly todos = injectQuery(mockQuery, () => ({ count: this.count() }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const firstSubscription = subscriptions[0];
+
+      fixture.componentInstance.count.set(20);
+      fixture.detectChanges();
+      tick();
+
+      const secondSubscription = subscriptions[1];
+      const latestData = [{ _id: '2', title: 'Latest todo' }];
+      secondSubscription.onUpdate(latestData);
+
+      fixture.destroy();
+
+      // Destroying must retire every generation, not just the newest one.
+      firstSubscription.onUpdate([{ _id: '1', title: 'Stale todo' }]);
+      firstSubscription.onError(new Error('stale failure'));
+      secondSubscription.onUpdate([{ _id: '3', title: 'Post-destroy todo' }]);
+      secondSubscription.onError(new Error('post-destroy failure'));
+
+      expect(fixture.componentInstance.todos.data()).toEqual(latestData);
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
     }));
 
     it('should ignore stale updates after transitioning to skipped', fakeAsync(() => {

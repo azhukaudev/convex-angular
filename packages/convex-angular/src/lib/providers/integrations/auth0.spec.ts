@@ -183,6 +183,12 @@ describe('provideAuth0Auth', () => {
     expect(setAuthFetcher).toBeDefined();
   }));
 
+  it('names AUTH0_AUTH when no Auth0 provider implementation is registered', () => {
+    TestBed.configureTestingModule({ providers: [] });
+
+    expect(() => TestBed.inject(AUTH0_AUTH)).toThrow(/AUTH0_AUTH/);
+  });
+
   it('throws when combined with provideConvexAuth in the same injector', () => {
     TestBed.configureTestingModule({
       providers: [

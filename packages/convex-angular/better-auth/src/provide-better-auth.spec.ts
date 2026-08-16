@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, EnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { CONVEX_AUTH, injectAuth } from 'convex-angular';
 import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
@@ -65,6 +65,21 @@ describe('provideBetterAuth', () => {
 
     expect(constructed).toBe(1);
     expect(seen()).toBe('built');
+  }));
+
+  it('resolves the session state from an explicit injector outside an injection context', fakeAsync(() => {
+    TestBed.configureTestingModule({
+      providers: [provideConvexTesting(new MockConvexClient()), provideBetterAuth(fakeClient)],
+    });
+    const injector = TestBed.inject(EnvironmentInjector);
+
+    // No ambient injection context here: the injectRef escape hatch is the
+    // only thing that can resolve the service.
+    const state = injectBetterAuth({ injectRef: injector });
+    tick();
+
+    expect(state).toBe(TestBed.inject(CONVEX_AUTH));
+    expect(state.isAuthenticated()).toBe(true);
   }));
 
   it('throws the root-only guard error on nested registration', () => {

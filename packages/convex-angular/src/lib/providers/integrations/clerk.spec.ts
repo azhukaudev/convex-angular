@@ -271,6 +271,12 @@ describe('provideClerkAuth', () => {
     expect(setAuthFetcher).toBeDefined();
   }));
 
+  it('names CLERK_AUTH when no Clerk provider implementation is registered', () => {
+    TestBed.configureTestingModule({ providers: [] });
+
+    expect(() => TestBed.inject(CLERK_AUTH)).toThrow(/CLERK_AUTH/);
+  });
+
   it('throws when combined with provideConvexAuth in the same injector', () => {
     TestBed.configureTestingModule({
       providers: [

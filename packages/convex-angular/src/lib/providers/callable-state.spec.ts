@@ -140,6 +140,54 @@ describe('createCallableState', () => {
       expect(onSuccess).toHaveBeenCalledWith('id-2');
     });
 
+    it('keeps loading while a newer invocation is still in flight', async () => {
+      const first = deferred<string>();
+      const second = deferred<string>();
+      invoke.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      const state = create();
+
+      const firstResult = state.execute({ title: 'First' });
+      const secondResult = state.execute({ title: 'Second' });
+
+      first.resolve('id-1');
+      await firstResult;
+
+      // The superseded invocation settled, but the newest one has not: the
+      // caller must still see a pending call.
+      expect(state.isLoading()).toBe(true);
+      expect(state.status()).toBe('pending');
+
+      second.resolve('id-2');
+      await secondResult;
+
+      expect(state.isLoading()).toBe(false);
+      expect(state.status()).toBe('success');
+    });
+
+    it('ignores an invocation superseded across a reset', async () => {
+      const first = deferred<string>();
+      const second = deferred<string>();
+      invoke.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      const state = create();
+
+      const firstResult = state.execute({ title: 'First' });
+      state.reset();
+      const secondResult = state.execute({ title: 'Second' });
+
+      second.resolve('id-2');
+      await secondResult;
+
+      // Resetting between the two calls must not hand the older invocation
+      // the newer one's identity.
+      first.resolve('id-1');
+      await firstResult;
+
+      expect(state.data()).toBe('id-2');
+      expect(state.status()).toBe('success');
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+      expect(onSuccess).toHaveBeenCalledWith('id-2');
+    });
+
     it('ignores stale failures after a newer invocation succeeded', async () => {
       const first = deferred<string>();
       const second = deferred<string>();

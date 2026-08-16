@@ -254,6 +254,25 @@ describe('Auth Guards', () => {
       expect(router.url).toBe('/');
     }));
 
+    it('redirects authenticated users while a rejected token is being refreshed', fakeAsync(() => {
+      isAuthenticated.set(true);
+      const router = setupGuardTestBed(routes);
+
+      authenticateAndNavigate(router, '/home');
+      expect(router.url).toBe('/home');
+
+      // Convex is fetching a replacement token; the user stays signed in, so
+      // the login route must still bounce them instead of waiting it out.
+      setAuthOnRefreshChange?.(true);
+      tick();
+
+      router.navigate(['/login']);
+      tick();
+      flush();
+
+      expect(router.url).toBe('/');
+    }));
+
     it('redirects authenticated users to the configured authenticatedRoute', fakeAsync(() => {
       isAuthenticated.set(true);
       const router = setupGuardTestBed(routes, { authenticatedRoute: '/home' });
@@ -422,6 +441,12 @@ describe('Auth Guards', () => {
       const config = TestBed.inject(CONVEX_AUTH_GUARD_CONFIG);
 
       expect(config.loginRoute).toBe('/auth/login');
+    });
+
+    it('should name the token when it is injected without a provider', () => {
+      TestBed.configureTestingModule({ providers: [] });
+
+      expect(() => TestBed.inject(CONVEX_AUTH_GUARD_CONFIG)).toThrow(/CONVEX_AUTH_GUARD_CONFIG/);
     });
 
     it('should be optional (return null when not provided)', () => {

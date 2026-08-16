@@ -52,6 +52,33 @@ describe('injectPaginatedQuery', () => {
     TestBed.resetTestingModule();
   });
 
+  it('should expose a pending, empty state before the subscription effect runs', () => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+
+    // Before the first change detection nothing has been subscribed yet, but
+    // the result already reads as an empty first page still loading.
+    expect(mockConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.todos.results()).toEqual([]);
+    expect(fixture.componentInstance.todos.error()).toBeUndefined();
+    expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
+    expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
+    expect(fixture.componentInstance.todos.canLoadMore()).toBe(false);
+    expect(fixture.componentInstance.todos.isExhausted()).toBe(false);
+    expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
+    expect(fixture.componentInstance.todos.isSuccess()).toBe(false);
+    expect(fixture.componentInstance.todos.status()).toBe('pending');
+  });
+
   it('should initialize with loading state', fakeAsync(() => {
     @Component({
       template: '',
@@ -179,6 +206,54 @@ describe('injectPaginatedQuery', () => {
     expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
     expect(fixture.componentInstance.todos.canLoadMore()).toBe(false);
     expect(fixture.componentInstance.todos.isExhausted()).toBe(false);
+  }));
+
+  it('should apply every LoadingFirstPage emission when nothing was server-seeded', fakeAsync(() => {
+    const firstLoadMore = jest.fn().mockReturnValue(true);
+    const secondLoadMore = jest.fn().mockReturnValue(true);
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    // Without a transferred seed to protect, the very first emission counts.
+    onUpdateCallback({
+      results: [{ _id: '1', name: 'Todo 1' }],
+      status: 'LoadingFirstPage',
+      loadMore: firstLoadMore,
+    });
+
+    expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Todo 1' }]);
+    expect(fixture.componentInstance.todos.loadMore(5)).toBe(true);
+    expect(firstLoadMore).toHaveBeenCalledWith(5);
+
+    // A later first-page emission on the same subscription is applied too.
+    onUpdateCallback({
+      results: [
+        { _id: '1', name: 'Todo 1' },
+        { _id: '2', name: 'Todo 2' },
+      ],
+      status: 'LoadingFirstPage',
+      loadMore: secondLoadMore,
+    });
+
+    expect(fixture.componentInstance.todos.results()).toEqual([
+      { _id: '1', name: 'Todo 1' },
+      { _id: '2', name: 'Todo 2' },
+    ]);
+    expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
+    expect(fixture.componentInstance.todos.loadMore(5)).toBe(true);
+    expect(secondLoadMore).toHaveBeenCalledWith(5);
   }));
 
   it('should update signals when CanLoadMore status is received', fakeAsync(() => {
@@ -399,6 +474,37 @@ describe('injectPaginatedQuery', () => {
     expect(fixture.componentInstance.todos.canLoadMore()).toBe(true);
   }));
 
+  it('should clear the exhausted flag when the subscription errors', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    onUpdateCallback({
+      results: [{ _id: '1', name: 'Todo 1' }],
+      status: 'Exhausted',
+      loadMore: jest.fn(),
+    });
+
+    expect(fixture.componentInstance.todos.isExhausted()).toBe(true);
+
+    const testError = new Error('Test error');
+    onErrorCallback(testError);
+
+    // An errored list is no longer known to be complete.
+    expect(fixture.componentInstance.todos.isExhausted()).toBe(false);
+    expect(fixture.componentInstance.todos.status()).toBe('error');
+  }));
+
   it('should reset pagination when reset() is called', fakeAsync(() => {
     @Component({
       template: '',
@@ -616,6 +722,120 @@ describe('injectPaginatedQuery', () => {
     expect(fixture.componentInstance.todos.results()).toEqual(latestResults);
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
     expect(fixture.componentInstance.todos.status()).toBe('success');
+  }));
+
+  it('should ignore callbacks from a subscription that predates a skip and resume', fakeAsync(() => {
+    const staleLoadMore = jest.fn().mockReturnValue(true);
+    const latestLoadMore = jest.fn().mockReturnValue(true);
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly shouldSkip = signal(false);
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => (this.shouldSkip() ? skipToken : {}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const firstSubscription = subscriptions[0];
+
+    fixture.componentInstance.shouldSkip.set(true);
+    fixture.detectChanges();
+    tick();
+
+    fixture.componentInstance.shouldSkip.set(false);
+    fixture.detectChanges();
+    tick();
+
+    const latestResults = [{ _id: '2', name: 'Latest todo' }];
+    subscriptions[1].onUpdate({
+      results: latestResults,
+      status: 'CanLoadMore',
+      loadMore: latestLoadMore,
+    });
+
+    // The skip in between advanced the staleness guard too, so the very first
+    // subscription must stay stale even though its args match again.
+    firstSubscription.onUpdate({
+      results: [{ _id: '1', name: 'Stale todo' }],
+      status: 'Exhausted',
+      loadMore: staleLoadMore,
+    });
+    firstSubscription.onError(new Error('stale failure'));
+
+    expect(fixture.componentInstance.todos.results()).toEqual(latestResults);
+    expect(fixture.componentInstance.todos.error()).toBeUndefined();
+    expect(fixture.componentInstance.todos.status()).toBe('success');
+
+    fixture.componentInstance.todos.loadMore(5);
+
+    expect(latestLoadMore).toHaveBeenCalledWith(5);
+    expect(staleLoadMore).not.toHaveBeenCalled();
+  }));
+
+  it('should ignore callbacks from every subscription after destroy', fakeAsync(() => {
+    const staleLoadMore = jest.fn().mockReturnValue(true);
+    const latestLoadMore = jest.fn().mockReturnValue(true);
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly category = signal('work');
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({ category: this.category() }), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    const firstSubscription = subscriptions[0];
+
+    fixture.componentInstance.category.set('personal');
+    fixture.detectChanges();
+    tick();
+
+    const secondSubscription = subscriptions[1];
+    const latestResults = [{ _id: '2', name: 'Latest todo' }];
+    secondSubscription.onUpdate({
+      results: latestResults,
+      status: 'CanLoadMore',
+      loadMore: latestLoadMore,
+    });
+
+    fixture.destroy();
+
+    // Destroying must retire every generation, not just the newest one.
+    firstSubscription.onUpdate({
+      results: [{ _id: '1', name: 'Stale todo' }],
+      status: 'Exhausted',
+      loadMore: staleLoadMore,
+    });
+    firstSubscription.onError(new Error('stale failure'));
+    secondSubscription.onUpdate({
+      results: [{ _id: '3', name: 'Post-destroy todo' }],
+      status: 'Exhausted',
+      loadMore: staleLoadMore,
+    });
+    secondSubscription.onError(new Error('post-destroy failure'));
+
+    expect(fixture.componentInstance.todos.results()).toEqual(latestResults);
+    expect(fixture.componentInstance.todos.error()).toBeUndefined();
+    expect(fixture.componentInstance.todos.isExhausted()).toBe(false);
+
+    fixture.componentInstance.todos.loadMore(5);
+
+    expect(latestLoadMore).toHaveBeenCalledWith(5);
+    expect(staleLoadMore).not.toHaveBeenCalled();
   }));
 
   it('should unsubscribe on component destroy', fakeAsync(() => {

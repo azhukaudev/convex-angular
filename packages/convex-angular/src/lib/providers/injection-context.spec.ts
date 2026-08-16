@@ -15,6 +15,23 @@ function testTarget() {
   return undefined;
 }
 
+function captureThrown(run: () => unknown): Error {
+  try {
+    run();
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error('Expected the call to throw, but it returned normally.');
+}
+
+function expectGuidedContextError(error: Error): void {
+  expect(error).toBeInstanceOf(Error);
+  // The diagnostic names the offending helper and both ways to fix the call.
+  expect(error.message).toMatch(/^testTarget\(\) must be called from an injection context/);
+  expect(error.message).toMatch(/explicit injector/);
+  expect(error.message).toMatch(/`injectRef` option/);
+}
+
 describe('injection-context helpers', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
@@ -40,8 +57,8 @@ describe('injection-context helpers', () => {
     expect(resolved).toBe(injector);
   });
 
-  it('throws outside an injection context when no injector is provided', () => {
-    expect(() => resolveEnvironmentInjector(testTarget)).toThrow();
+  it('throws a guided error when resolving outside an injection context', () => {
+    expectGuidedContextError(captureThrown(() => resolveEnvironmentInjector(testTarget)));
   });
 
   it('runs inside the provided injector outside an injection context', () => {
@@ -78,7 +95,7 @@ describe('injection-context helpers', () => {
     childInjector.destroy();
   });
 
-  it('throws outside an injection context when no injector is provided', () => {
-    expect(() => runInResolvedInjectionContext(testTarget, undefined, () => 'ok')).toThrow();
+  it('throws a guided error when running outside an injection context', () => {
+    expectGuidedContextError(captureThrown(() => runInResolvedInjectionContext(testTarget, undefined, () => 'ok')));
   });
 });

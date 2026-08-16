@@ -1,4 +1,4 @@
-import { Component, PLATFORM_ID, TransferState } from '@angular/core';
+import { Component, PLATFORM_ID, TransferState, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, PaginationResult } from 'convex/server';
@@ -148,9 +148,120 @@ describe('injectPaginatedQuery SSR and hydration', () => {
         expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Server todo' }]);
         expect(fixture.componentInstance.todos.canLoadMore()).toBe(true);
         expect(fixture.componentInstance.todos.isExhausted()).toBe(false);
+        expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(false);
+        expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
         // loadMore is inert until the live subscription syncs in the browser.
         expect(fixture.componentInstance.todos.loadMore(10)).toBe(false);
         expect(serverConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
+      }));
+
+      it('ignores a first-page fetch that resolves after the args changed', fakeAsync(() => {
+        const pending: Array<{
+          resolve: (page: unknown) => void;
+          reject: (err: Error) => void;
+        }> = [];
+        mockLoader.fetch = jest.fn(
+          () =>
+            new Promise((resolve, reject) => {
+              pending.push({ resolve, reject });
+            }),
+        );
+        setupServer();
+
+        const onSuccess = jest.fn();
+
+        @Component({
+          template: '',
+          standalone: true,
+        })
+        class TestComponent {
+          readonly category = signal('work');
+          readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({ category: this.category() }), {
+            initialNumItems: 10,
+            onSuccess,
+          });
+        }
+
+        const fixture = TestBed.createComponent(TestComponent);
+        fixture.detectChanges();
+        tick();
+
+        fixture.componentInstance.category.set('personal');
+        fixture.detectChanges();
+        tick();
+
+        expect(pending).toHaveLength(2);
+
+        // The current fetch settles first; the superseded one lands afterwards.
+        pending[1].resolve({
+          page: [{ _id: '2', name: 'Latest todo' }],
+          isDone: false,
+          continueCursor: 'cursor-2',
+        });
+        tick();
+        pending[0].resolve({
+          page: [{ _id: '1', name: 'Stale todo' }],
+          isDone: true,
+          continueCursor: 'cursor-1',
+        });
+        tick();
+
+        expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '2', name: 'Latest todo' }]);
+        expect(fixture.componentInstance.todos.isExhausted()).toBe(false);
+        expect(fixture.componentInstance.todos.canLoadMore()).toBe(true);
+        expect(onSuccess).toHaveBeenCalledTimes(1);
+      }));
+
+      it('ignores a first-page fetch that rejects after the args changed', fakeAsync(() => {
+        const pending: Array<{
+          resolve: (page: unknown) => void;
+          reject: (err: Error) => void;
+        }> = [];
+        mockLoader.fetch = jest.fn(
+          () =>
+            new Promise((resolve, reject) => {
+              pending.push({ resolve, reject });
+            }),
+        );
+        setupServer();
+
+        const onError = jest.fn();
+
+        @Component({
+          template: '',
+          standalone: true,
+        })
+        class TestComponent {
+          readonly category = signal('work');
+          readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({ category: this.category() }), {
+            initialNumItems: 10,
+            onError,
+          });
+        }
+
+        const fixture = TestBed.createComponent(TestComponent);
+        fixture.detectChanges();
+        tick();
+
+        fixture.componentInstance.category.set('personal');
+        fixture.detectChanges();
+        tick();
+
+        expect(pending).toHaveLength(2);
+
+        pending[1].resolve({
+          page: [{ _id: '2', name: 'Latest todo' }],
+          isDone: false,
+          continueCursor: 'cursor-2',
+        });
+        tick();
+        pending[0].reject(new Error('stale fetch failed'));
+        tick();
+
+        expect(fixture.componentInstance.todos.error()).toBeUndefined();
+        expect(fixture.componentInstance.todos.status()).toBe('success');
+        expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '2', name: 'Latest todo' }]);
+        expect(onError).not.toHaveBeenCalled();
       }));
 
       it('marks the query exhausted when the first page is the last', fakeAsync(() => {
@@ -257,6 +368,8 @@ describe('injectPaginatedQuery SSR and hydration', () => {
       expect(fixture.componentInstance.todos.status()).toBe('success');
       expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Transferred todo' }]);
       expect(fixture.componentInstance.todos.canLoadMore()).toBe(true);
+      expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(false);
+      expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
 
       // The live subscription is still established and replaces the seed.
       tick();

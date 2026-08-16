@@ -134,6 +134,62 @@ describe('injectPrewarmQuery', () => {
     expect(onError).toHaveBeenCalledWith(error, { userId: 'user-1' });
   });
 
+  it('releases a subscription only once when it fails after the window expired', fakeAsync(() => {
+    const onError = jest.fn();
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly prewarmUser = injectPrewarmQuery(mockQuery, { onError });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+
+    let warmed: boolean | undefined;
+    void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+      warmed = result;
+    });
+
+    tick(5_000);
+    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+
+    // A failure reported after the prewarm was already released must not
+    // unsubscribe a second time.
+    const error = new Error('late failure');
+    errorCallbacks[0](error);
+    tick();
+
+    expect(onError).toHaveBeenCalledWith(error, { userId: 'user-1' });
+    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+    expect(warmed).toBe(false);
+  }));
+
+  it('releases a subscription only once when it fails after the scope was destroyed', fakeAsync(() => {
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly prewarmUser = injectPrewarmQuery(mockQuery);
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+
+    fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
+    fixture.destroy();
+
+    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+
+    errorCallbacks[0](new Error('late failure'));
+    tick();
+
+    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+  }));
+
   it('supports injectRef outside the current injection context', () => {
     const injector = TestBed.inject(EnvironmentInjector);
 
