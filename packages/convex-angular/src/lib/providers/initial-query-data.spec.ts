@@ -1,26 +1,19 @@
+import { MockConvexClient } from 'convex-angular/testing';
 import { ConvexClient } from 'convex/browser';
 
 import { ConvexHydrationState } from '../ssr/state-transfer';
 import { readInitialQueryData } from './initial-query-data';
 
 describe('readInitialQueryData', () => {
-  let mockLocalQueryResult: jest.Mock;
+  let convex: MockConvexClient;
   let mockConsume: jest.Mock;
-  let disabled: boolean;
 
   const queryName = 'todos:listTodos';
   const args = { count: 10 };
   const argsKey = '{"count":10}';
 
   function convexClient(): ConvexClient {
-    return {
-      get disabled() {
-        return disabled;
-      },
-      client: {
-        localQueryResult: mockLocalQueryResult,
-      },
-    } as unknown as ConvexClient;
+    return convex as unknown as ConvexClient;
   }
 
   function hydrationState(): ConvexHydrationState {
@@ -28,24 +21,23 @@ describe('readInitialQueryData', () => {
   }
 
   beforeEach(() => {
-    disabled = false;
-    mockLocalQueryResult = jest.fn().mockReturnValue(undefined);
+    convex = new MockConvexClient();
     mockConsume = jest.fn().mockReturnValue(undefined);
   });
 
   it('returns a cache hit from the warm client cache', () => {
     const cached = [{ _id: '1', title: 'Cached todo' }];
-    mockLocalQueryResult.mockReturnValue(cached);
+    convex.seedQueryResult(queryName, args, cached);
 
     const initial = readInitialQueryData(convexClient(), hydrationState(), queryName, args, argsKey);
 
     expect(initial).toEqual({ kind: 'cache', value: cached });
-    expect(mockLocalQueryResult).toHaveBeenCalledWith(queryName, args);
+    expect(convex.localQueryResultCalls).toEqual([{ queryName, args }]);
   });
 
   it('prefers the warm cache over transferred data', () => {
     const cached = [{ _id: '1', title: 'Cached todo' }];
-    mockLocalQueryResult.mockReturnValue(cached);
+    convex.seedQueryResult(queryName, args, cached);
     mockConsume.mockReturnValue({ value: [{ _id: '2', title: 'Transferred todo' }] });
 
     const initial = readInitialQueryData(convexClient(), hydrationState(), queryName, args, argsKey);
@@ -73,13 +65,13 @@ describe('readInitialQueryData', () => {
   });
 
   it('skips the client cache on a disabled client', () => {
-    disabled = true;
-    mockLocalQueryResult.mockReturnValue([{ _id: '1', title: 'Cached todo' }]);
+    convex = new MockConvexClient({ disabled: true });
+    convex.seedQueryResult(queryName, args, [{ _id: '1', title: 'Cached todo' }]);
 
     const initial = readInitialQueryData(convexClient(), hydrationState(), queryName, args, argsKey);
 
     expect(initial).toBeUndefined();
-    expect(mockLocalQueryResult).not.toHaveBeenCalled();
+    expect(convex.localQueryResultCalls).toHaveLength(0);
   });
 
   it('returns undefined when neither cache nor transfer has data', () => {

@@ -1,11 +1,10 @@
 import { Component, EnvironmentProviders, Provider, signal } from '@angular/core';
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { Router, Routes, provideRouter } from '@angular/router';
-import { ConvexClient } from 'convex/browser';
+import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 
 import { provideConvexAuth } from '../providers/inject-auth';
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
-import { CONVEX } from '../tokens/convex';
 import {
   CONVEX_AUTH_GUARD_CONFIG,
   ConvexAuthGuardConfig,
@@ -14,40 +13,24 @@ import {
   createConvexAuthGuard,
 } from './auth-guards';
 
+function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
+  const registration = convex.lastAuthRegistration();
+  if (!registration) {
+    throw new Error('Expected a captured auth registration');
+  }
+  return registration;
+}
+
 describe('Auth Guards', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockSetAuth: jest.Mock;
-  let mockClearAuth: jest.Mock;
-  let mockHasAuth: jest.Mock;
-  let mockGetAuth: jest.Mock;
-  let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
-  let setAuthOnRefreshChange: ((isRefreshing: boolean) => void) | undefined;
+  let convex: MockConvexClient;
   let isLoading: ReturnType<typeof signal<boolean>>;
   let isAuthenticated: ReturnType<typeof signal<boolean>>;
 
   beforeEach(() => {
-    mockSetAuth = jest.fn((_fetchToken, onChange, onRefreshChange) => {
-      setAuthOnChange = onChange;
-      setAuthOnRefreshChange = onRefreshChange;
-    });
-    mockClearAuth = jest.fn();
-    mockHasAuth = jest.fn().mockReturnValue(false);
-    mockGetAuth = jest.fn().mockReturnValue(undefined);
-
-    mockConvexClient = {
-      disabled: false,
-      getAuth: mockGetAuth,
-      client: {
-        setAuth: mockSetAuth,
-        clearAuth: mockClearAuth,
-        hasAuth: mockHasAuth,
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     isLoading = signal(false);
     isAuthenticated = signal(false);
-    setAuthOnChange = undefined;
-    setAuthOnRefreshChange = undefined;
   });
 
   afterEach(() => {
@@ -68,7 +51,7 @@ describe('Auth Guards', () => {
     };
 
     const providers: Array<Provider | EnvironmentProviders> = [
-      { provide: CONVEX, useValue: mockConvexClient },
+      provideConvexTesting(convex),
       { provide: CONVEX_AUTH, useValue: mockProvider },
       provideConvexAuth(),
       provideRouter(routes),
@@ -85,7 +68,7 @@ describe('Auth Guards', () => {
   function authenticateAndNavigate(router: Router, url: string) {
     router.navigateByUrl(url);
     tick();
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     tick();
     flush();
   }
@@ -160,7 +143,7 @@ describe('Auth Guards', () => {
 
       expect(router.url).toBe('/');
 
-      setAuthOnChange?.(true);
+      requireLastAuthRegistration(convex).setAuthenticated(true);
       tick();
       flush();
 
@@ -176,7 +159,7 @@ describe('Auth Guards', () => {
 
       // Server rejects the previously confirmed token: Convex pauses the
       // socket while fetching a replacement. The user is still authenticated.
-      setAuthOnRefreshChange?.(true);
+      requireLastAuthRegistration(convex).setRefreshing(true);
       tick();
 
       router.navigate(['/']);
@@ -263,7 +246,7 @@ describe('Auth Guards', () => {
 
       // Convex is fetching a replacement token; the user stays signed in, so
       // the login route must still bounce them instead of waiting it out.
-      setAuthOnRefreshChange?.(true);
+      requireLastAuthRegistration(convex).setRefreshing(true);
       tick();
 
       router.navigate(['/login']);
@@ -309,7 +292,7 @@ describe('Auth Guards', () => {
 
     it('passes the current token and claims to allow', fakeAsync(() => {
       const allow = jest.fn().mockReturnValue(true);
-      mockGetAuth.mockReturnValue({ token: 'jwt-token', decoded: { role: 'admin' } });
+      convex.seedAuth({ token: 'jwt-token', decoded: { role: 'admin' } });
       isAuthenticated.set(true);
 
       const router = setupGuardTestBed(adminRoutes({ allow }));
@@ -320,7 +303,7 @@ describe('Auth Guards', () => {
     }));
 
     it('blocks navigation when allow fails and no forbiddenRoute is set', fakeAsync(() => {
-      mockGetAuth.mockReturnValue({ token: 'jwt-token', decoded: { role: 'viewer' } });
+      convex.seedAuth({ token: 'jwt-token', decoded: { role: 'viewer' } });
       isAuthenticated.set(true);
 
       const router = setupGuardTestBed(adminRoutes({ allow: ({ claims }) => claims['role'] === 'admin' }));
@@ -330,7 +313,7 @@ describe('Auth Guards', () => {
     }));
 
     it('redirects to forbiddenRoute when allow fails', fakeAsync(() => {
-      mockGetAuth.mockReturnValue({ token: 'jwt-token', decoded: { role: 'viewer' } });
+      convex.seedAuth({ token: 'jwt-token', decoded: { role: 'viewer' } });
       isAuthenticated.set(true);
 
       const router = setupGuardTestBed(
@@ -345,7 +328,7 @@ describe('Auth Guards', () => {
     }));
 
     it('blocks when no auth snapshot is available even if authenticated', fakeAsync(() => {
-      mockGetAuth.mockReturnValue(undefined);
+      convex.seedAuth(undefined);
       isAuthenticated.set(true);
 
       const router = setupGuardTestBed(adminRoutes({ allow: () => true }));
@@ -363,8 +346,8 @@ describe('Auth Guards', () => {
 
       // The server rejects the token; mid-refresh there is no usable
       // snapshot, so the guard must not run `allow` yet.
-      mockGetAuth.mockReturnValue(undefined);
-      setAuthOnRefreshChange?.(true);
+      convex.seedAuth(undefined);
+      requireLastAuthRegistration(convex).setRefreshing(true);
       tick();
 
       router.navigate(['/admin']);
@@ -375,8 +358,8 @@ describe('Auth Guards', () => {
 
       // The refresh completes with a fresh token; the pending guard decides
       // with the new claims.
-      mockGetAuth.mockReturnValue({ token: 'fresh-jwt', decoded: { role: 'admin' } });
-      setAuthOnRefreshChange?.(false);
+      convex.seedAuth({ token: 'fresh-jwt', decoded: { role: 'admin' } });
+      requireLastAuthRegistration(convex).setRefreshing(false);
       tick();
       flush();
 
@@ -385,7 +368,7 @@ describe('Auth Guards', () => {
     }));
 
     it('works as a canMatch guard', fakeAsync(() => {
-      mockGetAuth.mockReturnValue({ token: 'jwt-token', decoded: { role: 'admin' } });
+      convex.seedAuth({ token: 'jwt-token', decoded: { role: 'admin' } });
       isAuthenticated.set(true);
 
       const routes: Routes = [

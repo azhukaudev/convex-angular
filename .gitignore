@@ -52,6 +52,9 @@ Thumbs.db
 # Astro generated types for the docs site
 apps/docs/.astro
 
+# Vercel adapter build output for the docs site
+apps/docs/.vercel/output
+
 .env.local
 
 .claude/worktrees

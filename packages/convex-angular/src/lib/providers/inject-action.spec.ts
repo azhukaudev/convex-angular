@@ -1,9 +1,8 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
+import { MockCallableCall, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
-import { CONVEX } from '../tokens/convex';
 import { ActionReference, injectAction } from './inject-action';
 
 type Assert<T extends true> = T;
@@ -17,35 +16,25 @@ const mockAction = (() => {}) as unknown as FunctionReference<
   { success: boolean }
 > as ActionReference;
 
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason?: unknown) => void;
-}
-
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
+function requireCall(calls: readonly MockCallableCall[], index = calls.length - 1): MockCallableCall {
+  const call = calls[index];
+  if (!call) {
+    throw new Error(`Expected a captured action call at index ${index}`);
+  }
+  return call;
 }
 
 describe('injectAction', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
+  let convex: MockConvexClient;
   const ignoreRejection = (promise: Promise<unknown>) => {
     promise.catch(() => undefined);
   };
 
   beforeEach(() => {
-    mockConvexClient = {
-      action: jest.fn(),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -123,10 +112,6 @@ describe('injectAction', () => {
 
   describe('running actions', () => {
     it('should set isLoading to true when run() is called', fakeAsync(() => {
-      mockConvexClient.action.mockImplementation(
-        () => new Promise(() => {}), // Never resolves
-      );
-
       @Component({
         template: '',
         standalone: true,
@@ -138,6 +123,7 @@ describe('injectAction', () => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();
 
+      // Left unsettled: the captured call only completes when the test settles it.
       fixture.componentInstance.sendEmail.run({ message: 'test' });
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(true);
@@ -145,7 +131,6 @@ describe('injectAction', () => {
 
     it('should set data on successful action', fakeAsync(() => {
       const mockResult = { success: true };
-      mockConvexClient.action.mockResolvedValue(mockResult);
 
       @Component({
         template: '',
@@ -159,6 +144,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).resolve(mockResult);
       tick();
 
       expect(fixture.componentInstance.sendEmail.data()).toEqual(mockResult);
@@ -166,7 +152,6 @@ describe('injectAction', () => {
 
     it('should return result from run()', fakeAsync(() => {
       const mockResult = { success: true };
-      mockConvexClient.action.mockResolvedValue(mockResult);
 
       @Component({
         template: '',
@@ -181,6 +166,7 @@ describe('injectAction', () => {
 
       let result: unknown;
       fixture.componentInstance.sendEmail.run({ message: 'test' }).then((r) => (result = r));
+      requireCall(convex.actionCalls).resolve(mockResult);
       tick();
 
       expect(result).toEqual(mockResult);
@@ -188,10 +174,6 @@ describe('injectAction', () => {
 
     it('should clear previous data/error before running', fakeAsync(() => {
       const error = new Error('First error');
-      mockConvexClient.action.mockRejectedValueOnce(error);
-      mockConvexClient.action.mockImplementation(
-        () => new Promise(() => {}), // Never resolves
-      );
 
       @Component({
         template: '',
@@ -206,6 +188,7 @@ describe('injectAction', () => {
 
       // First call - error
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).reject(error);
       tick();
 
       expect(fixture.componentInstance.sendEmail.error()).toBeDefined();
@@ -218,8 +201,6 @@ describe('injectAction', () => {
     }));
 
     it('should call convex.action with correct arguments', fakeAsync(() => {
-      mockConvexClient.action.mockResolvedValue({ success: true });
-
       @Component({
         template: '',
         standalone: true,
@@ -232,18 +213,21 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       fixture.componentInstance.sendEmail.run({ message: 'hello' });
+      const call = requireCall(convex.actionCalls);
+      call.resolve({ success: true });
       tick();
 
-      expect(mockConvexClient.action).toHaveBeenCalledWith(mockAction, {
-        message: 'hello',
-      });
+      expect(convex.actionCalls).toHaveLength(1);
+      expect(call.fn).toBe(mockAction);
+      expect(call.args).toEqual({ message: 'hello' });
+      // injectAction passes no options object at all.
+      expect(call.options).toBeUndefined();
     }));
   });
 
   describe('error handling', () => {
     it('should set error signal on action failure', fakeAsync(() => {
       const error = new Error('Action failed');
-      mockConvexClient.action.mockRejectedValue(error);
 
       @Component({
         template: '',
@@ -257,14 +241,13 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).reject(error);
       tick();
 
       expect(fixture.componentInstance.sendEmail.error()).toBe(error);
     }));
 
     it('should convert non-Error objects to Error', fakeAsync(() => {
-      mockConvexClient.action.mockRejectedValue('string error');
-
       @Component({
         template: '',
         standalone: true,
@@ -278,6 +261,7 @@ describe('injectAction', () => {
 
       let rejection: unknown;
       fixture.componentInstance.sendEmail.run({ message: 'test' }).catch((error) => (rejection = error));
+      requireCall(convex.actionCalls).reject('string error');
       tick();
 
       const error = fixture.componentInstance.sendEmail.error();
@@ -288,7 +272,6 @@ describe('injectAction', () => {
 
     it('should reject with the same error stored in state', fakeAsync(() => {
       const failure = new Error('Failed');
-      mockConvexClient.action.mockRejectedValue(failure);
 
       @Component({
         template: '',
@@ -303,6 +286,7 @@ describe('injectAction', () => {
 
       let rejection: unknown;
       fixture.componentInstance.sendEmail.run({ message: 'test' }).catch((error) => (rejection = error));
+      requireCall(convex.actionCalls).reject(failure);
       tick();
 
       expect(rejection).toBe(failure);
@@ -317,7 +301,6 @@ describe('injectAction', () => {
   describe('callbacks', () => {
     it('should call onSuccess callback with result', fakeAsync(() => {
       const mockResult = { success: true };
-      mockConvexClient.action.mockResolvedValue(mockResult);
       const onSuccess = jest.fn();
 
       @Component({
@@ -332,6 +315,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).resolve(mockResult);
       tick();
 
       expect(onSuccess).toHaveBeenCalledWith(mockResult);
@@ -339,7 +323,6 @@ describe('injectAction', () => {
 
     it('should call onError callback with error', fakeAsync(() => {
       const error = new Error('Failed');
-      mockConvexClient.action.mockRejectedValue(error);
       const onError = jest.fn();
 
       @Component({
@@ -354,6 +337,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).reject(error);
       tick();
 
       expect(onError).toHaveBeenCalledWith(error);
@@ -361,7 +345,6 @@ describe('injectAction', () => {
     }));
 
     it('should not call onSuccess on error', fakeAsync(() => {
-      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
       const onSuccess = jest.fn();
 
       @Component({
@@ -376,13 +359,13 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).reject(new Error('Failed'));
       tick();
 
       expect(onSuccess).not.toHaveBeenCalled();
     }));
 
     it('should not call onError on success', fakeAsync(() => {
-      mockConvexClient.action.mockResolvedValue({ success: true });
       const onError = jest.fn();
 
       @Component({
@@ -397,6 +380,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).resolve({ success: true });
       tick();
 
       expect(onError).not.toHaveBeenCalled();
@@ -405,8 +389,6 @@ describe('injectAction', () => {
 
   describe('loading states', () => {
     it('should set isLoading to false after success', fakeAsync(() => {
-      mockConvexClient.action.mockResolvedValue({ success: true });
-
       @Component({
         template: '',
         standalone: true,
@@ -419,14 +401,13 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).resolve({ success: true });
       tick();
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
     }));
 
     it('should set isLoading to false after error', fakeAsync(() => {
-      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
-
       @Component({
         template: '',
         standalone: true,
@@ -439,6 +420,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).reject(new Error('Failed'));
       tick();
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
@@ -462,10 +444,6 @@ describe('injectAction', () => {
     });
 
     it('should return pending status while action is running', fakeAsync(() => {
-      mockConvexClient.action.mockImplementation(
-        () => new Promise(() => {}), // Never resolves
-      );
-
       @Component({
         template: '',
         standalone: true,
@@ -483,8 +461,6 @@ describe('injectAction', () => {
     }));
 
     it('should return success status after successful action', fakeAsync(() => {
-      mockConvexClient.action.mockResolvedValue({ success: true });
-
       @Component({
         template: '',
         standalone: true,
@@ -497,14 +473,13 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).resolve({ success: true });
       tick();
 
       expect(fixture.componentInstance.sendEmail.status()).toBe('success');
     }));
 
     it('should return error status after failed action', fakeAsync(() => {
-      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
-
       @Component({
         template: '',
         standalone: true,
@@ -517,6 +492,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).reject(new Error('Failed'));
       tick();
 
       expect(fixture.componentInstance.sendEmail.status()).toBe('error');
@@ -540,10 +516,6 @@ describe('injectAction', () => {
     });
 
     it('should be false while action is running', fakeAsync(() => {
-      mockConvexClient.action.mockImplementation(
-        () => new Promise(() => {}), // Never resolves
-      );
-
       @Component({
         template: '',
         standalone: true,
@@ -561,8 +533,6 @@ describe('injectAction', () => {
     }));
 
     it('should be true after successful action', fakeAsync(() => {
-      mockConvexClient.action.mockResolvedValue({ success: true });
-
       @Component({
         template: '',
         standalone: true,
@@ -575,14 +545,13 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).resolve({ success: true });
       tick();
 
       expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(true);
     }));
 
     it('should be false after failed action', fakeAsync(() => {
-      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
-
       @Component({
         template: '',
         standalone: true,
@@ -595,6 +564,7 @@ describe('injectAction', () => {
       fixture.detectChanges();
 
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).reject(new Error('Failed'));
       tick();
 
       expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(false);
@@ -603,8 +573,6 @@ describe('injectAction', () => {
 
   describe('reset', () => {
     it('should reset all state to initial values', fakeAsync(() => {
-      mockConvexClient.action.mockResolvedValue({ success: true });
-
       @Component({
         template: '',
         standalone: true,
@@ -618,6 +586,7 @@ describe('injectAction', () => {
 
       // Run an action
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).resolve({ success: true });
       tick();
 
       expect(fixture.componentInstance.sendEmail.data()).toBeDefined();
@@ -634,8 +603,6 @@ describe('injectAction', () => {
     }));
 
     it('should reset error state', fakeAsync(() => {
-      mockConvexClient.action.mockRejectedValue(new Error('Failed'));
-
       @Component({
         template: '',
         standalone: true,
@@ -649,6 +616,7 @@ describe('injectAction', () => {
 
       // Run a failing action
       ignoreRejection(fixture.componentInstance.sendEmail.run({ message: 'test' }));
+      requireCall(convex.actionCalls).reject(new Error('Failed'));
       tick();
 
       expect(fixture.componentInstance.sendEmail.error()).toBeDefined();
@@ -664,11 +632,6 @@ describe('injectAction', () => {
 
   describe('overlapping actions', () => {
     it('should keep only the latest successful result in state', fakeAsync(() => {
-      const first = createDeferred<{ success: boolean }>();
-      const second = createDeferred<{ success: boolean }>();
-
-      mockConvexClient.action.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-
       @Component({
         template: '',
         standalone: true,
@@ -685,7 +648,7 @@ describe('injectAction', () => {
       fixture.componentInstance.sendEmail.run({ message: 'first' }).then((value) => (firstResult = value));
       fixture.componentInstance.sendEmail.run({ message: 'second' }).then((value) => (secondResult = value));
 
-      second.resolve({ success: true });
+      requireCall(convex.actionCalls, 1).resolve({ success: true });
       tick();
 
       expect(fixture.componentInstance.sendEmail.data()).toEqual({
@@ -695,7 +658,7 @@ describe('injectAction', () => {
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
       expect(secondResult).toEqual({ success: true });
 
-      first.resolve({ success: false });
+      requireCall(convex.actionCalls, 0).resolve({ success: false });
       tick();
 
       expect(firstResult).toEqual({ success: false });
@@ -706,11 +669,6 @@ describe('injectAction', () => {
     }));
 
     it('should ignore stale errors when a newer action succeeds', fakeAsync(() => {
-      const first = createDeferred<{ success: boolean }>();
-      const second = createDeferred<{ success: boolean }>();
-
-      mockConvexClient.action.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-
       @Component({
         template: '',
         standalone: true,
@@ -727,7 +685,7 @@ describe('injectAction', () => {
       fixture.componentInstance.sendEmail.run({ message: 'first' }).catch((error) => (firstError = error));
       fixture.componentInstance.sendEmail.run({ message: 'second' }).then((value) => (secondResult = value));
 
-      second.resolve({ success: true });
+      requireCall(convex.actionCalls, 1).resolve({ success: true });
       tick();
 
       expect(fixture.componentInstance.sendEmail.data()).toEqual({
@@ -737,7 +695,7 @@ describe('injectAction', () => {
       expect(secondResult).toEqual({ success: true });
 
       const staleError = new Error('stale failure');
-      first.reject(staleError);
+      requireCall(convex.actionCalls, 0).reject(staleError);
       tick();
 
       expect(firstError).toBe(staleError);
@@ -749,11 +707,6 @@ describe('injectAction', () => {
     }));
 
     it('should let the latest failure win over an older success', fakeAsync(() => {
-      const first = createDeferred<{ success: boolean }>();
-      const second = createDeferred<{ success: boolean }>();
-
-      mockConvexClient.action.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-
       @Component({
         template: '',
         standalone: true,
@@ -771,7 +724,7 @@ describe('injectAction', () => {
       fixture.componentInstance.sendEmail.run({ message: 'second' }).catch((error) => (secondError = error));
 
       const latestError = new Error('latest failure');
-      second.reject(latestError);
+      requireCall(convex.actionCalls, 1).reject(latestError);
       tick();
 
       expect(secondError).toBe(latestError);
@@ -780,7 +733,7 @@ describe('injectAction', () => {
       expect(fixture.componentInstance.sendEmail.isSuccess()).toBe(false);
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
 
-      first.resolve({ success: true });
+      requireCall(convex.actionCalls, 0).resolve({ success: true });
       tick();
 
       expect(firstResult).toEqual({ success: true });
@@ -790,11 +743,6 @@ describe('injectAction', () => {
     }));
 
     it('should keep loading tied to the latest action only', fakeAsync(() => {
-      const first = createDeferred<{ success: boolean }>();
-      const second = createDeferred<{ success: boolean }>();
-
-      mockConvexClient.action.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-
       @Component({
         template: '',
         standalone: true,
@@ -811,21 +759,18 @@ describe('injectAction', () => {
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(true);
 
-      second.resolve({ success: true });
+      requireCall(convex.actionCalls, 1).resolve({ success: true });
       tick();
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
 
-      first.resolve({ success: false });
+      requireCall(convex.actionCalls, 0).resolve({ success: false });
       tick();
 
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
     }));
 
     it('should ignore in-flight completions after reset', fakeAsync(() => {
-      const pending = createDeferred<{ success: boolean }>();
-      mockConvexClient.action.mockReturnValueOnce(pending.promise);
-
       @Component({
         template: '',
         standalone: true,
@@ -849,7 +794,7 @@ describe('injectAction', () => {
       expect(fixture.componentInstance.sendEmail.status()).toBe('idle');
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
 
-      pending.resolve({ success: true });
+      requireCall(convex.actionCalls).resolve({ success: true });
       tick();
 
       expect(result).toEqual({ success: true });
@@ -860,9 +805,7 @@ describe('injectAction', () => {
     }));
 
     it('should ignore a pending success after the owning component is destroyed', fakeAsync(() => {
-      const pending = createDeferred<{ success: boolean }>();
       const onSuccess = jest.fn();
-      mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       @Component({
         template: '',
@@ -887,7 +830,7 @@ describe('injectAction', () => {
       expect(fixture.componentInstance.sendEmail.status()).toBe('idle');
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
 
-      pending.resolve({ success: true });
+      requireCall(convex.actionCalls).resolve({ success: true });
       tick();
 
       expect(result).toEqual({ success: true });
@@ -899,9 +842,7 @@ describe('injectAction', () => {
     }));
 
     it('should ignore a pending failure after the owning component is destroyed', fakeAsync(() => {
-      const pending = createDeferred<{ success: boolean }>();
       const onError = jest.fn();
-      mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       @Component({
         template: '',
@@ -928,7 +869,7 @@ describe('injectAction', () => {
       expect(fixture.componentInstance.sendEmail.isLoading()).toBe(false);
 
       const destroyedError = new Error('after destroy');
-      pending.reject(destroyedError);
+      requireCall(convex.actionCalls).reject(destroyedError);
       tick();
 
       expect(rejection).toBe(destroyedError);
@@ -943,22 +884,21 @@ describe('injectAction', () => {
   describe('injectRef', () => {
     it('should create an action outside an injection context with injectRef', fakeAsync(() => {
       const injector = TestBed.inject(EnvironmentInjector);
-      mockConvexClient.action.mockResolvedValue({ success: true });
 
       const sendEmail = injectAction(mockAction, { injectRef: injector });
       sendEmail.run({ message: 'test' });
+      const call = requireCall(convex.actionCalls);
+      call.resolve({ success: true });
       tick();
 
       expect(sendEmail.data()).toEqual({ success: true });
-      expect(mockConvexClient.action).toHaveBeenCalledWith(mockAction, {
-        message: 'test',
-      });
+      expect(call.fn).toBe(mockAction);
+      expect(call.args).toEqual({ message: 'test' });
+      expect(call.options).toBeUndefined();
     }));
 
     it('should ignore a pending success after the provided injector is destroyed', fakeAsync(() => {
-      const pending = createDeferred<{ success: boolean }>();
       const onSuccess = jest.fn();
-      mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);
       const childInjector = createEnvironmentInjector([], parentInjector);
@@ -976,7 +916,7 @@ describe('injectAction', () => {
       expect(sendEmail.status()).toBe('idle');
       expect(sendEmail.isLoading()).toBe(false);
 
-      pending.resolve({ success: true });
+      requireCall(convex.actionCalls).resolve({ success: true });
       tick();
 
       expect(result).toEqual({ success: true });
@@ -988,9 +928,7 @@ describe('injectAction', () => {
     }));
 
     it('should ignore a pending failure after the provided injector is destroyed', fakeAsync(() => {
-      const pending = createDeferred<{ success: boolean }>();
       const onError = jest.fn();
-      mockConvexClient.action.mockReturnValueOnce(pending.promise);
 
       const parentInjector = TestBed.inject(EnvironmentInjector);
       const childInjector = createEnvironmentInjector([], parentInjector);
@@ -1008,7 +946,7 @@ describe('injectAction', () => {
       expect(sendEmail.isLoading()).toBe(false);
 
       const destroyedError = new Error('after destroy');
-      pending.reject(destroyedError);
+      requireCall(convex.actionCalls).reject(destroyedError);
       tick();
 
       expect(rejection).toBe(destroyedError);

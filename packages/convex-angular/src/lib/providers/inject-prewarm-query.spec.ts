@@ -1,9 +1,8 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
+import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
-import { CONVEX } from '../tokens/convex';
 import { PrewarmQueryReference, injectPrewarmQuery } from './inject-prewarm-query';
 
 const mockQuery = (() => {}) as unknown as FunctionReference<
@@ -13,30 +12,22 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
   { name: string }
 > as PrewarmQueryReference;
 
+function requireQuerySubscription(convex: MockConvexClient, index: number): MockQuerySubscription {
+  const subscription = convex.querySubscriptions[index];
+  if (!subscription) {
+    throw new Error(`Expected a captured query subscription at index ${index}`);
+  }
+  return subscription;
+}
+
 describe('injectPrewarmQuery', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let unsubscribeFns: jest.Mock[];
-  let updateCallbacks: Array<(result: unknown) => void>;
-  let errorCallbacks: Array<(err: Error) => void>;
+  let convex: MockConvexClient;
 
   beforeEach(() => {
-    unsubscribeFns = [];
-    updateCallbacks = [];
-    errorCallbacks = [];
-
-    mockConvexClient = {
-      onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
-        updateCallbacks.push(onUpdate);
-        errorCallbacks.push(onError);
-
-        const unsubscribe = jest.fn();
-        unsubscribeFns.push(unsubscribe);
-        return unsubscribe;
-      }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -58,12 +49,9 @@ describe('injectPrewarmQuery', () => {
 
     fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
 
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledWith(
-      mockQuery,
-      { userId: 'user-1' },
-      expect.any(Function),
-      expect.any(Function),
-    );
+    expect(convex.querySubscriptions).toHaveLength(1);
+    expect(requireQuerySubscription(convex, 0).query).toBe(mockQuery);
+    expect(requireQuerySubscription(convex, 0).args).toEqual({ userId: 'user-1' });
   });
 
   it('unsubscribes after the default timeout', fakeAsync(() => {
@@ -80,13 +68,13 @@ describe('injectPrewarmQuery', () => {
 
     fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
 
-    expect(unsubscribeFns[0]).not.toHaveBeenCalled();
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(0);
 
     tick(4_999);
-    expect(unsubscribeFns[0]).not.toHaveBeenCalled();
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(0);
 
     tick(1);
-    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
   }));
 
   it('respects a custom extendSubscriptionFor timeout', fakeAsync(() => {
@@ -106,10 +94,10 @@ describe('injectPrewarmQuery', () => {
     fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
 
     tick(249);
-    expect(unsubscribeFns[0]).not.toHaveBeenCalled();
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(0);
 
     tick(1);
-    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
   }));
 
   it('forwards subscription errors to onError', () => {
@@ -129,7 +117,7 @@ describe('injectPrewarmQuery', () => {
     fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
 
     const error = new Error('Prefetch failed');
-    errorCallbacks[0]?.(error);
+    requireQuerySubscription(convex, 0).emitError(error);
 
     expect(onError).toHaveBeenCalledWith(error, { userId: 'user-1' });
   });
@@ -154,16 +142,17 @@ describe('injectPrewarmQuery', () => {
     });
 
     tick(5_000);
-    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
 
     // A failure reported after the prewarm was already released must not
-    // unsubscribe a second time.
+    // unsubscribe a second time. A real client could never call a retired
+    // callback, so invoke it directly to reach that guard.
     const error = new Error('late failure');
-    errorCallbacks[0](error);
+    requireQuerySubscription(convex, 0).emitErrorAfterUnsubscribe(error);
     tick();
 
     expect(onError).toHaveBeenCalledWith(error, { userId: 'user-1' });
-    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
     expect(warmed).toBe(false);
   }));
 
@@ -182,12 +171,12 @@ describe('injectPrewarmQuery', () => {
     fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
     fixture.destroy();
 
-    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
 
-    errorCallbacks[0](new Error('late failure'));
+    requireQuerySubscription(convex, 0).emitErrorAfterUnsubscribe(new Error('late failure'));
     tick();
 
-    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
   }));
 
   it('supports injectRef outside the current injection context', () => {
@@ -196,7 +185,7 @@ describe('injectPrewarmQuery', () => {
     const prewarmUser = injectPrewarmQuery(mockQuery, { injectRef: injector });
     prewarmUser.prewarm({ userId: 'user-1' });
 
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+    expect(convex.querySubscriptions).toHaveLength(1);
   });
 
   it('cleans up active prewarms when the provided injector is destroyed', () => {
@@ -208,8 +197,8 @@ describe('injectPrewarmQuery', () => {
 
     childInjector.destroy();
 
-    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
-    expect(unsubscribeFns[1]).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
+    expect(requireQuerySubscription(convex, 1).unsubscribeCount).toBe(1);
   });
 
   it('lets injectRef override the ambient component scope', () => {
@@ -231,11 +220,11 @@ describe('injectPrewarmQuery', () => {
     fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
     fixture.destroy();
 
-    expect(unsubscribeFns[0]).not.toHaveBeenCalled();
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(0);
 
     childInjector.destroy();
 
-    expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
   });
 
   it('throws outside an injection context without injectRef', () => {
@@ -260,7 +249,7 @@ describe('injectPrewarmQuery', () => {
         warmed = result;
       });
 
-      updateCallbacks[0]({ name: 'Ada' });
+      requireQuerySubscription(convex, 0).emit({ name: 'Ada' });
       tick();
 
       expect(warmed).toBe(true);
@@ -275,12 +264,12 @@ describe('injectPrewarmQuery', () => {
         warmed = result;
       });
 
-      errorCallbacks[0](new Error('subscription failed'));
+      requireQuerySubscription(convex, 0).emitError(new Error('subscription failed'));
       tick();
 
       expect(warmed).toBe(false);
       // A failed subscription is released immediately, not at expiry.
-      expect(unsubscribeFns[0]).toHaveBeenCalledTimes(1);
+      expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
     }));
 
     it('resolves false when the subscription expires before a result arrives', fakeAsync(() => {
@@ -306,7 +295,7 @@ describe('injectPrewarmQuery', () => {
         warmed = result;
       });
 
-      updateCallbacks[0]({ name: 'Ada' });
+      requireQuerySubscription(convex, 0).emit({ name: 'Ada' });
       tick(5_000);
 
       expect(warmed).toBe(true);
@@ -329,17 +318,14 @@ describe('injectPrewarmQuery', () => {
   });
 
   describe('disabled client (SSR)', () => {
+    let disabledConvex: MockConvexClient;
+
     beforeEach(() => {
       TestBed.resetTestingModule();
-      mockConvexClient = {
-        get disabled() {
-          return true;
-        },
-        onUpdate: jest.fn(),
-      } as unknown as jest.Mocked<ConvexClient>;
+      disabledConvex = new MockConvexClient({ disabled: true });
 
       TestBed.configureTestingModule({
-        providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+        providers: [provideConvexTesting(disabledConvex)],
       });
     });
 
@@ -361,10 +347,11 @@ describe('injectPrewarmQuery', () => {
       });
       tick();
 
-      // The subscription and its cleanup timer are created in the same
-      // guarded path; no onUpdate call means no timer was scheduled either.
-      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
-      expect(unsubscribeFns).toHaveLength(0);
+      // The subscription and its cleanup timer are created in the same guarded
+      // path, so never reaching the client means no timer was scheduled either.
+      // A disabled client records the attempt it refused, which is what proves
+      // the helper did not make one.
+      expect(disabledConvex.refusedSubscriptions).toHaveLength(0);
       expect(warmed).toBe(false);
     }));
   });

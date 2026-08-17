@@ -12,6 +12,7 @@ import { ConnectionState } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
 
 import {
+  MockAuthRegistration,
   MockConvexClient,
   MockPaginatedSubscription,
   MockQuerySubscription,
@@ -24,6 +25,14 @@ function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscr
     throw new Error('Expected a captured query subscription');
   }
   return subscription;
+}
+
+function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
+  const registration = convex.lastAuthRegistration();
+  if (!registration) {
+    throw new Error('Expected a captured auth registration');
+  }
+  return registration;
 }
 
 function requireLastPaginatedSubscription(convex: MockConvexClient): MockPaginatedSubscription {
@@ -327,10 +336,132 @@ describe('MockConvexClient contract', () => {
   });
 
   describe('client auth surface', () => {
-    it('reports no auth, with setAuth and clearAuth as no-ops', () => {
+    const fetchToken = async () => 'token';
+
+    it('starts unauthenticated with nothing registered', () => {
       expect(convex.client.hasAuth()).toBe(false);
-      expect(convex.client.setAuth()).toBeUndefined();
-      expect(convex.client.clearAuth()).toBeUndefined();
+      expect(convex.getAuth()).toBeUndefined();
+      expect(convex.authRegistrations).toHaveLength(0);
+      expect(convex.lastAuthRegistration()).toBeUndefined();
+      expect(convex.clearAuthCount).toBe(0);
+    });
+
+    it('captures the token fetcher a setAuth caller registers', async () => {
+      convex.client.setAuth(fetchToken);
+
+      const registration = requireLastAuthRegistration(convex);
+      expect(convex.authRegistrations).toHaveLength(1);
+      expect(registration.cleared).toBe(false);
+      await expect(registration.fetchToken({ forceRefreshToken: false })).resolves.toBe('token');
+    });
+
+    it('reports no authentication from registration alone', () => {
+      convex.client.setAuth(fetchToken);
+
+      // Registration is configuration; the real hasAuth() reports a held token.
+      expect(convex.client.hasAuth()).toBe(false);
+    });
+
+    it('reports authentication once the client holds a token', () => {
+      convex.seedAuth({ token: 'jwt', decoded: {} });
+
+      expect(convex.client.hasAuth()).toBe(true);
+    });
+
+    it('forwards the authentication outcome to the registered callback', () => {
+      const changes: boolean[] = [];
+      convex.client.setAuth(fetchToken, (isAuthenticated) => changes.push(isAuthenticated));
+
+      requireLastAuthRegistration(convex).setAuthenticated(true);
+
+      expect(changes).toEqual([true]);
+    });
+
+    it('forwards refresh transitions to the registered callback', () => {
+      const refreshes: boolean[] = [];
+      convex.client.setAuth(
+        fetchToken,
+        () => undefined,
+        (isRefreshing) => refreshes.push(isRefreshing),
+      );
+
+      const registration = requireLastAuthRegistration(convex);
+      registration.setRefreshing(true);
+      registration.setRefreshing(false);
+
+      expect(refreshes).toEqual([true, false]);
+    });
+
+    it('tolerates a registration made without optional callbacks', () => {
+      convex.client.setAuth(fetchToken);
+
+      const registration = requireLastAuthRegistration(convex);
+
+      expect(() => {
+        registration.setAuthenticated(true);
+        registration.setRefreshing(true);
+      }).not.toThrow();
+    });
+
+    it('keeps calling back after clearAuth, like the real client', () => {
+      const changes: boolean[] = [];
+      convex.client.setAuth(fetchToken, (isAuthenticated) => changes.push(isAuthenticated));
+      const registration = requireLastAuthRegistration(convex);
+
+      convex.client.clearAuth();
+      registration.setAuthenticated(true);
+
+      // clearAuth drops the token; it does not tear down the registered config,
+      // so a late callback still arrives and the helper must cope.
+      expect(registration.cleared).toBe(true);
+      expect(changes).toEqual([true]);
+    });
+
+    it('drops the held token and counts the call on clearAuth', () => {
+      convex.seedAuth({ token: 'jwt', decoded: {} });
+
+      convex.client.clearAuth();
+
+      expect(convex.client.hasAuth()).toBe(false);
+      expect(convex.getAuth()).toBeUndefined();
+      expect(convex.clearAuthCount).toBe(1);
+    });
+
+    it('keeps every registration in order across re-registration', () => {
+      convex.client.setAuth(fetchToken);
+      convex.client.clearAuth();
+      convex.client.setAuth(fetchToken);
+
+      expect(convex.authRegistrations).toHaveLength(2);
+      expect(convex.authRegistrations[0].cleared).toBe(true);
+      expect(requireLastAuthRegistration(convex).cleared).toBe(false);
+    });
+
+    it('lets a test stand in for an already-authenticated client', () => {
+      convex.seedAuth({ token: 'jwt', decoded: {} });
+
+      expect(convex.client.hasAuth()).toBe(true);
+      expect(convex.authRegistrations).toHaveLength(0);
+    });
+
+    it('reports no auth state at all when disabled', () => {
+      const disabled = new MockConvexClient({ disabled: true });
+      disabled.seedAuth({ token: 'jwt', decoded: {} });
+
+      expect(disabled.getAuth()).toBeUndefined();
+    });
+
+    it('reports the seeded token and claims through getAuth', () => {
+      convex.seedAuth({ token: 'jwt', decoded: { sub: 'user_1' } });
+
+      expect(convex.getAuth()).toEqual({ token: 'jwt', decoded: { sub: 'user_1' } });
+    });
+
+    it('clears a seeded token when seeded with undefined', () => {
+      convex.seedAuth({ token: 'jwt', decoded: {} });
+
+      convex.seedAuth(undefined);
+
       expect(convex.getAuth()).toBeUndefined();
     });
   });
@@ -471,6 +602,275 @@ describe('MockConvexClient contract', () => {
       expect(disabled.disabled).toBe(true);
       expect(new MockConvexClient().disabled).toBe(false);
       expect(new MockConvexClient({}).disabled).toBe(false);
+    });
+
+    it('registers no connection-state listener and hands back a callable no-op', () => {
+      const received: ConnectionState[] = [];
+      const unsubscribe = disabled.subscribeToConnectionState((state) => received.push(state));
+
+      disabled.setConnectionState({ isWebSocketConnected: false });
+
+      expect(received).toHaveLength(0);
+      expect(() => unsubscribe()).not.toThrow();
+    });
+
+    it('still records the connection-state calls it refuses to honour', () => {
+      disabled.subscribeToConnectionState(() => undefined);
+      expect(() => disabled.connectionState()).toThrow(/disabled/);
+
+      // Recorded rather than dropped, so `toBe(0)` elsewhere proves the caller
+      // never reached for these rather than proving nothing.
+      expect(disabled.connectionStateSubscriptions).toBe(1);
+      expect(disabled.connectionStateReads).toBe(1);
+    });
+
+    it('records a refused query subscription instead of dropping it silently', () => {
+      disabled.onUpdate(mockQuery, { count: 10 }, () => undefined);
+
+      expect(disabled.querySubscriptions).toHaveLength(0);
+      expect(disabled.refusedSubscriptions).toEqual([{ kind: 'query', query: mockQuery, args: { count: 10 } }]);
+    });
+
+    it('records a refused paginated subscription instead of dropping it silently', () => {
+      disabled.onPaginatedUpdate_experimental(mockQuery, { q: 'a' }, { initialNumItems: 10 }, () => undefined);
+
+      expect(disabled.paginatedSubscriptions).toHaveLength(0);
+      expect(disabled.refusedSubscriptions).toEqual([{ kind: 'paginated', query: mockQuery, args: { q: 'a' } }]);
+    });
+
+    it('refuses nothing when the client is enabled', () => {
+      const enabled = new MockConvexClient();
+
+      enabled.onUpdate(mockQuery, {}, () => undefined);
+      enabled.onPaginatedUpdate_experimental(mockQuery, {}, { initialNumItems: 10 }, () => undefined);
+
+      expect(enabled.refusedSubscriptions).toHaveLength(0);
+    });
+  });
+
+  describe('retired-callback fault injection', () => {
+    it('invokes a retired query callback the real client would never call', () => {
+      const received: unknown[] = [];
+      const unsubscribe = convex.onUpdate(mockQuery, {}, (result) => received.push(result));
+      const subscription = requireLastQuerySubscription(convex);
+
+      unsubscribe();
+      subscription.emit('gated');
+      subscription.emitAfterUnsubscribe('retired');
+
+      expect(received).toEqual(['retired']);
+    });
+
+    it('invokes a retired query error callback', () => {
+      const received: Error[] = [];
+      const unsubscribe = convex.onUpdate(
+        mockQuery,
+        {},
+        () => undefined,
+        (err) => received.push(err),
+      );
+      const subscription = requireLastQuerySubscription(convex);
+      const failure = new Error('boom');
+
+      unsubscribe();
+      subscription.emitError(new Error('gated'));
+      subscription.emitErrorAfterUnsubscribe(failure);
+
+      expect(received).toEqual([failure]);
+    });
+
+    it('invokes a retired paginated callback', () => {
+      const received: unknown[] = [];
+      const unsubscribe = convex.onPaginatedUpdate_experimental(mockQuery, {}, { initialNumItems: 10 }, (result) =>
+        received.push(result),
+      );
+      const subscription = requireLastPaginatedSubscription(convex);
+      const page = { results: ['a'], status: 'CanLoadMore', loadMore: () => true };
+
+      unsubscribe();
+      subscription.emitAfterUnsubscribe(page);
+
+      expect(received).toEqual([page]);
+    });
+
+    it('invokes a retired paginated error callback', () => {
+      const received: Error[] = [];
+      const unsubscribe = convex.onPaginatedUpdate_experimental(
+        mockQuery,
+        {},
+        { initialNumItems: 10 },
+        () => undefined,
+        (err) => received.push(err),
+      );
+      const subscription = requireLastPaginatedSubscription(convex);
+      const failure = new Error('boom');
+
+      unsubscribe();
+      subscription.emitErrorAfterUnsubscribe(failure);
+
+      expect(received).toEqual([failure]);
+    });
+
+    it('leaves the unsubscribe record untouched', () => {
+      const unsubscribe = convex.onUpdate(mockQuery, {}, () => undefined);
+      const subscription = requireLastQuerySubscription(convex);
+
+      unsubscribe();
+      subscription.emitAfterUnsubscribe('retired');
+
+      expect(subscription.unsubscribed).toBe(true);
+      expect(subscription.unsubscribeCount).toBe(1);
+    });
+
+    it('tolerates a retired error callback that was never registered', () => {
+      convex.onUpdate(mockQuery, {}, () => undefined);
+
+      expect(() => requireLastQuerySubscription(convex).emitErrorAfterUnsubscribe(new Error('boom'))).not.toThrow();
+    });
+  });
+
+  describe('callable options', () => {
+    it('records the options a mutation caller passes alongside its args', () => {
+      const optimisticUpdate = () => undefined;
+
+      void convex.mutation(mockMutation, { title: 'Todo' }, { optimisticUpdate });
+
+      expect(convex.mutationCalls).toHaveLength(1);
+      expect(convex.mutationCalls[0].args).toEqual({ title: 'Todo' });
+      expect(convex.mutationCalls[0].options).toEqual({ optimisticUpdate });
+    });
+
+    it('records undefined options when the caller passes none', () => {
+      void convex.mutation(mockMutation, {});
+      void convex.action(mockMutation, {});
+
+      expect(convex.mutationCalls[0].options).toBeUndefined();
+      expect(convex.actionCalls[0].options).toBeUndefined();
+    });
+
+    it('records an action call with its args', () => {
+      void convex.action(mockMutation, { title: 'Todo' });
+
+      expect(convex.actionCalls).toHaveLength(1);
+      expect(convex.actionCalls[0].args).toEqual({ title: 'Todo' });
+    });
+  });
+
+  describe('one-shot query', () => {
+    it('resolves a seeded warm-cache result', async () => {
+      convex.seedQueryResult('todos:list', { count: 1 }, ['todo']);
+
+      await expect(convex.query(mockQuery, { count: 1 })).resolves.toEqual(['todo']);
+    });
+
+    it('serves a warm-cache hit without opening a subscription', async () => {
+      convex.seedQueryResult('todos:list', { count: 1 }, ['todo']);
+
+      await convex.query(mockQuery, { count: 1 });
+
+      expect(convex.querySubscriptions).toHaveLength(0);
+    });
+
+    it('subscribes and stays pending on a cache miss, like the real client', async () => {
+      let settled = false;
+      const pending = convex.query(mockQuery, { count: 1 }).then((result) => {
+        settled = true;
+        return result;
+      });
+
+      expect(convex.querySubscriptions).toHaveLength(1);
+      expect(settled).toBe(false);
+
+      requireLastQuerySubscription(convex).emit(['todo']);
+
+      await expect(pending).resolves.toEqual(['todo']);
+    });
+
+    it('unsubscribes exactly once when a cache miss settles', async () => {
+      const pending = convex.query(mockQuery, { count: 1 });
+      const subscription = requireLastQuerySubscription(convex);
+
+      subscription.emit(['todo']);
+      await pending;
+
+      expect(subscription.unsubscribeCount).toBe(1);
+    });
+
+    it('rejects and unsubscribes when a cache miss errors', async () => {
+      const pending = convex.query(mockQuery, { count: 1 });
+      const subscription = requireLastQuerySubscription(convex);
+      const failure = new Error('boom');
+
+      subscription.emitError(failure);
+
+      await expect(pending).rejects.toBe(failure);
+      expect(subscription.unsubscribeCount).toBe(1);
+    });
+
+    it('records the warm-cache lookup it makes first', async () => {
+      convex.seedQueryResult('todos:list', { count: 1 }, ['todo']);
+
+      await convex.query(mockQuery, { count: 1 });
+
+      expect(convex.localQueryResultCalls).toEqual([{ queryName: 'todos:list', args: { count: 1 } }]);
+    });
+
+    it('rejects when the client is disabled', async () => {
+      await expect(new MockConvexClient({ disabled: true }).query(mockQuery, {})).rejects.toThrow(/disabled/);
+    });
+  });
+
+  describe('call records', () => {
+    it('counts each unsubscribe of a query subscription', () => {
+      const unsubscribe = convex.onUpdate(mockQuery, {}, () => undefined);
+      const subscription = requireLastQuerySubscription(convex);
+
+      expect(subscription.unsubscribeCount).toBe(0);
+
+      unsubscribe();
+
+      expect(subscription.unsubscribeCount).toBe(1);
+      expect(subscription.unsubscribed).toBe(true);
+    });
+
+    it('counts each unsubscribe of a paginated subscription', () => {
+      const unsubscribe = convex.onPaginatedUpdate_experimental(
+        mockQuery,
+        {},
+        { initialNumItems: 10 },
+        () => undefined,
+      );
+      const subscription = requireLastPaginatedSubscription(convex);
+
+      unsubscribe();
+
+      expect(subscription.unsubscribeCount).toBe(1);
+      expect(subscription.unsubscribed).toBe(true);
+    });
+
+    it('records every warm-cache lookup in order, hit or miss', () => {
+      convex.seedQueryResult('todos:list', { count: 1 }, ['todo']);
+
+      convex.client.localQueryResult('todos:list', { count: 1 });
+      convex.client.localQueryResult('todos:list', { count: 2 });
+
+      expect(convex.localQueryResultCalls).toEqual([
+        { queryName: 'todos:list', args: { count: 1 } },
+        { queryName: 'todos:list', args: { count: 2 } },
+      ]);
+    });
+
+    it('counts connection-state reads and subscriptions', () => {
+      convex.connectionState();
+      convex.connectionState();
+      const unsubscribe = convex.subscribeToConnectionState(() => undefined);
+
+      expect(convex.connectionStateReads).toBe(2);
+      expect(convex.connectionStateSubscriptions).toBe(1);
+
+      // Unsubscribing detaches the listener but does not rewrite the history.
+      unsubscribe();
+      expect(convex.connectionStateSubscriptions).toBe(1);
     });
   });
 

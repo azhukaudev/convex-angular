@@ -1,9 +1,8 @@
 import { Component, EnvironmentInjector, Injectable, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
+import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
-import { CONVEX } from '../tokens/convex';
 import { injectAuth, provideConvexAuth, provideConvexAuthFromExisting } from './inject-auth';
 
 @Injectable()
@@ -11,14 +10,19 @@ class ExistingAuthProvider implements ConvexAuthProvider {
   readonly isLoading = signal(false);
   readonly isAuthenticated = signal(false);
   readonly error = signal<Error | undefined>(undefined);
-  readonly fetchAccessToken = jest.fn(async (_args: { forceRefreshToken: boolean }) => 'token');
+  readonly fetchAccessToken = jest.fn(async () => 'token');
+}
+
+function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
+  const registration = convex.lastAuthRegistration();
+  if (!registration) {
+    throw new Error('Expected a captured auth registration');
+  }
+  return registration;
 }
 
 describe('injectAuth', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockSetAuth: jest.Mock;
-  let mockClearAuth: jest.Mock;
-  let mockHasAuth: jest.Mock;
+  let convex: MockConvexClient;
   let fetchAccessToken: jest.MockedFunction<
     (opts: { forceRefreshToken: boolean }) => Promise<string | null | undefined>
   >;
@@ -26,9 +30,6 @@ describe('injectAuth', () => {
   let providerAuthenticated: ReturnType<typeof signal<boolean>>;
   let providerError: ReturnType<typeof signal<Error | undefined>>;
   let reauthVersion: ReturnType<typeof signal<number>>;
-  let setAuthFetcher: ((args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>) | undefined;
-  let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
-  let setAuthOnRefreshChange: ((isRefreshing: boolean) => void) | undefined;
 
   function createProvider(): ConvexAuthProvider {
     return {
@@ -43,7 +44,7 @@ describe('injectAuth', () => {
   function configureTestingModule(authProvider: ConvexAuthProvider = createProvider(), extraProviders: unknown[] = []) {
     TestBed.configureTestingModule({
       providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
+        provideConvexTesting(convex),
         { provide: CONVEX_AUTH, useValue: authProvider },
         provideConvexAuth(),
         ...extraProviders,
@@ -72,26 +73,8 @@ describe('injectAuth', () => {
     providerError = signal<Error | undefined>(undefined);
     reauthVersion = signal(0);
     fetchAccessToken = jest.fn().mockResolvedValue('token');
-    setAuthFetcher = undefined;
-    setAuthOnChange = undefined;
-    setAuthOnRefreshChange = undefined;
 
-    mockSetAuth = jest.fn((fetchToken, onChange, onRefreshChange) => {
-      setAuthFetcher = fetchToken;
-      setAuthOnChange = onChange;
-      setAuthOnRefreshChange = onRefreshChange;
-    });
-    mockClearAuth = jest.fn();
-    mockHasAuth = jest.fn().mockReturnValue(false);
-
-    mockConvexClient = {
-      disabled: false,
-      client: {
-        setAuth: mockSetAuth,
-        clearAuth: mockClearAuth,
-        hasAuth: mockHasAuth,
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
   });
 
   afterEach(() => {
@@ -99,8 +82,11 @@ describe('injectAuth', () => {
   });
 
   it('exposes the current token and decoded claims via getAuth()', fakeAsync(() => {
+    // The client only holds a token while the provider is signed in; a signed-out
+    // provider makes the helper clear it before the assertion can read it back.
+    providerAuthenticated.set(true);
     const authSnapshot = { token: 'jwt-token', decoded: { sub: 'user-1' } };
-    (mockConvexClient as unknown as { getAuth: jest.Mock }).getAuth = jest.fn().mockReturnValue(authSnapshot);
+    convex.seedAuth(authSnapshot);
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -109,7 +95,7 @@ describe('injectAuth', () => {
   }));
 
   it('returns undefined from getAuth() when no token is set', fakeAsync(() => {
-    (mockConvexClient as unknown as { getAuth: jest.Mock }).getAuth = jest.fn().mockReturnValue(undefined);
+    convex.seedAuth(undefined);
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -119,7 +105,7 @@ describe('injectAuth', () => {
 
   it('throws when auth state providers are not configured', () => {
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
 
     @Component({
@@ -135,7 +121,7 @@ describe('injectAuth', () => {
 
   it('throws when provideConvexAuth is configured without CONVEX_AUTH', () => {
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }, provideConvexAuth()],
+      providers: [provideConvexTesting(convex), provideConvexAuth()],
     });
 
     @Component({
@@ -213,19 +199,20 @@ describe('injectAuth', () => {
     expect(fixture.componentInstance.auth.isLoading()).toBe(true);
     expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
     expect(fixture.componentInstance.auth.status()).toBe('loading');
-    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+    expect(convex.authRegistrations).toHaveLength(1);
   }));
 
   it('does not wire Convex auth while the provider is still loading', fakeAsync(() => {
     providerLoading.set(true);
     providerAuthenticated.set(true);
-    mockHasAuth.mockReturnValue(true);
+    // A token from a previous session is what makes the clear meaningful.
+    convex.seedAuth({ token: 'previous-session-token', decoded: {} });
     configureTestingModule();
 
     const fixture = createAuthFixture();
 
-    expect(mockSetAuth).not.toHaveBeenCalled();
-    expect(mockClearAuth).toHaveBeenCalledTimes(1);
+    expect(convex.authRegistrations).toHaveLength(0);
+    expect(convex.clearAuthCount).toBe(1);
     expect(fixture.componentInstance.auth.isAuthenticated()).toBe(false);
     expect(fixture.componentInstance.auth.status()).toBe('loading');
   }));
@@ -249,7 +236,7 @@ describe('injectAuth', () => {
     expect(auth.isAuthenticated()).toBe(false);
     expect(auth.status()).toBe('loading');
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -263,7 +250,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -279,7 +266,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthOnChange?.(false);
+    requireLastAuthRegistration(convex).setAuthenticated(false);
     fixture.detectChanges();
     tick();
 
@@ -295,14 +282,14 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.status()).toBe('authenticated');
     expect(fixture.componentInstance.auth.isRefreshing()).toBe(false);
 
-    setAuthOnRefreshChange?.(true);
+    requireLastAuthRegistration(convex).setRefreshing(true);
     fixture.detectChanges();
     tick();
 
@@ -317,14 +304,14 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthOnChange?.(true);
-    setAuthOnRefreshChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
+    requireLastAuthRegistration(convex).setRefreshing(true);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.status()).toBe('refreshing');
 
-    setAuthOnRefreshChange?.(false);
+    requireLastAuthRegistration(convex).setRefreshing(false);
     fixture.detectChanges();
     tick();
 
@@ -338,7 +325,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthOnRefreshChange?.(true);
+    requireLastAuthRegistration(convex).setRefreshing(true);
     fixture.detectChanges();
     tick();
 
@@ -353,8 +340,8 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthOnChange?.(true);
-    setAuthOnRefreshChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
+    requireLastAuthRegistration(convex).setRefreshing(true);
     fixture.detectChanges();
     tick();
 
@@ -374,19 +361,19 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
-    const staleOnRefreshChange = setAuthOnRefreshChange;
+    const staleRegistration = requireLastAuthRegistration(convex);
 
     reauthVersion.update((value) => value + 1);
     tick();
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
-    staleOnRefreshChange?.(true);
+    staleRegistration.setRefreshing(true);
     fixture.detectChanges();
     tick();
 
@@ -402,9 +389,11 @@ describe('injectAuth', () => {
     const fixture = createAuthFixture();
 
     let token: string | null | undefined;
-    setAuthFetcher?.({ forceRefreshToken: false }).then((value) => {
-      token = value;
-    });
+    requireLastAuthRegistration(convex)
+      .fetchToken({ forceRefreshToken: false })
+      .then((value) => {
+        token = value;
+      });
     tick();
     fixture.detectChanges();
 
@@ -421,9 +410,11 @@ describe('injectAuth', () => {
     const fixture = createAuthFixture();
 
     let token: string | null | undefined;
-    setAuthFetcher?.({ forceRefreshToken: false }).then((value) => {
-      token = value;
-    });
+    requireLastAuthRegistration(convex)
+      .fetchToken({ forceRefreshToken: false })
+      .then((value) => {
+        token = value;
+      });
     tick();
     fixture.detectChanges();
 
@@ -438,14 +429,14 @@ describe('injectAuth', () => {
     configureTestingModule();
 
     const fixture = createAuthFixture();
-    const staleFetchToken = setAuthFetcher;
+    const staleRegistration = requireLastAuthRegistration(convex);
 
     reauthVersion.update((value) => value + 1);
     fixture.detectChanges();
     tick();
 
     let token: string | null | undefined = 'unresolved';
-    staleFetchToken?.({ forceRefreshToken: false }).then((value) => {
+    staleRegistration.fetchToken({ forceRefreshToken: false }).then((value) => {
       token = value;
     });
     tick();
@@ -461,7 +452,7 @@ describe('injectAuth', () => {
     configureTestingModule();
 
     const fixture = createAuthFixture();
-    const staleFetchToken = setAuthFetcher;
+    const staleRegistration = requireLastAuthRegistration(convex);
 
     reauthVersion.update((value) => value + 1);
     fixture.detectChanges();
@@ -470,7 +461,7 @@ describe('injectAuth', () => {
     fetchAccessToken.mockRejectedValue(new Error('stale provider exploded'));
 
     let token: string | null | undefined = 'unresolved';
-    staleFetchToken?.({ forceRefreshToken: true }).then((value) => {
+    staleRegistration.fetchToken({ forceRefreshToken: true }).then((value) => {
       token = value;
     });
     tick();
@@ -486,19 +477,19 @@ describe('injectAuth', () => {
     configureTestingModule();
 
     const fixture = createAuthFixture();
-    const staleOnAuthChange = setAuthOnChange;
+    const staleRegistration = requireLastAuthRegistration(convex);
 
     reauthVersion.update((value) => value + 1);
     fixture.detectChanges();
     tick();
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.status()).toBe('authenticated');
 
-    staleOnAuthChange?.(false);
+    staleRegistration.setAuthenticated(false);
     fixture.detectChanges();
     tick();
 
@@ -514,9 +505,11 @@ describe('injectAuth', () => {
     const fixture = createAuthFixture();
 
     let token: string | null | undefined;
-    setAuthFetcher?.({ forceRefreshToken: true }).then((value) => {
-      token = value;
-    });
+    requireLastAuthRegistration(convex)
+      .fetchToken({ forceRefreshToken: true })
+      .then((value) => {
+        token = value;
+      });
     tick();
     fixture.detectChanges();
 
@@ -536,7 +529,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthFetcher?.({ forceRefreshToken: false });
+    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
     tick();
     fixture.detectChanges();
 
@@ -554,7 +547,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthFetcher?.({ forceRefreshToken: false });
+    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
     tick();
     fixture.detectChanges();
 
@@ -564,7 +557,7 @@ describe('injectAuth', () => {
       }),
     );
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -579,11 +572,11 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthFetcher?.({ forceRefreshToken: false });
+    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
     tick();
     fixture.detectChanges();
 
-    setAuthOnChange?.(false);
+    requireLastAuthRegistration(convex).setAuthenticated(false);
     fixture.detectChanges();
     tick();
 
@@ -627,7 +620,8 @@ describe('injectAuth', () => {
 
     expect(fixture.componentInstance.auth.error()).toBe(providerFailure);
 
-    mockSetAuth.mockImplementation(() => {
+    // Fault injection: the mock cannot arm a throwing `setAuth`.
+    jest.spyOn(convex.client, 'setAuth').mockImplementation(() => {
       throw new Error('sync exploded');
     });
 
@@ -650,7 +644,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthFetcher?.({ forceRefreshToken: false });
+    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
     tick();
     fixture.detectChanges();
 
@@ -676,26 +670,29 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthFetcher?.({ forceRefreshToken: false });
+    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
     tick();
 
-    mockHasAuth.mockReturnValue(true);
+    // The client holds a token, so signing out has something to clear.
+    convex.seedAuth({ token: 'live-token', decoded: {} });
     providerAuthenticated.set(false);
     fixture.detectChanges();
     tick();
 
-    expect(mockClearAuth).toHaveBeenCalled();
+    expect(convex.clearAuthCount).toBeGreaterThan(0);
     expect(fixture.componentInstance.auth.error()).toBeUndefined();
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
   }));
 
   it('leaves the Convex client alone when it holds no auth', fakeAsync(() => {
     providerAuthenticated.set(true);
+    // No token: the helper should consult hasAuth and decline to clear.
+    convex.seedAuth(undefined);
     configureTestingModule();
 
     const fixture = createAuthFixture();
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -703,13 +700,14 @@ describe('injectAuth', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockHasAuth).toHaveBeenCalled();
-    expect(mockClearAuth).not.toHaveBeenCalled();
+    expect(convex.hasAuthCount).toBeGreaterThan(0);
+    expect(convex.clearAuthCount).toBe(0);
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
   }));
 
   it('records an internal error when clearing Convex auth fails', fakeAsync(() => {
-    mockHasAuth.mockImplementation(() => {
+    // Fault injection: the mock cannot arm a throwing `hasAuth`.
+    jest.spyOn(convex.client, 'hasAuth').mockImplementation(() => {
       throw new Error('socket closed');
     });
     providerLoading.set(true);
@@ -733,14 +731,15 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
-    mockHasAuth.mockReturnValue(true);
+    // The client holds a token, so teardown has something to clear.
+    convex.seedAuth({ token: 'live-token', decoded: {} });
     TestBed.resetTestingModule();
 
-    expect(mockClearAuth).toHaveBeenCalledTimes(1);
+    expect(convex.clearAuthCount).toBe(1);
   }));
 
   it('does not report a refresh after the auth state is torn down', fakeAsync(() => {
@@ -749,7 +748,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -765,15 +764,14 @@ describe('injectAuth', () => {
   it('does not surface a sync failure raised after the auth state was destroyed', fakeAsync(() => {
     providerAuthenticated.set(true);
     TestBed.configureTestingModule({
-      providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
-        { provide: CONVEX_AUTH, useValue: createProvider() },
-      ],
+      providers: [provideConvexTesting(convex), { provide: CONVEX_AUTH, useValue: createProvider() }],
     });
 
     const rootInjector = TestBed.inject(EnvironmentInjector);
     const authInjector = createEnvironmentInjector([provideConvexAuth()], rootInjector);
-    mockSetAuth.mockImplementation(() => {
+    // Fault injection: the mock cannot arm a throwing `setAuth`. Stubbing it
+    // also suppresses the recorded registration, hence the spy call count.
+    const setAuth = jest.spyOn(convex.client, 'setAuth').mockImplementation(() => {
       authInjector.destroy();
       throw new Error('sync exploded');
     });
@@ -783,7 +781,7 @@ describe('injectAuth', () => {
     TestBed.tick();
     tick();
 
-    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+    expect(setAuth).toHaveBeenCalledTimes(1);
     expect(auth.error()).toBeUndefined();
     expect(auth.status()).toBe('loading');
   }));
@@ -793,18 +791,18 @@ describe('injectAuth', () => {
     configureTestingModule();
 
     const fixture = createAuthFixture();
-    const firstOnAuthChange = setAuthOnChange;
+    const firstRegistration = requireLastAuthRegistration(convex);
 
     reauthVersion.update((value) => value + 1);
     fixture.detectChanges();
     tick();
 
-    expect(mockSetAuth).toHaveBeenCalledTimes(2);
+    expect(convex.authRegistrations).toHaveLength(2);
 
     const auth = fixture.componentInstance.auth;
     TestBed.resetTestingModule();
 
-    firstOnAuthChange?.(true);
+    firstRegistration.setAuthenticated(true);
 
     expect(auth.isAuthenticated()).toBe(false);
     expect(auth.status()).toBe('loading');
@@ -815,12 +813,12 @@ describe('injectAuth', () => {
     configureTestingModule();
 
     createAuthFixture();
-    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+    expect(convex.authRegistrations).toHaveLength(1);
 
     reauthVersion.update((value) => value + 1);
     tick();
 
-    expect(mockSetAuth).toHaveBeenCalledTimes(2);
+    expect(convex.authRegistrations).toHaveLength(2);
   }));
 
   it('returns the same auth state object for repeated calls in the same injector', fakeAsync(() => {
@@ -833,7 +831,7 @@ describe('injectAuth', () => {
     tick();
 
     expect(authA).toBe(authB);
-    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+    expect(convex.authRegistrations).toHaveLength(1);
   }));
 
   it('reuses the root auth state across child injectors and does not clear auth on child destroy', fakeAsync(() => {
@@ -848,22 +846,19 @@ describe('injectAuth', () => {
     tick();
 
     expect(childAuth).toBe(rootAuth);
-    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+    expect(convex.authRegistrations).toHaveLength(1);
 
-    mockHasAuth.mockReturnValue(true);
+    // The client holds a token, so a child destroy that wrongly tore down the
+    // root auth state would have something to clear and would be caught.
+    convex.seedAuth({ token: 'live-token', decoded: {} });
     childInjector.destroy();
 
-    expect(mockClearAuth).not.toHaveBeenCalled();
+    expect(convex.clearAuthCount).toBe(0);
   }));
 
   describe('disabled client (SSR)', () => {
     beforeEach(() => {
-      mockConvexClient = {
-        disabled: true,
-        get client(): never {
-          throw new Error('ConvexClient is disabled');
-        },
-      } as unknown as jest.Mocked<ConvexClient>;
+      convex = new MockConvexClient({ disabled: true });
     });
 
     it('does not record an internal error while the provider is loading', fakeAsync(() => {
@@ -915,18 +910,11 @@ describe('provideConvexAuthFromExisting', () => {
   });
 
   it('reuses the existing auth provider instance', fakeAsync(() => {
-    const mockConvexClient = {
-      disabled: false,
-      client: {
-        setAuth: jest.fn(),
-        clearAuth: jest.fn(),
-        hasAuth: jest.fn().mockReturnValue(false),
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
+    const convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
       providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
+        provideConvexTesting(convex),
         ExistingAuthProvider,
         provideConvexAuthFromExisting(ExistingAuthProvider),
       ],
@@ -955,22 +943,15 @@ describe('provideConvexAuthFromExisting', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.client.setAuth).toHaveBeenCalledTimes(1);
+    expect(convex.authRegistrations).toHaveLength(1);
   }));
 
   it('throws when combined with provideConvexAuth in the same injector', () => {
-    const mockConvexClient = {
-      disabled: false,
-      client: {
-        setAuth: jest.fn(),
-        clearAuth: jest.fn(),
-        hasAuth: jest.fn().mockReturnValue(false),
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
+    const convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
       providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
+        provideConvexTesting(convex),
         ExistingAuthProvider,
         provideConvexAuthFromExisting(ExistingAuthProvider),
         provideConvexAuth(),
@@ -989,18 +970,11 @@ describe('provideConvexAuthFromExisting', () => {
   });
 
   it('throws when registered in a child injector after parent auth is configured', () => {
-    const mockConvexClient = {
-      disabled: false,
-      client: {
-        setAuth: jest.fn(),
-        clearAuth: jest.fn(),
-        hasAuth: jest.fn().mockReturnValue(false),
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
+    const convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
       providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
+        provideConvexTesting(convex),
         ExistingAuthProvider,
         provideConvexAuthFromExisting(ExistingAuthProvider),
       ],

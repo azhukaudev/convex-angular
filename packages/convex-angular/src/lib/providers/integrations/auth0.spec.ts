@@ -1,19 +1,21 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
+import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 
 import { CONVEX_AUTH } from '../../tokens/auth';
-import { CONVEX } from '../../tokens/convex';
 import { injectAuth, provideConvexAuth } from '../inject-auth';
 import { AUTH0_AUTH, Auth0AuthProvider, provideAuth0Auth } from './auth0';
 
+function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
+  const registration = convex.lastAuthRegistration();
+  if (!registration) {
+    throw new Error('Expected a captured auth registration');
+  }
+  return registration;
+}
+
 describe('provideAuth0Auth', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockSetAuth: jest.Mock;
-  let mockClearAuth: jest.Mock;
-  let mockHasAuth: jest.Mock;
-  let setAuthFetcher: ((args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>) | undefined;
-  let setAuthOnChange: ((isAuthenticated: boolean) => void) | undefined;
+  let convex: MockConvexClient;
 
   let isLoading: ReturnType<typeof signal<boolean>>;
   let isAuthenticated: ReturnType<typeof signal<boolean>>;
@@ -31,37 +33,17 @@ describe('provideAuth0Auth', () => {
 
   function configureTestingModule(auth0Provider: Auth0AuthProvider = createAuth0Provider()) {
     TestBed.configureTestingModule({
-      providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
-        { provide: AUTH0_AUTH, useValue: auth0Provider },
-        provideAuth0Auth(),
-      ],
+      providers: [provideConvexTesting(convex), { provide: AUTH0_AUTH, useValue: auth0Provider }, provideAuth0Auth()],
     });
   }
 
   beforeEach(() => {
+    convex = new MockConvexClient();
+
     isLoading = signal(false);
     isAuthenticated = signal(false);
     error = signal<Error | undefined>(undefined);
     getAccessTokenSilently = jest.fn().mockResolvedValue('token');
-    setAuthFetcher = undefined;
-    setAuthOnChange = undefined;
-
-    mockSetAuth = jest.fn((fetchToken, onChange) => {
-      setAuthFetcher = fetchToken;
-      setAuthOnChange = onChange;
-    });
-    mockClearAuth = jest.fn();
-    mockHasAuth = jest.fn().mockReturnValue(false);
-
-    mockConvexClient = {
-      disabled: false,
-      client: {
-        setAuth: mockSetAuth,
-        clearAuth: mockClearAuth,
-        hasAuth: mockHasAuth,
-      },
-    } as unknown as jest.Mocked<ConvexClient>;
   });
 
   afterEach(() => {
@@ -145,9 +127,11 @@ describe('provideAuth0Auth', () => {
     tick();
 
     let token: string | null | undefined;
-    setAuthFetcher?.({ forceRefreshToken: true }).then((value) => {
-      token = value;
-    });
+    requireLastAuthRegistration(convex)
+      .fetchToken({ forceRefreshToken: true })
+      .then((value) => {
+        token = value;
+      });
     tick();
     fixture.detectChanges();
 
@@ -172,15 +156,15 @@ describe('provideAuth0Auth', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockSetAuth).toHaveBeenCalledTimes(1);
+    expect(convex.authRegistrations).toHaveLength(1);
     expect(fixture.componentInstance.auth.status()).toBe('loading');
 
-    setAuthOnChange?.(true);
+    requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.status()).toBe('authenticated');
-    expect(setAuthFetcher).toBeDefined();
+    expect(requireLastAuthRegistration(convex).fetchToken).toBeDefined();
   }));
 
   it('names AUTH0_AUTH when no Auth0 provider implementation is registered', () => {
@@ -192,7 +176,7 @@ describe('provideAuth0Auth', () => {
   it('throws when combined with provideConvexAuth in the same injector', () => {
     TestBed.configureTestingModule({
       providers: [
-        { provide: CONVEX, useValue: mockConvexClient },
+        provideConvexTesting(convex),
         { provide: AUTH0_AUTH, useValue: createAuth0Provider() },
         provideAuth0Auth(),
         provideConvexAuth(),

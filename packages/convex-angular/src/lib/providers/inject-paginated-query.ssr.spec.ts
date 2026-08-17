@@ -1,12 +1,11 @@
 import { Component, PLATFORM_ID, TransferState, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
+import { MockConvexClient, MockPaginatedSubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference, PaginationResult } from 'convex/server';
 
 import { skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { ConvexHydrationState, makeQueryStateKey, serializeQueryArgs, wrapQueryResult } from '../ssr/state-transfer';
-import { CONVEX } from '../tokens/convex';
 import { PaginatedQueryReference, injectPaginatedQuery } from './inject-paginated-query';
 
 jest.mock('convex/server', () => ({
@@ -22,20 +21,22 @@ const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
   PaginationResult<{ _id: string; name: string }>
 > as PaginatedQueryReference;
 
+function requireLastPaginatedSubscription(convex: MockConvexClient): MockPaginatedSubscription {
+  const subscription = convex.lastPaginatedSubscription();
+  if (!subscription) {
+    throw new Error('Expected a captured paginated subscription');
+  }
+  return subscription;
+}
+
 describe('injectPaginatedQuery SSR and hydration', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let onUpdateCallback: (result: any) => void;
+  let convex: MockConvexClient;
 
   beforeEach(() => {
-    mockConvexClient = {
-      onPaginatedUpdate_experimental: jest.fn((_query, _args, _options, onUpdate) => {
-        onUpdateCallback = onUpdate;
-        return jest.fn();
-      }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -49,26 +50,10 @@ describe('injectPaginatedQuery SSR and hydration', () => {
 
       // A disabled client's onPaginatedUpdate_experimental registration is a
       // no-op (mirrors ConvexClient behavior on the server platform).
-      const noopUnsubscribe = Object.assign(() => undefined, {
-        unsubscribe: () => undefined,
-        getCurrentValue: () => undefined,
-        getQueryLogs: () => undefined,
-      });
-      const disabledConvexClient = {
-        get disabled() {
-          return true;
-        },
-        get client() {
-          throw new Error('ConvexClient is disabled');
-        },
-        onPaginatedUpdate_experimental: jest.fn(() => noopUnsubscribe),
-      } as unknown as ConvexClient;
+      const disabledConvex = new MockConvexClient({ disabled: true });
 
       TestBed.configureTestingModule({
-        providers: [
-          { provide: PLATFORM_ID, useValue: 'server' },
-          { provide: CONVEX, useValue: disabledConvexClient },
-        ],
+        providers: [{ provide: PLATFORM_ID, useValue: 'server' }, provideConvexTesting(disabledConvex)],
       });
 
       @Component({
@@ -93,21 +78,16 @@ describe('injectPaginatedQuery SSR and hydration', () => {
 
     describe('first-page server fetching', () => {
       let mockLoader: { enabled: boolean; fetch: jest.Mock };
-      let serverConvexClient: ConvexClient;
+      let serverConvex: MockConvexClient;
 
       function setupServer() {
         TestBed.resetTestingModule();
-        serverConvexClient = {
-          get disabled() {
-            return true;
-          },
-          onPaginatedUpdate_experimental: jest.fn(),
-        } as unknown as ConvexClient;
+        serverConvex = new MockConvexClient({ disabled: true });
 
         TestBed.configureTestingModule({
           providers: [
             { provide: PLATFORM_ID, useValue: 'server' },
-            { provide: CONVEX, useValue: serverConvexClient },
+            provideConvexTesting(serverConvex),
             { provide: ConvexServerQueryLoader, useValue: mockLoader },
           ],
         });
@@ -152,7 +132,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
         expect(fixture.componentInstance.todos.isLoadingMore()).toBe(false);
         // loadMore is inert until the live subscription syncs in the browser.
         expect(fixture.componentInstance.todos.loadMore(10)).toBe(false);
-        expect(serverConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
+        expect(serverConvex.refusedSubscriptions).toHaveLength(0);
       }));
 
       it('ignores a first-page fetch that resolves after the args changed', fakeAsync(() => {
@@ -337,7 +317,7 @@ describe('injectPaginatedQuery SSR and hydration', () => {
     beforeEach(() => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
-        providers: [{ provide: CONVEX, useValue: mockConvexClient }, ConvexHydrationState],
+        providers: [provideConvexTesting(convex), ConvexHydrationState],
       });
     });
 
@@ -373,10 +353,10 @@ describe('injectPaginatedQuery SSR and hydration', () => {
 
       // The live subscription is still established and replaces the seed.
       tick();
-      onUpdateCallback({
+      requireLastPaginatedSubscription(convex).emit({
         results: [{ _id: '1', name: 'Live todo' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn().mockReturnValue(true),
+        loadMore: () => true,
       });
 
       expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Live todo' }]);
@@ -413,10 +393,11 @@ describe('injectPaginatedQuery SSR and hydration', () => {
       // The real client always fires an initial LoadingFirstPage emission for
       // a fresh subscription; it must not clobber the seed.
       tick();
-      onUpdateCallback({
+      const subscription = requireLastPaginatedSubscription(convex);
+      subscription.emit({
         results: [],
         status: 'LoadingFirstPage',
-        loadMore: jest.fn().mockReturnValue(false),
+        loadMore: () => false,
       });
 
       expect(fixture.componentInstance.todos.status()).toBe('success');
@@ -425,10 +406,10 @@ describe('injectPaginatedQuery SSR and hydration', () => {
       expect(fixture.componentInstance.todos.loadMore(10)).toBe(false); // still inert
 
       // A real emission then replaces the seed and re-arms loadMore.
-      onUpdateCallback({
+      subscription.emit({
         results: [{ _id: '1', name: 'Live todo' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn().mockReturnValue(true),
+        loadMore: () => true,
       });
       expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Live todo' }]);
       expect(fixture.componentInstance.todos.loadMore(10)).toBe(true);

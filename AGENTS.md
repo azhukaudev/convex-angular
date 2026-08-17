@@ -24,7 +24,7 @@ Use pnpm. Prefer existing Nx targets and root scripts over ad hoc commands.
 - `nx test convex-angular -- -t "<test name>"` — filter tests by name.
 - `pnpm typecheck` — type-check all three library entry points.
 - `pnpm typecheck:spec` — type-check specs; Jest transpiles them without type-checking.
-- `pnpm lint` — lint all projects. Warnings are tolerated; errors block.
+- `pnpm lint` — lint all projects. The workspace is at zero errors and zero warnings; keep it there.
 - `pnpm format` / `pnpm format:check` — write or check Prettier formatting.
 - `pnpm check:duplication` — run jscpd over library and app sources.
 - `pnpm check:deadcode` — run knip; the expected baseline is zero findings.
@@ -48,6 +48,7 @@ Git hooks are managed by Lefthook. Pre-commit formats staged files and runs dupl
 
 Quality baselines are ratchets:
 
+- Keep ESLint at zero warnings as well as zero errors. Fix the cause rather than silencing it: narrow the type instead of asserting with `!`, delete the unused binding, and reach for an inline `eslint-disable` only with a reason comment. Generated or build output that cannot be edited belongs in the relevant `eslint.config.mjs` `ignores`, not in a suppression comment.
 - Keep knip at zero findings. Prefer deleting unused code or exports over adding ignores; every necessary ignore needs a reason.
 - Do not raise the jscpd threshold to accommodate new duplication. Extract shared logic instead.
 - Prettier may report pre-existing repository drift; format the files you change rather than sweeping unrelated files.
@@ -79,6 +80,10 @@ The `convex-angular` TypeScript path alias points to library source, so the demo
 Tests use Jest with `jest-preset-angular`, zone-based TestBed, and colocated `*.spec.ts` files. Jest configs are deliberately CommonJS (`jest.config.cjs`), and Nx infers test targets through `@nx/jest/plugin`; do not add redundant explicit test targets without a concrete need.
 
 Both Jest configs intentionally cap `maxWorkers` at 4 because higher worker counts reproduce a Node 24 `jest-worker` SIGSEGV. Keep the cap unless the Node/runtime issue is re-evaluated with evidence.
+
+Specs stand the Convex client up through `MockConvexClient` and `provideConvexTesting()` from `convex-angular/testing`, not a hand-rolled `jest.Mocked<ConvexClient>` literal. The library dogfooding its own published test double is deliberate: a capability the mock cannot express is a gap consumers hit too, so extend the mock rather than fake around it. Two deliberate exceptions remain — `tokens/convex.spec.ts` needs a real `ConvexClient`, and one `injectPaginatedQuery` test injects a client that genuinely lacks `onPaginatedUpdate_experimental`.
+
+The mock mirrors the installed client's semantics, so verify against `node_modules/convex` before changing it. In particular `hasAuth()` reports a held token (seed one with `seedAuth`), not a `setAuth` registration; `clearAuth()` does not stop registered callbacks; and `emitAfterUnsubscribe()` reaches a defensive staleness guard that the real client can never trigger, so it is not for ordinary tests. For error paths the mock cannot express, `jest.spyOn(convex.client, ...)` on the mock's own stable `client` object is the supported escape hatch.
 
 Stryker is configured in the root `stryker.config.mjs`. Mutation testing is minutes-slow, so it runs at the end of `verify:full` and in CI, but not in `verify:quick`, Nx targets, or git hooks. It remains report-only because the goal is zero actionable survivors rather than a percentage threshold:
 

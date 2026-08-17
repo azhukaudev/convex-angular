@@ -1,27 +1,49 @@
 ---
 title: Driving state
-description: How to drive query results, errors, paginated pages, mutation settlement, warm-cache prefill, connection state, and the disabled client from a test.
+description: How to drive query results, errors, paginated pages, mutation settlement, authentication, warm-cache prefill, connection state, and the disabled client from a test.
 sidebar:
   order: 2
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, Code } from '@astrojs/starlight/components';
+
+import authTest from '../../../examples/testing-auth.ts?raw';
+import disabledClientTest from '../../../examples/testing-disabled-client.ts?raw';
+import oneShotQueryTest from '../../../examples/testing-one-shot-query.ts?raw';
+import staleEmissionsTest from '../../../examples/testing-stale-emissions.ts?raw';
 
 `MockConvexClient` captures everything the helpers ask of it and gives the test the controls. This
 page is the matrix of what you can drive and the call that drives it.
 
-| What you want to drive                    | How                                                                        |
-| ----------------------------------------- | -------------------------------------------------------------------------- |
-| A query result                            | `convex.lastQuerySubscription()!.emit(value)`                              |
-| A query error                             | `convex.lastQuerySubscription()!.emitError(err)`                           |
-| A specific query, not the last            | `convex.querySubscriptions[i].emit(value)`                                 |
-| A paginated page                          | `convex.lastPaginatedSubscription()!.emit({ results, status, loadMore })`  |
-| A mutation result                         | `convex.mutationCalls[i].resolve(value)`                                   |
-| A mutation failure                        | `convex.mutationCalls[i].reject(err)`                                      |
-| An action result or failure               | `convex.actionCalls[i].resolve(value)` / `.reject(err)`                    |
-| Warm-cache data before the first emission | `convex.seedQueryResult(queryName, args, result)` before `createComponent` |
-| Connection state                          | `convex.setConnectionState(partial)`                                       |
-| Server-side rendering                     | `new MockConvexClient({ disabled: true })`                                 |
+| What you want to drive                     | How                                                                        |
+| ------------------------------------------ | -------------------------------------------------------------------------- |
+| A query result                             | `convex.lastQuerySubscription()!.emit(value)`                              |
+| A query error                              | `convex.lastQuerySubscription()!.emitError(err)`                           |
+| A specific query, not the last             | `convex.querySubscriptions[i].emit(value)`                                 |
+| A defensive staleness guard (nothing else) | `subscription.emitAfterUnsubscribe(value)` — see the caveat below          |
+| A paginated page                           | `convex.lastPaginatedSubscription()!.emit({ results, status, loadMore })`  |
+| A mutation result                          | `convex.mutationCalls[i].resolve(value)`                                   |
+| A mutation failure                         | `convex.mutationCalls[i].reject(err)`                                      |
+| An action result or failure                | `convex.actionCalls[i].resolve(value)` / `.reject(err)`                    |
+| Convex confirming or rejecting a token     | `convex.lastAuthRegistration()!.setAuthenticated(bool)`                    |
+| Convex asking for a token                  | `convex.lastAuthRegistration()!.fetchToken({ forceRefreshToken })`         |
+| A token refresh in progress                | `convex.lastAuthRegistration()!.setRefreshing(bool)`                       |
+| The token the client holds                 | `convex.seedAuth({ token, decoded })`                                      |
+| Warm-cache data before the first emission  | `convex.seedQueryResult(queryName, args, result)` before `createComponent` |
+| A one-shot `convex.query()`                | `seedQueryResult` for a hit; on a miss, `emit()` the subscription it opens |
+| Connection state                           | `convex.setConnectionState(partial)`                                       |
+| Server-side rendering                      | `new MockConvexClient({ disabled: true })`                                 |
+
+And what you can assert about, without driving anything:
+
+| What you want to prove                        | Where to look                                                  |
+| --------------------------------------------- | -------------------------------------------------------------- |
+| A subscription was released exactly once      | `subscription.unsubscribeCount`                                |
+| A disabled client never opened a subscription | `convex.refusedSubscriptions`                                  |
+| The warm cache was consulted, and with what   | `convex.localQueryResultCalls`                                 |
+| The connection state was never read           | `convex.connectionStateReads` / `connectionStateSubscriptions` |
+| Auth was cleared, or looked at and left alone | `convex.clearAuthCount` / `convex.hasAuthCount`                |
+| The options a mutation was invoked with       | `convex.mutationCalls[i].options`                              |
 
 Every capture array is ordered oldest first, and `lastQuerySubscription()` /
 `lastPaginatedSubscription()` return the newest entry or `undefined`.
@@ -70,6 +92,32 @@ convex.lastQuerySubscription()!.emitError(failure);
 expect(fixture.componentInstance.todos.status()).toBe('error');
 expect(fixture.componentInstance.todos.error()).toBe(failure);
 ```
+
+## Emitting after unsubscribe
+
+`emit()` and `emitError()` are gated on unsubscribe: once the helper has torn down, they do nothing.
+That mirrors the real client exactly, and it is what you want in every ordinary test.
+
+`emitAfterUnsubscribe()` and `emitErrorAfterUnsubscribe()` invoke the retired callback anyway,
+straight past that gate. Be clear about what this is: **the real client cannot do it.**
+`unsubscribe()` synchronously removes the listener before it returns, so no later dispatch can ever
+reach a retired callback — there is no race to lose.
+
+They exist for one narrow purpose. The query helpers carry a defensive generation guard that drops
+results belonging to a superseded subscription. Against a faithful client that guard is unreachable,
+and unreachable code is untested code. These two methods are the only way to fire it.
+
+`unsubscribeCount` is the companion assertion — it proves the helper released the subscription once
+and only once, which a boolean `unsubscribed` cannot.
+
+<Code code={staleEmissionsTest} lang="ts" title="category-todos.spec.ts" />
+
+<Aside type="caution">
+  **Do not reach for these in ordinary tests.** A test using `emitAfterUnsubscribe()` is asserting against a client that
+  does not exist, so a passing assertion tells you nothing about production and a failing one may be flagging behaviour
+  no deployment can trigger. They belong only in a test whose stated subject is the staleness guard itself. Everywhere
+  else — including anything you would describe as "a late result" — use `emit()`.
+</Aside>
 
 ## Paginated pages
 
@@ -131,8 +179,8 @@ Details of the helper itself are in [Pagination](/queries/pagination/).
 ## Mutations and actions
 
 A captured mutation's promise **never settles on its own**. `mutation()` and `action()` push a
-`{ fn, args, resolve, reject }` record onto `mutationCalls` / `actionCalls` and return a promise held
-open until the test settles it. That is what makes the in-flight state assertable.
+`{ fn, args, options, resolve, reject }` record onto `mutationCalls` / `actionCalls` and return a
+promise held open until the test settles it. That is what makes the in-flight state assertable.
 
 ```typescript
 fixture.componentInstance.add();
@@ -162,14 +210,105 @@ expect(fixture.componentInstance.addTodo.status()).toBe('error');
 expect(fixture.componentInstance.addTodo.error()).toBe(failure);
 ```
 
-Actions are identical with `convex.actionCalls`. Note that the mock records the mutation's args only
-— optimistic update functions passed to `injectMutation()` are not invoked by the mock, since there
-is no local store for them to write into.
+`reject()` accepts any value, not just an `Error`, so a helper's normalization of whatever the wire
+threw is testable:
+
+```typescript
+convex.mutationCalls[0].reject('a bare string');
+tick();
+
+expect(fixture.componentInstance.addTodo.status()).toBe('error');
+```
+
+Actions are identical with `convex.actionCalls`.
+
+Mutations carry a third argument, recorded on `options`. `injectMutation()` always forwards
+`{ optimisticUpdate }` there — the property is `undefined` when no optimistic update was configured.
+Actions have no options parameter at all, matching the real client, so an action's `options` is
+always `undefined`:
+
+```typescript
+expect(convex.mutationCalls[0].options).toEqual({ optimisticUpdate: expect.any(Function) });
+expect(convex.actionCalls[0].options).toBeUndefined();
+```
+
+That proves the optimistic update reached the client. It does **not** run it: the mock has no local
+store for an optimistic update to write into, so the function is recorded and never called. See
+[Optimistic updates](/mutations/optimistic-updates/) for what it does against a real deployment.
 
 <Aside type="tip">
   A forgotten `resolve()`/`reject()` is the usual cause of a test that hangs on a pending status. If a mutation-driven
   assertion fails with `status()` still `'pending'`, check that the call was settled and that a `tick()` followed it.
 </Aside>
+
+## Authentication
+
+Auth is the one area where the mock is not the whole story. `provideConvexTesting()` registers the
+`CONVEX` token and nothing else, so the identity side is yours: a `ConvexAuthProvider` behind
+`CONVEX_AUTH`, plus `provideConvexAuth()`. That is what makes `injectAuth()` resolvable and what
+calls `client.setAuth` in the first place — without it the mock captures nothing.
+
+With those registered, the two halves split cleanly:
+
+- **Your fake provider** models the identity system — Clerk, Auth0, Better Auth, your own session
+  service. Flip its `isLoading` / `isAuthenticated` signals and decide what `fetchAccessToken`
+  returns.
+- **`convex.lastAuthRegistration()`** models Convex answering back. Every `client.setAuth` call lands
+  on `convex.authRegistrations` as a `MockAuthRegistration`.
+
+A registration is inert until the test drives it. The mock never calls `fetchToken` itself, never
+validates a token, and never decides the outcome:
+
+| Call                                             | What it simulates                                                             |
+| ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `registration.setAuthenticated(true)`            | Convex accepted the token. `injectAuth().status()` becomes `'authenticated'`. |
+| `registration.setAuthenticated(false)`           | Convex rejected it. The status settles on `'unauthenticated'`.                |
+| `registration.setRefreshing(true)`               | A token renewal started; the status becomes `'refreshing'`.                   |
+| `registration.fetchToken({ forceRefreshToken })` | Convex asking your provider for a token, on connect or on expiry.             |
+
+Until `setAuthenticated` is called, `injectAuth()` stays `'loading'` — a signed-in provider is not
+enough on its own, which is exactly the state most auth bugs live in.
+
+### Registration is not authentication
+
+Registering a token fetcher is configuration. It does not make the client authenticated, and this is
+where an intuitive mental model goes wrong. The real `hasAuth()` reports whether the client is
+**holding a token**, not whether a fetcher was installed, and `setAuthenticated(true)` is only a
+notification — it hands the client no token.
+
+`convex.seedAuth({ token, decoded })` is the single source of current auth. It is what `getAuth()`
+reports, what makes `client.hasAuth()` true, and what `client.clearAuth()` drops. Seed it before the
+fixture exists to stand in for a client that was already authenticated when the code under test ran:
+
+```typescript
+convex.seedAuth({ token: 'jwt-token', decoded: { sub: 'user-1' } });
+```
+
+Without a seeded token, `hasAuth()` is `false` no matter how many registrations exist — so a test
+asserting that sign-out clears auth must seed one first, or `clearAuth()` is never reached and
+`clearAuthCount` stays `0`.
+
+`convex.clearAuthCount` and `convex.hasAuthCount` count those calls; `hasAuthCount` is what separates
+"asked and correctly decided not to clear" from "never looked".
+
+<Aside type="caution">
+  `registration.cleared` is a **recorded fact, not a gate**. The real `clearAuth()` drops the token without tearing down
+  the authentication manager's configuration, so a cleared registration can still call back — and this mock lets it.
+  Driving `setAuthenticated()` on a cleared registration therefore still reaches the code under test. What ignores it is
+  the helper's own generation guard, which is precisely the behaviour worth asserting.
+</Aside>
+
+<Code code={authTest} lang="ts" title="account-badge.spec.ts" />
+
+<Aside type="tip">
+  For failures the mock has no knob for — `client.setAuth` itself throwing, say — spy on the mock's own client object
+  with `jest.spyOn(convex.client, 'setAuth')`, as the last test above does. `convex.client` is a stable object, so the
+  spy sticks. Do not hand-roll a replacement `ConvexClient` fake to reach one error path; see [fault
+  injection](/testing/mock-convex-client/#fault-injection).
+</Aside>
+
+The helper's own contract — the statuses, the loading rules, the error prefixes — is documented in
+[the auth overview](/auth/overview/).
 
 ## Warm-cache prefill
 
@@ -211,6 +350,50 @@ expect(fixture.componentInstance.todos.status()).toBe('success');
 Seeding never affects the subscription itself — the subscription is still captured, and still needs
 an `emit()`.
 
+Every lookup is recorded on `convex.localQueryResultCalls`, hit or miss, which is how a missed seed
+stops being a silent mystery: the recorded name and args are exactly what the helper asked for, so a
+mismatch is visible instead of merely absent.
+
+```typescript
+expect(convex.localQueryResultCalls).toEqual([{ queryName: 'todos:list', args: { count: 20 } }]);
+```
+
+The array also grows on every re-subscribe, so it doubles as a record of which argument combinations
+a component walked through.
+
+### One-shot queries
+
+The same seeded cache backs `convex.query(fn, args)`, the one-shot read used by code that injects the
+client directly rather than through a query helper — a service method, a route resolver. It follows
+the real client down both paths, and which one you land on decides how the test drives it:
+
+| Cache        | What happens                                                                     |
+| ------------ | -------------------------------------------------------------------------------- |
+| **Hit**      | Resolves straight from the cache. No subscription is opened.                     |
+| **Miss**     | Opens a subscription and stays **pending** until it delivers, then unsubscribes. |
+| **Disabled** | Rejects with `'ConvexClient is disabled'`.                                       |
+
+The miss is the case you will actually hit, because it is what happens whenever you have not seeded
+anything. The promise does not resolve to `undefined` — it does not resolve at all until you settle
+the subscription that `querySubscriptions` now holds:
+
+```typescript
+const pending = service.count();
+
+// The miss fell back to a subscription; settle it or the promise hangs.
+convex.lastQuerySubscription()!.emit([{ _id: '1', title: 'Write docs' }]);
+
+await expect(pending).resolves.toBe(1);
+```
+
+<Code code={oneShotQueryTest} lang="ts" title="todo-counter.spec.ts" />
+
+<Aside type="tip">
+  A one-shot `query()` that never settles is almost always an unseeded cache miss. Check `convex.querySubscriptions` —
+  if there is an entry there, the read is waiting on an `emit()` you have not made yet. Seed the result instead if the
+  point of the test is not the fetch itself.
+</Aside>
+
 ## Connection state
 
 `setConnectionState()` shallow-merges the partial into the current state and pushes the result
@@ -238,25 +421,25 @@ A fresh mock starts connected and idle; the exact defaults are listed in the
 ## Simulating server-side rendering
 
 `new MockConvexClient({ disabled: true })` mirrors a disabled `ConvexClient`, which is the state the
-client is in during a server render: subscriptions become no-ops, the `client` getter throws
-`'ConvexClient is disabled'`, and `connectionState()` throws.
+client is in during a server render: subscribing becomes a no-op, the `client` getter throws
+`'ConvexClient is disabled'`, `connectionState()` throws, `getAuth()` reports `undefined`, and a
+one-shot `query()` rejects.
 
-```typescript
-const convex = new MockConvexClient({ disabled: true });
-TestBed.configureTestingModule({ providers: [provideConvexTesting(convex)] });
+Nothing about a skipped subscription is an error, though. The subscribe call succeeds and hands back
+a callable no-op unsubscribe, exactly as the real disabled client does; the subscription is simply
+never established. That leaves an empty `querySubscriptions`, which is weak evidence — it looks
+identical whether the code under test asked and was skipped or never asked at all. So the disabled
+mock records what it passed over:
 
-// A component holding both injectQuery() and injectConvexConnectionState().
-const fixture = TestBed.createComponent(TodoShell);
-fixture.detectChanges();
-tick();
+- `convex.refusedSubscriptions` gets a `{ kind, query, args }` entry for every subscription that was
+  asked for and skipped, so a test can name it.
+- `convex.connectionStateReads` and `convex.connectionStateSubscriptions` count the attempt **before**
+  the disabled branch, so a zero there is a positive claim: the code never even reached for the
+  connection state.
+- `convex.localQueryResultCalls` stays empty, because a disabled client's warm cache is never
+  consulted.
 
-// No subscription was captured, the helper stays pending, and the connection
-// state reports the static disconnected default.
-expect(convex.querySubscriptions).toHaveLength(0);
-expect(fixture.componentInstance.todos.status()).toBe('pending');
-expect(fixture.componentInstance.connection().isWebSocketConnected).toBe(false);
-expect(() => convex.client).toThrow('ConvexClient is disabled');
-```
+<Code code={disabledClientTest} lang="ts" title="todo-shell.spec.ts" />
 
 This is the right tool for asserting that a component renders a sane skeleton with no client, and for
 covering the `convex.disabled` branches of your own code. It is not a full SSR harness — the mock
@@ -280,15 +463,19 @@ convex.lastQuerySubscription()!.emit(['ignored']); // no-op
 
 The same applies after a reactive-argument change: the old subscription is unsubscribed and only
 the new one (`lastQuerySubscription()`) is live, so a handle captured earlier in the test is dead.
+`emitAfterUnsubscribe()` is the only way past this, and it belongs solely in a test of the staleness
+guard itself.
 
 </Aside>
 
 <Aside type="caution">
-  **A disabled mock captures nothing.** `onUpdate` and `onPaginatedUpdate_experimental` return a
-  no-op unsubscribe without recording anything, so `convex.querySubscriptions.length === 0` and
-  `lastQuerySubscription()` is `undefined`. There is no handle to emit through, and the helper stays
-  `'pending'` forever. If a test using `{ disabled: true }` fails on a missing subscription, that is
-  the contract, not a bug — use an enabled mock when the test needs to drive data.
+  **A disabled mock captures no *drivable* subscription.** `onUpdate` and
+  `onPaginatedUpdate_experimental` record a `MockRefusedSubscription` and return a no-op unsubscribe,
+  so `convex.querySubscriptions.length === 0` and `lastQuerySubscription()` is `undefined` even
+  though `convex.refusedSubscriptions` is populated. There is no handle to emit through, and the
+  helper stays `'pending'` forever. If a test using `{ disabled: true }` fails on a missing
+  subscription, that is the contract, not a bug — use an enabled mock when the test needs to drive
+  data.
 </Aside>
 
 <Aside type="tip">

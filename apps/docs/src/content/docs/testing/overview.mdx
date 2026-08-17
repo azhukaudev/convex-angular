@@ -21,7 +21,7 @@ import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 ```
 
 The entry point exports exactly two runtime values — `MockConvexClient` and `provideConvexTesting` —
-plus the four types describing what it captures. See
+plus the seven types describing what it captures. See
 [Mock reference](/testing/mock-convex-client/) for the full API and
 [Driving state](/testing/driving-state/) for the how-to matrix.
 
@@ -53,11 +53,28 @@ Keep the mock in a variable. The argument is optional — `provideConvexTesting(
 mock — but then the test has no handle to drive it with.
 
 <Aside type="caution">
-  `MockConvexClient` has no reset method, and its capture arrays (`querySubscriptions`, `paginatedSubscriptions`,
-  `mutationCalls`, `actionCalls`) are never cleared. Construct a new `MockConvexClient` in `beforeEach` so index-based
-  assertions such as `convex.mutationCalls[0]` refer to the current test's call and not a leftover from the previous
-  one.
+  `MockConvexClient` has no reset method. Its capture arrays (`querySubscriptions`, `paginatedSubscriptions`,
+  `mutationCalls`, `actionCalls`, `authRegistrations`, `localQueryResultCalls`, `refusedSubscriptions`) are never
+  cleared, and neither are its counters (`clearAuthCount`, `hasAuthCount`, the connection-state counts). Construct a new
+  `MockConvexClient` in `beforeEach` so index-based assertions such as `convex.mutationCalls[0]` refer to the current
+  test's call and not a leftover from the previous one.
 </Aside>
+
+### Components that use auth
+
+`provideConvexTesting()` registers the `CONVEX` token and nothing more, so `injectAuth()`, the auth
+directives, and the route guards still need their own registration in the test: a
+`ConvexAuthProvider` behind `CONVEX_AUTH`, plus `provideConvexAuth()`.
+
+```typescript
+TestBed.configureTestingModule({
+  providers: [provideConvexTesting(convex), { provide: CONVEX_AUTH, useValue: fakeAuthProvider }, provideConvexAuth()],
+});
+```
+
+That pairing is what makes the mock's auth surface interesting: your fake provider plays the identity
+system, and `convex.lastAuthRegistration()` plays Convex answering back. See
+[Authentication](/testing/driving-state/#authentication).
 
 ## A complete component test
 
@@ -231,4 +248,4 @@ needed before asserting rendered DOM.
 ## Next
 
 [Driving state](/testing/driving-state/) is the practical matrix: results, errors, pages, mutation
-settlement, warm-cache prefill, connection state, and the disabled (SSR) mock.
+settlement, authentication, warm-cache prefill, connection state, and the disabled (SSR) mock.

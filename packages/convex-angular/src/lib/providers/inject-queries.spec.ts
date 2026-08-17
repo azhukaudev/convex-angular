@@ -7,13 +7,12 @@ import {
   signal,
 } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
-import { FunctionReference, getFunctionName } from 'convex/server';
+import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
+import { FunctionReference } from 'convex/server';
 
 import { skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { ConvexHydrationState, makeQueryStateKey, wrapQueryResult } from '../ssr/state-transfer';
-import { CONVEX } from '../tokens/convex';
 import { injectQueries } from './inject-queries';
 
 type Assert<T extends true> = T;
@@ -49,45 +48,34 @@ mockQueryNames.set(mockUserQuery, 'users:get');
 mockQueryNames.set(mockTodosQuery, 'todos:list');
 mockQueryNames.set(mockStatsQuery, 'stats:get');
 
-describe('injectQueries', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockLocalQueryResult: jest.Mock;
-  let unsubscribeByKey: Map<string, jest.Mock>;
-  let onUpdateByKey: Map<string, (result: unknown) => void>;
-  let onErrorByKey: Map<string, (error: Error) => void>;
-  let localResultsByKey: Map<string, unknown>;
+const sameArgs = (left: Record<string, unknown>, right: Record<string, unknown>) =>
+  JSON.stringify(left) === JSON.stringify(right);
 
-  const keyFor = (queryName: string, args: Record<string, unknown>) => `${queryName}:${JSON.stringify(args)}`;
+/**
+ * The captured subscriptions are an ordered list, so a key is identified by the
+ * args it subscribed with. `occurrence` picks between repeated subscriptions
+ * for the same args (a resubscribe appends a second one).
+ */
+function requireQuerySubscription(
+  convex: MockConvexClient,
+  args: Record<string, unknown>,
+  occurrence = 0,
+): MockQuerySubscription {
+  const subscription = convex.querySubscriptions.filter((candidate) => sameArgs(candidate.args, args))[occurrence];
+  if (!subscription) {
+    throw new Error(`Expected query subscription #${occurrence} with args ${JSON.stringify(args)}`);
+  }
+  return subscription;
+}
+
+describe('injectQueries', () => {
+  let convex: MockConvexClient;
 
   beforeEach(() => {
-    unsubscribeByKey = new Map();
-    onUpdateByKey = new Map();
-    onErrorByKey = new Map();
-    localResultsByKey = new Map();
-
-    mockLocalQueryResult = jest.fn((queryName: string, args: Record<string, unknown>) =>
-      localResultsByKey.get(keyFor(queryName, args)),
-    );
-
-    mockConvexClient = {
-      client: {
-        localQueryResult: mockLocalQueryResult,
-      },
-      onUpdate: jest.fn((query, args, onUpdate, onError) => {
-        const queryName = (getFunctionName as jest.Mock)(query) as string;
-        const key = keyFor(queryName, args as Record<string, unknown>);
-        const unsubscribe = jest.fn();
-
-        unsubscribeByKey.set(key, unsubscribe);
-        onUpdateByKey.set(key, onUpdate);
-        onErrorByKey.set(key, onError);
-
-        return unsubscribe;
-      }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -111,7 +99,7 @@ describe('injectQueries', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+    expect(convex.querySubscriptions).toHaveLength(2);
     expect(fixture.componentInstance.queries.results()).toEqual({
       user: undefined,
       todos: undefined,
@@ -122,7 +110,7 @@ describe('injectQueries', () => {
     });
     expect(fixture.componentInstance.queries.isLoading()).toBe(true);
 
-    onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))?.({
+    requireQuerySubscription(convex, { userId: 'user-1' }).emit({
       name: 'Ali',
     });
 
@@ -136,7 +124,7 @@ describe('injectQueries', () => {
     });
     expect(fixture.componentInstance.queries.isLoading()).toBe(true);
 
-    onUpdateByKey.get(keyFor('todos:list', { count: 10 }))?.([{ _id: '1', title: 'Todo 1' }]);
+    requireQuerySubscription(convex, { count: 10 }).emit([{ _id: '1', title: 'Todo 1' }]);
 
     expect(fixture.componentInstance.queries.results()).toEqual({
       user: { name: 'Ali' },
@@ -195,17 +183,18 @@ describe('injectQueries', () => {
     fixture.detectChanges();
     tick();
 
-    const staleUpdate = onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))!;
-    const staleFail = onErrorByKey.get(keyFor('users:get', { userId: 'user-1' }))!;
+    const stale = requireQuerySubscription(convex, { userId: 'user-1' });
 
     fixture.componentInstance.userId.set('user-2');
     fixture.detectChanges();
     tick();
 
-    onUpdateByKey.get(keyFor('users:get', { userId: 'user-2' }))?.({ name: 'Latest' });
+    requireQuerySubscription(convex, { userId: 'user-2' }).emit({ name: 'Latest' });
 
-    staleUpdate({ name: 'Stale' });
-    staleFail(new Error('stale failure'));
+    // A real client could never call a retired callback; invoke it directly
+    // to reach the helper's staleness guard.
+    stale.emitAfterUnsubscribe({ name: 'Stale' });
+    stale.emitErrorAfterUnsubscribe(new Error('stale failure'));
 
     expect(fixture.componentInstance.queries.results().user).toEqual({ name: 'Latest' });
     expect(fixture.componentInstance.queries.errors().user).toBeUndefined();
@@ -229,15 +218,15 @@ describe('injectQueries', () => {
     fixture.detectChanges();
     tick();
 
-    const removedUpdate = onUpdateByKey.get(keyFor('stats:get', { teamId: 'team-1' }))!;
-    const removedFail = onErrorByKey.get(keyFor('stats:get', { teamId: 'team-1' }))!;
+    const removed = requireQuerySubscription(convex, { teamId: 'team-1' });
 
     fixture.componentInstance.includeStats.set(false);
     fixture.detectChanges();
     tick();
 
-    removedUpdate({ total: 7 });
-    removedFail(new Error('late failure'));
+    // The dropped key's subscription must not resurrect it.
+    removed.emitAfterUnsubscribe({ total: 7 });
+    removed.emitErrorAfterUnsubscribe(new Error('late failure'));
 
     expect('stats' in fixture.componentInstance.queries.results()).toBe(false);
     expect('stats' in fixture.componentInstance.queries.errors()).toBe(false);
@@ -245,10 +234,8 @@ describe('injectQueries', () => {
   }));
 
   it('seeds cached results per key before the first update', fakeAsync(() => {
-    localResultsByKey.set(keyFor('users:get', { userId: 'user-1' }), {
-      name: 'Cached user',
-    });
-    localResultsByKey.set(keyFor('todos:list', { count: 5 }), [{ _id: '1', title: 'Cached todo' }]);
+    convex.seedQueryResult('users:get', { userId: 'user-1' }, { name: 'Cached user' });
+    convex.seedQueryResult('todos:list', { count: 5 }, [{ _id: '1', title: 'Cached todo' }]);
 
     @Component({
       template: '',
@@ -287,12 +274,12 @@ describe('injectQueries', () => {
     fixture.detectChanges();
     tick();
 
-    onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))?.({
+    requireQuerySubscription(convex, { userId: 'user-1' }).emit({
       name: 'Ali',
     });
 
     const failure = new Error('Stats failed');
-    onErrorByKey.get(keyFor('stats:get', { teamId: 'team-1' }))?.(failure);
+    requireQuerySubscription(convex, { teamId: 'team-1' }).emitError(failure);
 
     expect(fixture.componentInstance.queries.results()).toEqual({
       user: { name: 'Ali' },
@@ -315,17 +302,20 @@ describe('injectQueries', () => {
     })
     class TestComponent {
       readonly userId = signal<string | null>(null);
-      readonly queries = injectQueries(() => ({
-        user: this.userId() ? { query: mockUserQuery, args: { userId: this.userId()! } } : skipToken,
-        todos: { query: mockTodosQuery, args: { count: 10 } },
-      }));
+      readonly queries = injectQueries(() => {
+        const userId = this.userId();
+        return {
+          user: userId ? { query: mockUserQuery, args: { userId } } : skipToken,
+          todos: { query: mockTodosQuery, args: { count: 10 } },
+        };
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+    expect(convex.querySubscriptions).toHaveLength(1);
     expect(fixture.componentInstance.queries.statuses()).toEqual({
       user: 'skipped',
       todos: 'pending',
@@ -339,7 +329,7 @@ describe('injectQueries', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+    expect(convex.querySubscriptions).toHaveLength(2);
     expect(fixture.componentInstance.queries.statuses()).toEqual({
       user: 'pending',
       todos: 'pending',
@@ -349,7 +339,7 @@ describe('injectQueries', () => {
     fixture.detectChanges();
     tick();
 
-    expect(unsubscribeByKey.get(keyFor('users:get', { userId: 'user-1' }))).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, { userId: 'user-1' }).unsubscribeCount).toBe(1);
     expect(fixture.componentInstance.queries.statuses().user).toBe('skipped');
   }));
 
@@ -370,7 +360,7 @@ describe('injectQueries', () => {
     fixture.detectChanges();
     tick();
 
-    onUpdateByKey.get(keyFor('stats:get', { teamId: 'team-1' }))?.({ total: 3 });
+    requireQuerySubscription(convex, { teamId: 'team-1' }).emit({ total: 3 });
     expect(fixture.componentInstance.queries.results()).toEqual({
       user: undefined,
       stats: { total: 3 },
@@ -380,7 +370,7 @@ describe('injectQueries', () => {
     fixture.detectChanges();
     tick();
 
-    expect(unsubscribeByKey.get(keyFor('stats:get', { teamId: 'team-1' }))).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, { teamId: 'team-1' }).unsubscribeCount).toBe(1);
     expect(fixture.componentInstance.queries.results()).toEqual({
       user: undefined,
     });
@@ -431,10 +421,13 @@ describe('injectQueries', () => {
     })
     class TestComponent {
       readonly userId = signal<string | null>(null);
-      readonly queries = injectQueries(() => ({
-        user: this.userId() ? { query: mockUserQuery, args: { userId: this.userId()! } } : skipToken,
-        todos: { query: mockTodosQuery, args: { count: 10 } },
-      }));
+      readonly queries = injectQueries(() => {
+        const userId = this.userId();
+        return {
+          user: userId ? { query: mockUserQuery, args: { userId } } : skipToken,
+          todos: { query: mockTodosQuery, args: { count: 10 } },
+        };
+      });
     }
 
     const fixture = TestBed.createComponent(TestComponent);
@@ -471,15 +464,15 @@ describe('injectQueries', () => {
     fixture.detectChanges();
     tick();
 
-    const initialTodosSubscription = unsubscribeByKey.get(keyFor('todos:list', { count: 10 }));
+    const initialTodosSubscription = requireQuerySubscription(convex, { count: 10 });
 
     fixture.componentInstance.userId.set('user-2');
     fixture.detectChanges();
     tick();
 
-    expect(unsubscribeByKey.get(keyFor('users:get', { userId: 'user-1' }))).toHaveBeenCalledTimes(1);
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(3);
-    expect(initialTodosSubscription).not.toHaveBeenCalled();
+    expect(requireQuerySubscription(convex, { userId: 'user-1' }).unsubscribeCount).toBe(1);
+    expect(convex.querySubscriptions).toHaveLength(3);
+    expect(initialTodosSubscription.unsubscribeCount).toBe(0);
   }));
 
   it('cleans up all subscriptions when the component is destroyed', fakeAsync(() => {
@@ -500,8 +493,8 @@ describe('injectQueries', () => {
 
     fixture.destroy();
 
-    expect(unsubscribeByKey.get(keyFor('users:get', { userId: 'user-1' }))).toHaveBeenCalledTimes(1);
-    expect(unsubscribeByKey.get(keyFor('todos:list', { count: 10 }))).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, { userId: 'user-1' }).unsubscribeCount).toBe(1);
+    expect(requireQuerySubscription(convex, { count: 10 }).unsubscribeCount).toBe(1);
   }));
 
   it('supports injectRef outside the current injection context', fakeAsync(() => {
@@ -516,7 +509,7 @@ describe('injectQueries', () => {
 
     tick();
 
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+    expect(convex.querySubscriptions).toHaveLength(1);
     expect(queries.statuses()).toEqual({ user: 'pending' });
   }));
 
@@ -534,7 +527,7 @@ describe('injectQueries', () => {
     tick();
     childInjector.destroy();
 
-    expect(unsubscribeByKey.get(keyFor('users:get', { userId: 'user-1' }))).toHaveBeenCalledTimes(1);
+    expect(requireQuerySubscription(convex, { userId: 'user-1' }).unsubscribeCount).toBe(1);
   }));
 
   it('infers keyed result types from the query definitions', () => {
@@ -591,10 +584,10 @@ describe('injectQueries', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))?.({ name: 'Ada' });
+      requireQuerySubscription(convex, { userId: 'user-1' }).emit({ name: 'Ada' });
       expect(onSuccess).toHaveBeenCalledWith('user', { name: 'Ada' });
 
-      onUpdateByKey.get(keyFor('todos:list', { count: 10 }))?.([{ _id: '1', title: 'T' }]);
+      requireQuerySubscription(convex, { count: 10 }).emit([{ _id: '1', title: 'T' }]);
       expect(onSuccess).toHaveBeenCalledWith('todos', [{ _id: '1', title: 'T' }]);
     }));
 
@@ -619,7 +612,7 @@ describe('injectQueries', () => {
       tick();
 
       const queryError = new Error('boom');
-      onErrorByKey.get(keyFor('users:get', { userId: 'user-1' }))?.(queryError);
+      requireQuerySubscription(convex, { userId: 'user-1' }).emitError(queryError);
 
       expect(onError).toHaveBeenCalledWith('user', queryError);
     }));
@@ -642,18 +635,18 @@ describe('injectQueries', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+      expect(convex.querySubscriptions).toHaveLength(2);
 
       // Deliver data, then refetch: subscriptions are re-established and
       // existing data is preserved while pending.
-      onUpdateByKey.get(keyFor('users:get', { userId: 'user-1' }))?.({ name: 'Ada' });
-      const originalUnsubscribe = unsubscribeByKey.get(keyFor('users:get', { userId: 'user-1' }));
+      requireQuerySubscription(convex, { userId: 'user-1' }).emit({ name: 'Ada' });
+      const originalSubscription = requireQuerySubscription(convex, { userId: 'user-1' });
       fixture.componentInstance.queries.refetch();
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(4);
-      expect(originalUnsubscribe).toHaveBeenCalled();
+      expect(convex.querySubscriptions).toHaveLength(4);
+      expect(originalSubscription.unsubscribed).toBe(true);
       expect(fixture.componentInstance.queries.statuses()).toEqual({ user: 'pending', todos: 'pending' });
       expect(fixture.componentInstance.queries.results().user).toEqual({ name: 'Ada' });
     }));
@@ -661,7 +654,7 @@ describe('injectQueries', () => {
 
   describe('SSR (server platform)', () => {
     let mockLoader: { enabled: boolean; fetch: jest.Mock };
-    let serverConvexClient: ConvexClient;
+    let serverConvex: MockConvexClient;
 
     beforeEach(() => {
       TestBed.resetTestingModule();
@@ -677,20 +670,12 @@ describe('injectQueries', () => {
         }),
       };
 
-      serverConvexClient = {
-        get disabled() {
-          return true;
-        },
-        get client() {
-          throw new Error('ConvexClient is disabled');
-        },
-        onUpdate: jest.fn(),
-      } as unknown as ConvexClient;
+      serverConvex = new MockConvexClient({ disabled: true });
 
       TestBed.configureTestingModule({
         providers: [
           { provide: PLATFORM_ID, useValue: 'server' },
-          { provide: CONVEX, useValue: serverConvexClient },
+          provideConvexTesting(serverConvex),
           { provide: ConvexServerQueryLoader, useValue: mockLoader },
         ],
       });
@@ -713,7 +698,9 @@ describe('injectQueries', () => {
       tick();
 
       expect(mockLoader.fetch).toHaveBeenCalledTimes(2);
-      expect(serverConvexClient.onUpdate).not.toHaveBeenCalled();
+      // A disabled client records the subscriptions it refused, so an empty
+      // record proves the helper never attempted to subscribe on the server.
+      expect(serverConvex.refusedSubscriptions).toHaveLength(0);
       expect(fixture.componentInstance.queries.statuses()).toEqual({ user: 'success', todos: 'success' });
       expect(fixture.componentInstance.queries.results()).toEqual({
         user: { name: 'Server user' },
@@ -754,10 +741,7 @@ describe('injectQueries', () => {
     it('keeps skipped keys skipped and stays pending without a loader', fakeAsync(() => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
-        providers: [
-          { provide: PLATFORM_ID, useValue: 'server' },
-          { provide: CONVEX, useValue: serverConvexClient },
-        ],
+        providers: [{ provide: PLATFORM_ID, useValue: 'server' }, provideConvexTesting(serverConvex)],
       });
 
       @Component({
@@ -783,7 +767,7 @@ describe('injectQueries', () => {
     beforeEach(() => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
-        providers: [{ provide: CONVEX, useValue: mockConvexClient }, ConvexHydrationState],
+        providers: [provideConvexTesting(convex), ConvexHydrationState],
       });
     });
 
@@ -810,10 +794,10 @@ describe('injectQueries', () => {
       expect(fixture.componentInstance.queries.results().todos).toEqual([{ _id: '1', title: 'T' }]);
 
       // Live subscriptions are established for both keys.
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+      expect(convex.querySubscriptions).toHaveLength(2);
 
       // A live update replaces the seeded value.
-      onUpdateByKey.get(keyFor('todos:list', { count: 10 }))?.([{ _id: '1', title: 'Live' }]);
+      requireQuerySubscription(convex, { count: 10 }).emit([{ _id: '1', title: 'Live' }]);
       expect(fixture.componentInstance.queries.results().todos).toEqual([{ _id: '1', title: 'Live' }]);
       tick();
     }));

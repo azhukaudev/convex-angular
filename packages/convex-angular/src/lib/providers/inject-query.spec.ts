@@ -1,10 +1,9 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
+import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
 import { skipToken } from '../skip-token';
-import { CONVEX } from '../tokens/convex';
 import { QueryReference, injectQuery } from './inject-query';
 
 type Assert<T extends true> = T;
@@ -24,36 +23,22 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
   Array<{ _id: string; title: string }>
 > as QueryReference;
 
+function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscription {
+  const subscription = convex.lastQuerySubscription();
+  if (!subscription) {
+    throw new Error('Expected a captured query subscription');
+  }
+  return subscription;
+}
+
 describe('injectQuery', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockUnsubscribe: jest.Mock;
-  let mockLocalQueryResult: jest.Mock;
-  let subscriptions: Array<{
-    onUpdate: (result: any) => void;
-    onError: (err: Error) => void;
-  }>;
-  let onUpdateCallback: (result: any) => void;
-  let onErrorCallback: (err: Error) => void;
+  let convex: MockConvexClient;
 
   beforeEach(() => {
-    mockUnsubscribe = jest.fn();
-    mockLocalQueryResult = jest.fn().mockReturnValue(undefined);
-    subscriptions = [];
-
-    mockConvexClient = {
-      client: {
-        localQueryResult: mockLocalQueryResult,
-      },
-      onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
-        subscriptions.push({ onUpdate, onError });
-        onUpdateCallback = onUpdate;
-        onErrorCallback = onError;
-        return mockUnsubscribe;
-      }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -75,7 +60,7 @@ describe('injectQuery', () => {
 
       // Before the first change detection the effect has not established a
       // subscription, so nothing is loading, skipped or placeholder-backed.
-      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(convex.querySubscriptions).toHaveLength(0);
       expect(fixture.componentInstance.todos.data()).toBeUndefined();
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
       expect(fixture.componentInstance.todos.isLoading()).toBe(false);
@@ -86,7 +71,7 @@ describe('injectQuery', () => {
 
     it('should initialize with local query result if available', fakeAsync(() => {
       const cachedData = [{ _id: '1', title: 'Cached todo' }];
-      mockLocalQueryResult.mockReturnValue(cachedData);
+      convex.seedQueryResult('todos:listTodos', { count: 10 }, cachedData);
 
       @Component({
         template: '',
@@ -104,8 +89,6 @@ describe('injectQuery', () => {
     }));
 
     it('should initialize with undefined if no local result', fakeAsync(() => {
-      mockLocalQueryResult.mockReturnValue(undefined);
-
       @Component({
         template: '',
         standalone: true,
@@ -118,8 +101,10 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      // Data is set by the subscription callback, not initial state
-      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      // Nothing was seeded for these args, so the warm cache had nothing to
+      // offer; data is set by the subscription callback, not initial state.
+      expect(convex.localQueryResultCalls).toEqual([{ queryName: 'todos:listTodos', args: { count: 10 } }]);
+      expect(convex.querySubscriptions).toHaveLength(1);
     }));
 
     it('should type data as query result or undefined', () => {
@@ -206,12 +191,15 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledWith(
-        mockQuery,
-        { count: 20 },
-        expect.any(Function),
-        expect.any(Function),
-      );
+      expect(convex.querySubscriptions).toHaveLength(1);
+      expect(requireLastQuerySubscription(convex).query).toBe(mockQuery);
+      expect(requireLastQuerySubscription(convex).args).toEqual({ count: 20 });
+
+      // The subscription also carries an error callback: an emitted error is
+      // surfaced rather than dropped.
+      const error = new Error('Query failed');
+      requireLastQuerySubscription(convex).emitError(error);
+      expect(fixture.componentInstance.todos.error()).toBe(error);
     }));
 
     it('should update data signal on successful update', fakeAsync(() => {
@@ -231,7 +219,7 @@ describe('injectQuery', () => {
         { _id: '1', title: 'Todo 1' },
         { _id: '2', title: 'Todo 2' },
       ];
-      onUpdateCallback(mockData);
+      requireLastQuerySubscription(convex).emit(mockData);
 
       expect(fixture.componentInstance.todos.data()).toEqual(mockData);
     }));
@@ -249,7 +237,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
 
       expect(fixture.componentInstance.todos.isLoading()).toBe(false);
     }));
@@ -268,11 +256,11 @@ describe('injectQuery', () => {
       tick();
 
       // First, set an error
-      onErrorCallback(new Error('Test error'));
+      requireLastQuerySubscription(convex).emitError(new Error('Test error'));
       expect(fixture.componentInstance.todos.error()).toBeDefined();
 
       // Then, successful update
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
 
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
     }));
@@ -293,7 +281,7 @@ describe('injectQuery', () => {
       tick();
 
       const error = new Error('Query failed');
-      onErrorCallback(error);
+      requireLastQuerySubscription(convex).emitError(error);
 
       expect(fixture.componentInstance.todos.error()).toBe(error);
     }));
@@ -313,11 +301,11 @@ describe('injectQuery', () => {
 
       // First, set some data
       const mockData = [{ _id: '1', title: 'Todo' }];
-      onUpdateCallback(mockData);
+      requireLastQuerySubscription(convex).emit(mockData);
       expect(fixture.componentInstance.todos.data()).toBeDefined();
 
       // Then, error - data should be preserved
-      onErrorCallback(new Error('Query failed'));
+      requireLastQuerySubscription(convex).emitError(new Error('Query failed'));
 
       expect(fixture.componentInstance.todos.data()).toEqual(mockData);
     }));
@@ -335,7 +323,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onErrorCallback(new Error('Query failed'));
+      requireLastQuerySubscription(convex).emitError(new Error('Query failed'));
 
       expect(fixture.componentInstance.todos.isLoading()).toBe(false);
     }));
@@ -355,7 +343,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(convex.querySubscriptions).toHaveLength(0);
     }));
 
     it('should set isSkipped to true when skipToken is returned', fakeAsync(() => {
@@ -438,7 +426,7 @@ describe('injectQuery', () => {
 
       // Initially skipped
       expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
-      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(convex.querySubscriptions).toHaveLength(0);
 
       // Set userId to enable query
       fixture.componentInstance.userId.set('user-123');
@@ -446,7 +434,7 @@ describe('injectQuery', () => {
       tick();
 
       expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
-      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      expect(convex.querySubscriptions).toHaveLength(1);
     }));
 
     it('should clear data/error when transitioning to skipped', fakeAsync(() => {
@@ -464,7 +452,7 @@ describe('injectQuery', () => {
       tick();
 
       // Set some data
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
       expect(fixture.componentInstance.todos.data()).toBeDefined();
       expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
 
@@ -493,15 +481,16 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      expect(convex.querySubscriptions).toHaveLength(1);
+      const subscription = requireLastQuerySubscription(convex);
+      expect(subscription.unsubscribeCount).toBe(0);
 
       // Skip the query
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
 
-      expect(mockUnsubscribe).toHaveBeenCalled();
+      expect(subscription.unsubscribeCount).toBe(1);
     }));
 
     it('should not double-unsubscribe when toggling skipToken', fakeAsync(() => {
@@ -518,25 +507,29 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      const firstSubscription = requireLastQuerySubscription(convex);
+      expect(firstSubscription.unsubscribeCount).toBe(0);
 
       // Skip the query - should unsubscribe once
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(firstSubscription.unsubscribeCount).toBe(1);
 
       // Resume the query - should not unsubscribe again
       fixture.componentInstance.shouldSkip.set(false);
       fixture.detectChanges();
       tick();
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+      const secondSubscription = requireLastQuerySubscription(convex);
+      expect(firstSubscription.unsubscribeCount).toBe(1);
+      expect(secondSubscription.unsubscribeCount).toBe(0);
 
       // Skip again - should unsubscribe once more
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(2);
+      expect(firstSubscription.unsubscribeCount).toBe(1);
+      expect(secondSubscription.unsubscribeCount).toBe(1);
     }));
 
     it('should resubscribe when transitioning from skipped to active', fakeAsync(() => {
@@ -553,7 +546,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+      expect(convex.querySubscriptions).toHaveLength(0);
       expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
 
       // Enable the query
@@ -561,7 +554,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalled();
+      expect(convex.querySubscriptions).toHaveLength(1);
       expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
       expect(fixture.componentInstance.todos.isLoading()).toBe(true);
     }));
@@ -584,24 +577,22 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledWith(
-        mockQuery,
-        { count: 10 },
-        expect.any(Function),
-        expect.any(Function),
-      );
+      expect(requireLastQuerySubscription(convex).query).toBe(mockQuery);
+      expect(requireLastQuerySubscription(convex).args).toEqual({ count: 10 });
 
       // Change count
       fixture.componentInstance.count.set(20);
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledWith(
-        mockQuery,
-        { count: 20 },
-        expect.any(Function),
-        expect.any(Function),
-      );
+      expect(convex.querySubscriptions).toHaveLength(2);
+      expect(requireLastQuerySubscription(convex).query).toBe(mockQuery);
+      expect(requireLastQuerySubscription(convex).args).toEqual({ count: 20 });
+
+      // The resubscription carries an error callback too.
+      const error = new Error('Query failed');
+      requireLastQuerySubscription(convex).emitError(error);
+      expect(fixture.componentInstance.todos.error()).toBe(error);
     }));
 
     it('should unsubscribe from previous subscription when args change', fakeAsync(() => {
@@ -620,14 +611,15 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      const firstSubscription = requireLastQuerySubscription(convex);
+      expect(firstSubscription.unsubscribeCount).toBe(0);
 
       // Change count
       fixture.componentInstance.count.set(20);
       fixture.detectChanges();
       tick();
 
-      expect(mockUnsubscribe).toHaveBeenCalled();
+      expect(firstSubscription.unsubscribeCount).toBe(1);
     }));
 
     it('should ignore stale updates when args change', fakeAsync(() => {
@@ -646,19 +638,20 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      const firstSubscription = subscriptions[0];
+      const firstSubscription = requireLastQuerySubscription(convex);
 
       fixture.componentInstance.count.set(20);
       fixture.detectChanges();
       tick();
 
-      const secondSubscription = subscriptions[1];
       const latestData = [{ _id: '2', title: 'Latest todo' }];
 
-      secondSubscription.onUpdate(latestData);
+      requireLastQuerySubscription(convex).emit(latestData);
       expect(fixture.componentInstance.todos.data()).toEqual(latestData);
 
-      firstSubscription.onUpdate([{ _id: '1', title: 'Stale todo' }]);
+      // The real client would never call a retired callback; invoke it
+      // directly to reach the defensive generation guard.
+      firstSubscription.emitAfterUnsubscribe([{ _id: '1', title: 'Stale todo' }]);
 
       expect(fixture.componentInstance.todos.data()).toEqual(latestData);
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
@@ -681,17 +674,16 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      const firstSubscription = subscriptions[0];
+      const firstSubscription = requireLastQuerySubscription(convex);
 
       fixture.componentInstance.count.set(20);
       fixture.detectChanges();
       tick();
 
-      const secondSubscription = subscriptions[1];
       const latestData = [{ _id: '2', title: 'Latest todo' }];
 
-      secondSubscription.onUpdate(latestData);
-      firstSubscription.onError(new Error('stale failure'));
+      requireLastQuerySubscription(convex).emit(latestData);
+      firstSubscription.emitErrorAfterUnsubscribe(new Error('stale failure'));
 
       expect(fixture.componentInstance.todos.data()).toEqual(latestData);
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
@@ -712,7 +704,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      const firstSubscription = subscriptions[0];
+      const firstSubscription = requireLastQuerySubscription(convex);
 
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
@@ -723,12 +715,12 @@ describe('injectQuery', () => {
       tick();
 
       const latestData = [{ _id: '2', title: 'Latest todo' }];
-      subscriptions[1].onUpdate(latestData);
+      requireLastQuerySubscription(convex).emit(latestData);
 
       // The skip in between advanced the staleness guard too, so the very
       // first subscription must stay stale even though its args match again.
-      firstSubscription.onUpdate([{ _id: '1', title: 'Stale todo' }]);
-      firstSubscription.onError(new Error('stale failure'));
+      firstSubscription.emitAfterUnsubscribe([{ _id: '1', title: 'Stale todo' }]);
+      firstSubscription.emitErrorAfterUnsubscribe(new Error('stale failure'));
 
       expect(fixture.componentInstance.todos.data()).toEqual(latestData);
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
@@ -753,14 +745,9 @@ describe('injectQuery', () => {
 
       const initialData = [{ _id: '1', title: 'Todo 10' }];
       const cachedData = [{ _id: '2', title: 'Todo 20 (cached)' }];
-      onUpdateCallback(initialData);
+      requireLastQuerySubscription(convex).emit(initialData);
 
-      mockLocalQueryResult.mockImplementation((queryName: string, args: { count: number }) => {
-        if (queryName === 'todos:listTodos' && args.count === 20) {
-          return cachedData;
-        }
-        return undefined;
-      });
+      convex.seedQueryResult('todos:listTodos', { count: 20 }, cachedData);
 
       fixture.componentInstance.count.set(20);
       fixture.detectChanges();
@@ -788,7 +775,7 @@ describe('injectQuery', () => {
       tick();
 
       const initialData = [{ _id: '1', title: 'Todo 10' }];
-      onUpdateCallback(initialData);
+      requireLastQuerySubscription(convex).emit(initialData);
 
       fixture.componentInstance.count.set(20);
       fixture.detectChanges();
@@ -815,15 +802,15 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+      expect(convex.querySubscriptions).toHaveLength(1);
 
       // Changes to a value that serializes to the same args
       fixture.componentInstance.sig.set(30);
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      expect(convex.querySubscriptions).toHaveLength(1);
+      expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(0);
     }));
 
     it('should still resubscribe via refetch() when args serialize identically', fakeAsync(() => {
@@ -844,13 +831,13 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+      expect(convex.querySubscriptions).toHaveLength(1);
 
       fixture.componentInstance.todos.refetch();
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+      expect(convex.querySubscriptions).toHaveLength(2);
     }));
 
     it('should resubscribe after a skipToken transition even when args return to the same value', fakeAsync(() => {
@@ -867,7 +854,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+      expect(convex.querySubscriptions).toHaveLength(1);
 
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
@@ -877,7 +864,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+      expect(convex.querySubscriptions).toHaveLength(2);
     }));
   });
 
@@ -895,11 +882,12 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      const subscription = requireLastQuerySubscription(convex);
+      expect(subscription.unsubscribeCount).toBe(0);
 
       fixture.destroy();
 
-      expect(mockUnsubscribe).toHaveBeenCalled();
+      expect(subscription.unsubscribeCount).toBe(1);
     }));
 
     it('should ignore callbacks from every subscription after destroy', fakeAsync(() => {
@@ -916,23 +904,23 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      const firstSubscription = subscriptions[0];
+      const firstSubscription = requireLastQuerySubscription(convex);
 
       fixture.componentInstance.count.set(20);
       fixture.detectChanges();
       tick();
 
-      const secondSubscription = subscriptions[1];
+      const secondSubscription = requireLastQuerySubscription(convex);
       const latestData = [{ _id: '2', title: 'Latest todo' }];
-      secondSubscription.onUpdate(latestData);
+      secondSubscription.emit(latestData);
 
       fixture.destroy();
 
       // Destroying must retire every generation, not just the newest one.
-      firstSubscription.onUpdate([{ _id: '1', title: 'Stale todo' }]);
-      firstSubscription.onError(new Error('stale failure'));
-      secondSubscription.onUpdate([{ _id: '3', title: 'Post-destroy todo' }]);
-      secondSubscription.onError(new Error('post-destroy failure'));
+      firstSubscription.emitAfterUnsubscribe([{ _id: '1', title: 'Stale todo' }]);
+      firstSubscription.emitErrorAfterUnsubscribe(new Error('stale failure'));
+      secondSubscription.emitAfterUnsubscribe([{ _id: '3', title: 'Post-destroy todo' }]);
+      secondSubscription.emitErrorAfterUnsubscribe(new Error('post-destroy failure'));
 
       expect(fixture.componentInstance.todos.data()).toEqual(latestData);
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
@@ -952,14 +940,14 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      const firstSubscription = subscriptions[0];
+      const firstSubscription = requireLastQuerySubscription(convex);
 
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
 
-      firstSubscription.onUpdate([{ _id: '1', title: 'Stale todo' }]);
-      firstSubscription.onError(new Error('stale failure'));
+      firstSubscription.emitAfterUnsubscribe([{ _id: '1', title: 'Stale todo' }]);
+      firstSubscription.emitErrorAfterUnsubscribe(new Error('stale failure'));
 
       expect(fixture.componentInstance.todos.data()).toBeUndefined();
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
@@ -982,19 +970,21 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
+      const subscription = requireLastQuerySubscription(convex);
+
       // First update
-      onUpdateCallback([{ _id: '1', title: 'Todo 1' }]);
+      subscription.emit([{ _id: '1', title: 'Todo 1' }]);
       expect(fixture.componentInstance.todos.data()?.length).toBe(1);
 
       // Second update
-      onUpdateCallback([
+      subscription.emit([
         { _id: '1', title: 'Todo 1' },
         { _id: '2', title: 'Todo 2' },
       ]);
       expect(fixture.componentInstance.todos.data()?.length).toBe(2);
 
       // Third update
-      onUpdateCallback([]);
+      subscription.emit([]);
       expect(fixture.componentInstance.todos.data()?.length).toBe(0);
     }));
   });
@@ -1029,7 +1019,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
 
       expect(fixture.componentInstance.todos.status()).toBe('success');
     }));
@@ -1047,7 +1037,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onErrorCallback(new Error('Query failed'));
+      requireLastQuerySubscription(convex).emitError(new Error('Query failed'));
 
       expect(fixture.componentInstance.todos.status()).toBe('error');
     }));
@@ -1093,12 +1083,12 @@ describe('injectQuery', () => {
       expect(fixture.componentInstance.todos.status()).toBe('pending');
 
       // Data received -> success
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
 
       expect(fixture.componentInstance.todos.status()).toBe('success');
 
       // Error -> error
-      onErrorCallback(new Error('Query failed'));
+      requireLastQuerySubscription(convex).emitError(new Error('Query failed'));
 
       expect(fixture.componentInstance.todos.status()).toBe('error');
     }));
@@ -1134,7 +1124,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
 
       expect(fixture.componentInstance.todos.isSuccess()).toBe(true);
     }));
@@ -1152,7 +1142,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onErrorCallback(new Error('Query failed'));
+      requireLastQuerySubscription(convex).emitError(new Error('Query failed'));
 
       expect(fixture.componentInstance.todos.isSuccess()).toBe(false);
     }));
@@ -1188,14 +1178,14 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+      expect(convex.querySubscriptions).toHaveLength(1);
 
       // Refetch
       fixture.componentInstance.todos.refetch();
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(2);
+      expect(convex.querySubscriptions).toHaveLength(2);
     }));
 
     it('should unsubscribe from previous subscription on refetch', fakeAsync(() => {
@@ -1211,14 +1201,15 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      const subscription = requireLastQuerySubscription(convex);
+      expect(subscription.unsubscribeCount).toBe(0);
 
       // Refetch
       fixture.componentInstance.todos.refetch();
       fixture.detectChanges();
       tick();
 
-      expect(mockUnsubscribe).toHaveBeenCalled();
+      expect(subscription.unsubscribeCount).toBe(1);
     }));
 
     it('should preserve existing data during refetch', fakeAsync(() => {
@@ -1236,7 +1227,7 @@ describe('injectQuery', () => {
 
       // Set initial data
       const initialData = [{ _id: '1', title: 'Todo' }];
-      onUpdateCallback(initialData);
+      requireLastQuerySubscription(convex).emit(initialData);
 
       expect(fixture.componentInstance.todos.data()).toEqual(initialData);
 
@@ -1264,14 +1255,9 @@ describe('injectQuery', () => {
 
       const initialData = [{ _id: '1', title: 'Todo' }];
       const cachedData = [{ _id: '2', title: 'Todo (cached)' }];
-      onUpdateCallback(initialData);
+      requireLastQuerySubscription(convex).emit(initialData);
 
-      mockLocalQueryResult.mockImplementation((queryName: string, args: { count: number }) => {
-        if (queryName === 'todos:listTodos' && args.count === 10) {
-          return cachedData;
-        }
-        return undefined;
-      });
+      convex.seedQueryResult('todos:listTodos', { count: 10 }, cachedData);
 
       fixture.componentInstance.todos.refetch();
       fixture.detectChanges();
@@ -1295,7 +1281,7 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
       expect(fixture.componentInstance.todos.isLoading()).toBe(false);
 
       // Refetch
@@ -1326,7 +1312,7 @@ describe('injectQuery', () => {
       tick();
 
       const mockData = [{ _id: '1', title: 'Todo' }];
-      onUpdateCallback(mockData);
+      requireLastQuerySubscription(convex).emit(mockData);
 
       expect(onSuccess).toHaveBeenCalledWith(mockData);
     }));
@@ -1348,8 +1334,9 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback([{ _id: '1', title: 'Todo 1' }]);
-      onUpdateCallback([
+      const subscription = requireLastQuerySubscription(convex);
+      subscription.emit([{ _id: '1', title: 'Todo 1' }]);
+      subscription.emit([
         { _id: '1', title: 'Todo 1' },
         { _id: '2', title: 'Todo 2' },
       ]);
@@ -1375,7 +1362,7 @@ describe('injectQuery', () => {
       tick();
 
       const error = new Error('Query failed');
-      onErrorCallback(error);
+      requireLastQuerySubscription(convex).emitError(error);
 
       expect(onError).toHaveBeenCalledWith(error);
     }));
@@ -1394,8 +1381,9 @@ describe('injectQuery', () => {
       tick();
 
       // Should not throw
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
-      onErrorCallback(new Error('Query failed'));
+      const subscription = requireLastQuerySubscription(convex);
+      subscription.emit([{ _id: '1', title: 'Todo' }]);
+      subscription.emitError(new Error('Query failed'));
 
       expect(fixture.componentInstance.todos.error()).toBeDefined();
     }));
@@ -1417,12 +1405,13 @@ describe('injectQuery', () => {
 
       // Set initial data
       const initialData = [{ _id: '1', title: 'Todo' }];
-      onUpdateCallback(initialData);
+      const subscription = requireLastQuerySubscription(convex);
+      subscription.emit(initialData);
 
       expect(fixture.componentInstance.todos.data()).toEqual(initialData);
 
       // Error occurs - data should be preserved
-      onErrorCallback(new Error('Query failed'));
+      subscription.emitError(new Error('Query failed'));
 
       expect(fixture.componentInstance.todos.data()).toEqual(initialData);
       expect(fixture.componentInstance.todos.error()).toBeDefined();
@@ -1438,17 +1427,19 @@ describe('injectQuery', () => {
       });
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledWith(
-        mockQuery,
-        { count: 10 },
-        expect.any(Function),
-        expect.any(Function),
-      );
+      expect(convex.querySubscriptions).toHaveLength(1);
+      expect(requireLastQuerySubscription(convex).query).toBe(mockQuery);
+      expect(requireLastQuerySubscription(convex).args).toEqual({ count: 10 });
 
       const result = [{ _id: '1', title: 'Todo 1' }];
-      onUpdateCallback(result);
+      requireLastQuerySubscription(convex).emit(result);
 
       expect(todos.data()).toEqual(result);
+
+      // Both callbacks are wired for an injectRef-created query.
+      const error = new Error('Query failed');
+      requireLastQuerySubscription(convex).emitError(error);
+      expect(todos.error()).toBe(error);
     }));
 
     it('should clean up subscriptions when the provided injector is destroyed', fakeAsync(() => {
@@ -1459,11 +1450,12 @@ describe('injectQuery', () => {
       });
       tick();
 
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      const subscription = requireLastQuerySubscription(convex);
+      expect(subscription.unsubscribeCount).toBe(0);
 
       childInjector.destroy();
 
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(subscription.unsubscribeCount).toBe(1);
     }));
 
     it('should let injectRef override the ambient component scope', fakeAsync(() => {
@@ -1483,11 +1475,13 @@ describe('injectQuery', () => {
       fixture.detectChanges();
       tick();
 
+      const subscription = requireLastQuerySubscription(convex);
+
       fixture.destroy();
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      expect(subscription.unsubscribeCount).toBe(0);
 
       childInjector.destroy();
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(subscription.unsubscribeCount).toBe(1);
     }));
 
     it('should still throw outside an injection context without injectRef', () => {

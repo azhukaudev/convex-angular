@@ -1,22 +1,18 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 
-import { CONVEX, provideConvex } from '../tokens/convex';
+import { provideConvex } from '../tokens/convex';
 import { injectConvex } from './inject-convex';
 
 describe('injectConvex', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
+  let convex: MockConvexClient;
 
   beforeEach(() => {
-    mockConvexClient = {
-      query: jest.fn(),
-      mutation: jest.fn(),
-      action: jest.fn(),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -36,7 +32,7 @@ describe('injectConvex', () => {
     const fixture = TestBed.createComponent(TestComponent);
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.convex).toBe(mockConvexClient);
+    expect(fixture.componentInstance.convex).toBe(convex);
   });
 
   it('should provide access to client methods', () => {
@@ -76,7 +72,7 @@ describe('injectConvex', () => {
   it('should resolve the ConvexClient outside an injection context with injectRef', () => {
     const injector = TestBed.inject(EnvironmentInjector);
 
-    expect(injectConvex({ injectRef: injector })).toBe(mockConvexClient);
+    expect(injectConvex({ injectRef: injector })).toBe(convex);
   });
 
   it('should throw outside an injection context without injectRef', () => {

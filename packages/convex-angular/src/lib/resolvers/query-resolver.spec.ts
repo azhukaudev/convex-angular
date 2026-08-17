@@ -1,13 +1,12 @@
 import { PLATFORM_ID } from '@angular/core';
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
-import { ConvexClient } from 'convex/browser';
+import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
 import { QueryReference } from '../providers/inject-query';
 import { skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
-import { CONVEX } from '../tokens/convex';
 import { convexQueryResolver } from './query-resolver';
 
 jest.mock('convex/server', () => ({
@@ -25,28 +24,22 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
 const route = {} as ActivatedRouteSnapshot;
 const state = {} as RouterStateSnapshot;
 
+function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscription {
+  const subscription = convex.lastQuerySubscription();
+  if (!subscription) {
+    throw new Error('Expected a captured query subscription');
+  }
+  return subscription;
+}
+
 describe('convexQueryResolver', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockUnsubscribe: jest.Mock;
-  let onUpdateCallback: ((result: unknown) => void) | undefined;
-  let onErrorCallback: ((err: Error) => void) | undefined;
+  let convex: MockConvexClient;
 
   beforeEach(() => {
-    mockUnsubscribe = jest.fn();
-    onUpdateCallback = undefined;
-    onErrorCallback = undefined;
-
-    mockConvexClient = {
-      disabled: false,
-      onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
-        onUpdateCallback = onUpdate;
-        onErrorCallback = onError;
-        return mockUnsubscribe;
-      }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -65,14 +58,11 @@ describe('convexQueryResolver', () => {
     void Promise.resolve(runResolver(resolver)).then((value) => (resolved = value));
     tick();
 
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledWith(
-      mockQuery,
-      { userId: 'user-1' },
-      expect.any(Function),
-      expect.any(Function),
-    );
+    expect(convex.querySubscriptions).toHaveLength(1);
+    expect(requireLastQuerySubscription(convex).query).toBe(mockQuery);
+    expect(requireLastQuerySubscription(convex).args).toEqual({ userId: 'user-1' });
 
-    onUpdateCallback?.({ name: 'Ada' });
+    requireLastQuerySubscription(convex).emit({ name: 'Ada' });
     tick();
 
     expect(resolved).toEqual({ name: 'Ada' });
@@ -84,13 +74,13 @@ describe('convexQueryResolver', () => {
 
     void Promise.resolve(runResolver(resolver));
     tick();
-    onUpdateCallback?.({ name: 'Ada' });
+    requireLastQuerySubscription(convex).emit({ name: 'Ada' });
     tick();
 
-    expect(mockUnsubscribe).not.toHaveBeenCalled();
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(0);
 
     tick(5000);
-    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
   }));
 
   it('honors a custom keepSubscribedFor', fakeAsync(() => {
@@ -98,12 +88,12 @@ describe('convexQueryResolver', () => {
 
     void Promise.resolve(runResolver(resolver));
     tick();
-    onUpdateCallback?.({ name: 'Ada' });
+    requireLastQuerySubscription(convex).emit({ name: 'Ada' });
 
     tick(99);
-    expect(mockUnsubscribe).not.toHaveBeenCalled();
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(0);
     tick(1);
-    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
   }));
 
   it('resolves undefined immediately for skipped queries', fakeAsync(() => {
@@ -114,7 +104,7 @@ describe('convexQueryResolver', () => {
     tick();
 
     expect(resolved).toBeUndefined();
-    expect(mockConvexClient.onUpdate).not.toHaveBeenCalled();
+    expect(convex.querySubscriptions).toHaveLength(0);
   }));
 
   it('defaults to empty args when no argsFn is given', fakeAsync(() => {
@@ -123,8 +113,10 @@ describe('convexQueryResolver', () => {
     void Promise.resolve(runResolver(resolver));
     tick();
 
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledWith(mockQuery, {}, expect.any(Function), expect.any(Function));
-    onUpdateCallback?.({ name: 'Ada' });
+    expect(convex.querySubscriptions).toHaveLength(1);
+    expect(requireLastQuerySubscription(convex).query).toBe(mockQuery);
+    expect(requireLastQuerySubscription(convex).args).toEqual({});
+    requireLastQuerySubscription(convex).emit({ name: 'Ada' });
     tick(5000);
   }));
 
@@ -135,7 +127,7 @@ describe('convexQueryResolver', () => {
     void Promise.resolve(runResolver(resolver)).then((value) => (resolved = value));
     tick();
 
-    onErrorCallback?.(new Error('boom'));
+    requireLastQuerySubscription(convex).emitError(new Error('boom'));
     tick();
 
     expect(resolved).toBeUndefined();
@@ -147,17 +139,17 @@ describe('convexQueryResolver', () => {
 
     void Promise.resolve(runResolver(resolver));
     tick();
-    onUpdateCallback?.({ name: 'Ada' });
+    requireLastQuerySubscription(convex).emit({ name: 'Ada' });
     tick();
 
     // Let the keep-warm timer fire first.
     tick(5000);
-    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
 
     // Now simulate the environment being torn down (the second trigger).
     TestBed.resetTestingModule();
 
-    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
   }));
 
   it('resolves undefined and unsubscribes exactly once when destroyed before any result', fakeAsync(() => {
@@ -172,7 +164,7 @@ describe('convexQueryResolver', () => {
     tick();
 
     expect(resolved).toBeUndefined();
-    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
     // A scope destroyed before the first result has nothing to keep warm, so
     // it must not schedule a keep-warm timer on its way out. `flush` reports
     // the virtual time it had to advance to drain the queue: zero means the
@@ -187,11 +179,11 @@ describe('convexQueryResolver', () => {
     void Promise.resolve(runResolver(resolver)).then((value) => (resolved = value));
     tick();
 
-    onUpdateCallback?.({ name: 'Ada' });
+    requireLastQuerySubscription(convex).emit({ name: 'Ada' });
     tick(1000);
     // Live updates keep flowing while the subscription is warm; they must not
     // re-resolve the navigation or stack up another keep-warm timer.
-    onUpdateCallback?.({ name: 'Ada Lovelace' });
+    requireLastQuerySubscription(convex).emit({ name: 'Ada Lovelace' });
     tick(1000);
 
     expect(resolved).toEqual({ name: 'Ada' });
@@ -199,24 +191,14 @@ describe('convexQueryResolver', () => {
     TestBed.resetTestingModule();
     tick();
 
-    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
     expect(flush()).toBe(0);
   }));
 
   it('resolves undefined on a disabled client instead of hanging', fakeAsync(() => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
-      providers: [
-        {
-          provide: CONVEX,
-          useValue: {
-            get disabled() {
-              return true;
-            },
-            onUpdate: jest.fn(),
-          } as unknown as ConvexClient,
-        },
-      ],
+      providers: [provideConvexTesting(new MockConvexClient({ disabled: true }))],
     });
 
     const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
@@ -236,15 +218,7 @@ describe('convexQueryResolver', () => {
       TestBed.configureTestingModule({
         providers: [
           { provide: PLATFORM_ID, useValue: 'server' },
-          {
-            provide: CONVEX,
-            useValue: {
-              get disabled() {
-                return true;
-              },
-              onUpdate: jest.fn(),
-            } as unknown as ConvexClient,
-          },
+          provideConvexTesting(new MockConvexClient({ disabled: true })),
           ...(withLoader ? [{ provide: ConvexServerQueryLoader, useValue: mockLoader }] : []),
         ],
       });

@@ -229,6 +229,9 @@ importers:
       '@astrojs/check':
         specifier: 0.9.10
         version: 0.9.10(prettier-plugin-astro@0.14.1)(prettier@3.8.4)(typescript@5.9.3)
+      '@types/jest':
+        specifier: 30.0.0
+        version: 30.0.0
       convex:
         specifier: 1.42.1
         version: 1.42.1(react@19.2.7)

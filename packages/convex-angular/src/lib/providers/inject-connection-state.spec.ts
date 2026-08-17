@@ -1,40 +1,30 @@
 import { Component, EnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { ConnectionState, ConvexClient } from 'convex/browser';
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import { ConnectionState } from 'convex/browser';
 
-import { CONVEX } from '../tokens/convex';
 import { injectConvexConnectionState } from './inject-connection-state';
 
+// The connected, idle state a fresh MockConvexClient reports.
+const CONNECTED_STATE: ConnectionState = {
+  hasInflightRequests: false,
+  isWebSocketConnected: true,
+  timeOfOldestInflightRequest: null,
+  hasEverConnected: true,
+  connectionCount: 1,
+  connectionRetries: 0,
+  inflightMutations: 0,
+  inflightActions: 0,
+};
+
 describe('injectConvexConnectionState', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockUnsubscribe: jest.Mock;
-  let currentConnectionState: ConnectionState;
-  let connectionStateSubscriber: ((state: ConnectionState) => void) | undefined;
+  let convex: MockConvexClient;
 
   beforeEach(() => {
-    currentConnectionState = {
-      hasInflightRequests: false,
-      isWebSocketConnected: true,
-      timeOfOldestInflightRequest: null,
-      hasEverConnected: true,
-      connectionCount: 1,
-      connectionRetries: 0,
-      inflightMutations: 0,
-      inflightActions: 0,
-    };
-
-    mockUnsubscribe = jest.fn();
-
-    mockConvexClient = {
-      connectionState: jest.fn(() => currentConnectionState),
-      subscribeToConnectionState: jest.fn((subscriber) => {
-        connectionStateSubscriber = subscriber;
-        return mockUnsubscribe;
-      }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -54,9 +44,9 @@ describe('injectConvexConnectionState', () => {
     const fixture = TestBed.createComponent(TestComponent);
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.connectionState()).toEqual(currentConnectionState);
-    expect(mockConvexClient.connectionState).toHaveBeenCalledTimes(1);
-    expect(mockConvexClient.subscribeToConnectionState).toHaveBeenCalledTimes(1);
+    expect(fixture.componentInstance.connectionState()).toEqual(CONNECTED_STATE);
+    expect(convex.connectionStateReads).toBe(1);
+    expect(convex.connectionStateSubscriptions).toBe(1);
   });
 
   it('updates reactively when connection state changes', () => {
@@ -72,15 +62,15 @@ describe('injectConvexConnectionState', () => {
     fixture.detectChanges();
 
     const nextState: ConnectionState = {
-      ...currentConnectionState,
+      ...CONNECTED_STATE,
       isWebSocketConnected: false,
       hasInflightRequests: true,
       connectionRetries: 2,
       timeOfOldestInflightRequest: new Date(1700000000000),
     };
 
-    expect(connectionStateSubscriber).toBeDefined();
-    connectionStateSubscriber?.(nextState);
+    expect(convex.connectionStateSubscriptions).toBe(1);
+    convex.setConnectionState(nextState);
 
     expect(fixture.componentInstance.connectionState()).toEqual(nextState);
   });
@@ -98,7 +88,13 @@ describe('injectConvexConnectionState', () => {
     fixture.detectChanges();
     fixture.destroy();
 
-    expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(convex.connectionStateUnsubscribes).toBe(1);
+
+    convex.setConnectionState({ isWebSocketConnected: false, connectionRetries: 2 });
+
+    // The client moved on, but the destroyed helper is no longer listening.
+    expect(convex.connectionState().isWebSocketConnected).toBe(false);
+    expect(fixture.componentInstance.connectionState()).toEqual(CONNECTED_STATE);
   });
 
   it('resolves outside an injection context with injectRef', () => {
@@ -106,7 +102,7 @@ describe('injectConvexConnectionState', () => {
 
     const connectionState = injectConvexConnectionState({ injectRef: injector });
 
-    expect(connectionState()).toEqual(currentConnectionState);
+    expect(connectionState()).toEqual(CONNECTED_STATE);
   });
 
   it('throws outside an injection context without injectRef', () => {
@@ -114,22 +110,14 @@ describe('injectConvexConnectionState', () => {
   });
 
   describe('disabled client (SSR)', () => {
+    let disabledConvex: MockConvexClient;
+
     beforeEach(() => {
       TestBed.resetTestingModule();
-      mockConvexClient = {
-        get disabled() {
-          return true;
-        },
-        connectionState: jest.fn(() => {
-          throw new Error('ConvexClient is disabled');
-        }),
-        subscribeToConnectionState: jest.fn(() => {
-          throw new Error('ConvexClient is disabled');
-        }),
-      } as unknown as jest.Mocked<ConvexClient>;
+      disabledConvex = new MockConvexClient({ disabled: true });
 
       TestBed.configureTestingModule({
-        providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+        providers: [provideConvexTesting(disabledConvex)],
       });
     });
 
@@ -155,8 +143,10 @@ describe('injectConvexConnectionState', () => {
         inflightMutations: 0,
         inflightActions: 0,
       });
-      expect(mockConvexClient.connectionState).not.toHaveBeenCalled();
-      expect(mockConvexClient.subscribeToConnectionState).not.toHaveBeenCalled();
+      // The mock counts attempts even while disabled, so zero here means the
+      // helper never reached for the connection-state APIs at all.
+      expect(disabledConvex.connectionStateReads).toBe(0);
+      expect(disabledConvex.connectionStateSubscriptions).toBe(0);
     });
   });
 });

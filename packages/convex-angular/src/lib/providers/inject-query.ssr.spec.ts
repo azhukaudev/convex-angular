@@ -1,12 +1,11 @@
 import { Component, PLATFORM_ID, TransferState, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
+import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
 import { skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { ConvexHydrationState, makeQueryStateKey, wrapQueryResult } from '../ssr/state-transfer';
-import { CONVEX } from '../tokens/convex';
 import { QueryReference, injectQuery } from './inject-query';
 
 // Mock getFunctionName to avoid needing a real FunctionReference
@@ -22,25 +21,27 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
   Array<{ _id: string; title: string }>
 > as QueryReference;
 
+function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscription {
+  const subscription = convex.lastQuerySubscription();
+  if (!subscription) {
+    throw new Error('Expected a captured query subscription');
+  }
+  return subscription;
+}
+
 describe('injectQuery SSR (server platform)', () => {
   let mockLoader: { enabled: boolean; fetch: jest.Mock };
-  let serverConvexClient: ConvexClient;
+  let serverConvex: MockConvexClient;
 
   function setupServer(options: { withLoader?: boolean } = {}) {
-    serverConvexClient = {
-      get disabled() {
-        return true;
-      },
-      get client() {
-        throw new Error('ConvexClient is disabled');
-      },
-      onUpdate: jest.fn(),
-    } as unknown as ConvexClient;
+    // The server-side client is disabled: subscriptions are no-ops and the
+    // low-level client throws, exactly like the real one during SSR.
+    serverConvex = new MockConvexClient({ disabled: true });
 
     TestBed.configureTestingModule({
       providers: [
         { provide: PLATFORM_ID, useValue: 'server' },
-        { provide: CONVEX, useValue: serverConvexClient },
+        provideConvexTesting(serverConvex),
         ...(options.withLoader === false ? [] : [{ provide: ConvexServerQueryLoader, useValue: mockLoader }]),
       ],
     });
@@ -80,7 +81,9 @@ describe('injectQuery SSR (server platform)', () => {
     expect(fixture.componentInstance.todos.status()).toBe('success');
     expect(fixture.componentInstance.todos.data()).toEqual([{ _id: '1', title: 'Server todo' }]);
     expect(onSuccess).toHaveBeenCalledWith([{ _id: '1', title: 'Server todo' }]);
-    expect(serverConvexClient.onUpdate).not.toHaveBeenCalled();
+    // The disabled client records what it refuses, so this proves the helper
+    // never even attempted to subscribe on the server.
+    expect(serverConvex.refusedSubscriptions).toHaveLength(0);
   }));
 
   it('should surface server fetch errors', fakeAsync(() => {
@@ -204,9 +207,7 @@ describe('injectQuery SSR (server platform)', () => {
 });
 
 describe('injectQuery hydration seeding (browser)', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockLocalQueryResult: jest.Mock;
-  let onUpdateCallback: (result: unknown) => void;
+  let convex: MockConvexClient;
 
   function seedTransferState(argsKey: string, value: unknown) {
     const transferState = TestBed.inject(TransferState);
@@ -214,20 +215,10 @@ describe('injectQuery hydration seeding (browser)', () => {
   }
 
   beforeEach(() => {
-    mockLocalQueryResult = jest.fn().mockReturnValue(undefined);
-
-    mockConvexClient = {
-      client: {
-        localQueryResult: mockLocalQueryResult,
-      },
-      onUpdate: jest.fn((_query, _args, onUpdate) => {
-        onUpdateCallback = onUpdate;
-        return jest.fn();
-      }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }, ConvexHydrationState],
+      providers: [provideConvexTesting(convex), ConvexHydrationState],
     });
   });
 
@@ -254,7 +245,7 @@ describe('injectQuery hydration seeding (browser)', () => {
     expect(fixture.componentInstance.todos.data()).toEqual([{ _id: '1', title: 'Transferred todo' }]);
 
     // The live subscription is still established.
-    expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+    expect(convex.querySubscriptions).toHaveLength(1);
     tick();
   }));
 
@@ -273,7 +264,7 @@ describe('injectQuery hydration seeding (browser)', () => {
     fixture.detectChanges();
     tick();
 
-    onUpdateCallback([{ _id: '1', title: 'Live todo' }]);
+    requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Live todo' }]);
 
     expect(fixture.componentInstance.todos.data()).toEqual([{ _id: '1', title: 'Live todo' }]);
     expect(fixture.componentInstance.todos.status()).toBe('success');
@@ -281,7 +272,7 @@ describe('injectQuery hydration seeding (browser)', () => {
 
   it('should prefer the warm client cache over transferred data', fakeAsync(() => {
     seedTransferState('{"count":10}', [{ _id: 'transferred', title: 'Transferred' }]);
-    mockLocalQueryResult.mockReturnValue([{ _id: 'warm', title: 'Warm cache' }]);
+    convex.seedQueryResult('todos:listTodos', { count: 10 }, [{ _id: 'warm', title: 'Warm cache' }]);
 
     @Component({
       template: '',

@@ -1,5 +1,6 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { MockConvexClient, MockPaginatedSubscription, provideConvexTesting } from 'convex-angular/testing';
 import { ConvexClient } from 'convex/browser';
 import { FunctionReference, PaginationResult } from 'convex/server';
 
@@ -20,31 +21,22 @@ const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
   PaginationResult<{ _id: string; name: string }>
 > as PaginatedQueryReference;
 
+function requireLastPaginatedSubscription(convex: MockConvexClient): MockPaginatedSubscription {
+  const subscription = convex.lastPaginatedSubscription();
+  if (!subscription) {
+    throw new Error('Expected a captured paginated subscription');
+  }
+  return subscription;
+}
+
 describe('injectPaginatedQuery', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockUnsubscribe: jest.Mock;
-  let subscriptions: Array<{
-    onUpdate: (result: any) => void;
-    onError: (err: Error) => void;
-  }>;
-  let onUpdateCallback: (result: any) => void;
-  let onErrorCallback: (err: Error) => void;
+  let convex: MockConvexClient;
 
   beforeEach(() => {
-    mockUnsubscribe = jest.fn();
-    subscriptions = [];
-
-    mockConvexClient = {
-      onPaginatedUpdate_experimental: jest.fn((_query, _args, _options, onUpdate, onError) => {
-        subscriptions.push({ onUpdate, onError });
-        onUpdateCallback = onUpdate;
-        onErrorCallback = onError;
-        return mockUnsubscribe;
-      }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -67,7 +59,7 @@ describe('injectPaginatedQuery', () => {
 
     // Before the first change detection nothing has been subscribed yet, but
     // the result already reads as an empty first page still loading.
-    expect(mockConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
+    expect(convex.paginatedSubscriptions).toHaveLength(0);
     expect(fixture.componentInstance.todos.results()).toEqual([]);
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
     expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
@@ -104,6 +96,8 @@ describe('injectPaginatedQuery', () => {
 
   it('should throw a clear error when experimental paginated subscriptions are unavailable', fakeAsync(() => {
     TestBed.resetTestingModule();
+    // Deliberately not a MockConvexClient: a client that simply lacks the
+    // experimental method is the honest double for this error path.
     TestBed.configureTestingModule({
       providers: [{ provide: CONVEX, useValue: {} as ConvexClient }],
     });
@@ -144,13 +138,16 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledWith(
-      mockPaginatedQuery,
-      { category: 'work' },
-      { initialNumItems: 20 },
-      expect.any(Function),
-      expect.any(Function),
-    );
+    const subscription = requireLastPaginatedSubscription(convex);
+    expect(subscription.query).toBe(mockPaginatedQuery);
+    expect(subscription.args).toEqual({ category: 'work' });
+    expect(subscription.initialNumItems).toBe(20);
+
+    // Subscribing correctly includes handing the client an error callback.
+    const subscriptionError = new Error('subscription failed');
+    subscription.emitError(subscriptionError);
+
+    expect(fixture.componentInstance.todos.error()).toBe(subscriptionError);
   }));
 
   it('should subscribe through the pagination adapter when support is available', fakeAsync(() => {
@@ -168,14 +165,14 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    onUpdateCallback({
+    requireLastPaginatedSubscription(convex).emit({
       results: [{ _id: '1', name: 'Todo 1' }],
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
     fixture.detectChanges();
 
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+    expect(convex.paginatedSubscriptions).toHaveLength(1);
     expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Todo 1' }]);
     expect(fixture.componentInstance.todos.status()).toBe('success');
   }));
@@ -195,10 +192,10 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    onUpdateCallback({
+    requireLastPaginatedSubscription(convex).emit({
       results: [],
       status: 'LoadingFirstPage',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
     fixture.detectChanges();
 
@@ -209,8 +206,8 @@ describe('injectPaginatedQuery', () => {
   }));
 
   it('should apply every LoadingFirstPage emission when nothing was server-seeded', fakeAsync(() => {
-    const firstLoadMore = jest.fn().mockReturnValue(true);
-    const secondLoadMore = jest.fn().mockReturnValue(true);
+    const firstLoadMore = jest.fn(() => true);
+    const secondLoadMore = jest.fn(() => true);
 
     @Component({
       template: '',
@@ -226,8 +223,10 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
+    const subscription = requireLastPaginatedSubscription(convex);
+
     // Without a transferred seed to protect, the very first emission counts.
-    onUpdateCallback({
+    subscription.emit({
       results: [{ _id: '1', name: 'Todo 1' }],
       status: 'LoadingFirstPage',
       loadMore: firstLoadMore,
@@ -238,7 +237,7 @@ describe('injectPaginatedQuery', () => {
     expect(firstLoadMore).toHaveBeenCalledWith(5);
 
     // A later first-page emission on the same subscription is applied too.
-    onUpdateCallback({
+    subscription.emit({
       results: [
         { _id: '1', name: 'Todo 1' },
         { _id: '2', name: 'Todo 2' },
@@ -276,10 +275,10 @@ describe('injectPaginatedQuery', () => {
       { _id: '2', name: 'Todo 2' },
     ];
 
-    onUpdateCallback({
+    requireLastPaginatedSubscription(convex).emit({
       results: mockItems,
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
     fixture.detectChanges();
 
@@ -307,10 +306,10 @@ describe('injectPaginatedQuery', () => {
 
     const mockItems = [{ _id: '1', name: 'Todo 1' }];
 
-    onUpdateCallback({
+    requireLastPaginatedSubscription(convex).emit({
       results: mockItems,
       status: 'LoadingMore',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
     fixture.detectChanges();
 
@@ -341,10 +340,10 @@ describe('injectPaginatedQuery', () => {
       { _id: '2', name: 'Todo 2' },
     ];
 
-    onUpdateCallback({
+    requireLastPaginatedSubscription(convex).emit({
       results: mockItems,
       status: 'Exhausted',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
     fixture.detectChanges();
 
@@ -356,7 +355,7 @@ describe('injectPaginatedQuery', () => {
   }));
 
   it('should call loadMore on the underlying client', fakeAsync(() => {
-    const mockLoadMore = jest.fn().mockReturnValue(true);
+    const mockLoadMore = jest.fn(() => true);
 
     @Component({
       template: '',
@@ -372,7 +371,7 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    onUpdateCallback({
+    requireLastPaginatedSubscription(convex).emit({
       results: [{ _id: '1', name: 'Todo 1' }],
       status: 'CanLoadMore',
       loadMore: mockLoadMore,
@@ -422,7 +421,7 @@ describe('injectPaginatedQuery', () => {
     tick();
 
     const testError = new Error('Test error');
-    onErrorCallback(testError);
+    requireLastPaginatedSubscription(convex).emitError(testError);
     fixture.detectChanges();
 
     expect(fixture.componentInstance.todos.results()).toEqual([]);
@@ -450,12 +449,13 @@ describe('injectPaginatedQuery', () => {
     tick();
 
     const mockItems = [{ _id: '1', name: 'Todo 1' }];
+    const subscription = requireLastPaginatedSubscription(convex);
 
     // First, load some data
-    onUpdateCallback({
+    subscription.emit({
       results: mockItems,
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
     fixture.detectChanges();
 
@@ -463,7 +463,7 @@ describe('injectPaginatedQuery', () => {
 
     // Then trigger an error
     const testError = new Error('Test error');
-    onErrorCallback(testError);
+    subscription.emitError(testError);
     fixture.detectChanges();
 
     // Results should be preserved
@@ -489,16 +489,17 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    onUpdateCallback({
+    const subscription = requireLastPaginatedSubscription(convex);
+    subscription.emit({
       results: [{ _id: '1', name: 'Todo 1' }],
       status: 'Exhausted',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
 
     expect(fixture.componentInstance.todos.isExhausted()).toBe(true);
 
     const testError = new Error('Test error');
-    onErrorCallback(testError);
+    subscription.emitError(testError);
 
     // An errored list is no longer known to be complete.
     expect(fixture.componentInstance.todos.isExhausted()).toBe(false);
@@ -520,11 +521,13 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
+    const firstSubscription = requireLastPaginatedSubscription(convex);
+
     // Load some data
-    onUpdateCallback({
+    firstSubscription.emit({
       results: [{ _id: '1', name: 'Todo 1' }],
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
     fixture.detectChanges();
 
@@ -536,8 +539,8 @@ describe('injectPaginatedQuery', () => {
     tick();
 
     // Should have called unsubscribe and resubscribed
-    expect(mockUnsubscribe).toHaveBeenCalled();
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+    expect(firstSubscription.unsubscribed).toBe(true);
+    expect(convex.paginatedSubscriptions).toHaveLength(2);
   }));
 
   it('should resubscribe from the first page when reset() is used after a first-page error', fakeAsync(() => {
@@ -555,7 +558,8 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    onErrorCallback(new Error('Test error'));
+    const firstSubscription = requireLastPaginatedSubscription(convex);
+    firstSubscription.emitError(new Error('Test error'));
     fixture.detectChanges();
 
     expect(fixture.componentInstance.todos.status()).toBe('error');
@@ -565,8 +569,8 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockUnsubscribe).toHaveBeenCalled();
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+    expect(firstSubscription.unsubscribed).toBe(true);
+    expect(convex.paginatedSubscriptions).toHaveLength(2);
     expect(fixture.componentInstance.todos.status()).toBe('pending');
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
   }));
@@ -587,22 +591,27 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+    expect(convex.paginatedSubscriptions).toHaveLength(1);
+    const firstSubscription = requireLastPaginatedSubscription(convex);
 
     // Change args
     fixture.componentInstance.category.set('personal');
     fixture.detectChanges();
     tick();
 
-    expect(mockUnsubscribe).toHaveBeenCalled();
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenLastCalledWith(
-      mockPaginatedQuery,
-      { category: 'personal' },
-      { initialNumItems: 10 },
-      expect.any(Function),
-      expect.any(Function),
-    );
+    expect(firstSubscription.unsubscribed).toBe(true);
+    expect(convex.paginatedSubscriptions).toHaveLength(2);
+
+    const latestSubscription = requireLastPaginatedSubscription(convex);
+    expect(latestSubscription.query).toBe(mockPaginatedQuery);
+    expect(latestSubscription.args).toEqual({ category: 'personal' });
+    expect(latestSubscription.initialNumItems).toBe(10);
+
+    // The replacement subscription is wired for errors too, not just results.
+    const subscriptionError = new Error('subscription failed');
+    latestSubscription.emitError(subscriptionError);
+
+    expect(fixture.componentInstance.todos.error()).toBe(subscriptionError);
   }));
 
   it('should resubscribe when initialNumItems signal changes', fakeAsync(() => {
@@ -621,27 +630,32 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+    expect(convex.paginatedSubscriptions).toHaveLength(1);
+    const firstSubscription = requireLastPaginatedSubscription(convex);
 
     // Change the reactive page size
     fixture.componentInstance.pageSize.set(20);
     fixture.detectChanges();
     tick();
 
-    expect(mockUnsubscribe).toHaveBeenCalled();
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
-    expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenLastCalledWith(
-      mockPaginatedQuery,
-      {},
-      { initialNumItems: 20 },
-      expect.any(Function),
-      expect.any(Function),
-    );
+    expect(firstSubscription.unsubscribed).toBe(true);
+    expect(convex.paginatedSubscriptions).toHaveLength(2);
+
+    const latestSubscription = requireLastPaginatedSubscription(convex);
+    expect(latestSubscription.query).toBe(mockPaginatedQuery);
+    expect(latestSubscription.args).toEqual({});
+    expect(latestSubscription.initialNumItems).toBe(20);
+
+    // The replacement subscription is wired for errors too, not just results.
+    const subscriptionError = new Error('subscription failed');
+    latestSubscription.emitError(subscriptionError);
+
+    expect(fixture.componentInstance.todos.error()).toBe(subscriptionError);
   }));
 
   it('should ignore stale updates and stale loadMore handlers when args change', fakeAsync(() => {
-    const staleLoadMore = jest.fn().mockReturnValue(true);
-    const latestLoadMore = jest.fn().mockReturnValue(true);
+    const staleLoadMore = jest.fn(() => true);
+    const latestLoadMore = jest.fn(() => true);
 
     @Component({
       template: '',
@@ -658,22 +672,24 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    const firstSubscription = subscriptions[0];
+    const firstSubscription = convex.paginatedSubscriptions[0];
 
     fixture.componentInstance.category.set('personal');
     fixture.detectChanges();
     tick();
 
-    const secondSubscription = subscriptions[1];
+    const secondSubscription = convex.paginatedSubscriptions[1];
     const latestResults = [{ _id: '2', name: 'Latest todo' }];
 
-    secondSubscription.onUpdate({
+    secondSubscription.emit({
       results: latestResults,
       status: 'CanLoadMore',
       loadMore: latestLoadMore,
     });
 
-    firstSubscription.onUpdate({
+    // A real client never delivers to a retired callback; invoking it directly
+    // is the only way to reach the helper's defensive generation guard.
+    firstSubscription.emitAfterUnsubscribe({
       results: [{ _id: '1', name: 'Stale todo' }],
       status: 'CanLoadMore',
       loadMore: staleLoadMore,
@@ -703,21 +719,21 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    const firstSubscription = subscriptions[0];
+    const firstSubscription = convex.paginatedSubscriptions[0];
 
     fixture.componentInstance.todos.reset();
     fixture.detectChanges();
     tick();
 
-    const secondSubscription = subscriptions[1];
+    const secondSubscription = convex.paginatedSubscriptions[1];
     const latestResults = [{ _id: '2', name: 'Latest todo' }];
 
-    secondSubscription.onUpdate({
+    secondSubscription.emit({
       results: latestResults,
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
-    firstSubscription.onError(new Error('stale failure'));
+    firstSubscription.emitErrorAfterUnsubscribe(new Error('stale failure'));
 
     expect(fixture.componentInstance.todos.results()).toEqual(latestResults);
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
@@ -725,8 +741,8 @@ describe('injectPaginatedQuery', () => {
   }));
 
   it('should ignore callbacks from a subscription that predates a skip and resume', fakeAsync(() => {
-    const staleLoadMore = jest.fn().mockReturnValue(true);
-    const latestLoadMore = jest.fn().mockReturnValue(true);
+    const staleLoadMore = jest.fn(() => true);
+    const latestLoadMore = jest.fn(() => true);
 
     @Component({
       template: '',
@@ -743,7 +759,7 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    const firstSubscription = subscriptions[0];
+    const firstSubscription = convex.paginatedSubscriptions[0];
 
     fixture.componentInstance.shouldSkip.set(true);
     fixture.detectChanges();
@@ -754,7 +770,7 @@ describe('injectPaginatedQuery', () => {
     tick();
 
     const latestResults = [{ _id: '2', name: 'Latest todo' }];
-    subscriptions[1].onUpdate({
+    convex.paginatedSubscriptions[1].emit({
       results: latestResults,
       status: 'CanLoadMore',
       loadMore: latestLoadMore,
@@ -762,12 +778,12 @@ describe('injectPaginatedQuery', () => {
 
     // The skip in between advanced the staleness guard too, so the very first
     // subscription must stay stale even though its args match again.
-    firstSubscription.onUpdate({
+    firstSubscription.emitAfterUnsubscribe({
       results: [{ _id: '1', name: 'Stale todo' }],
       status: 'Exhausted',
       loadMore: staleLoadMore,
     });
-    firstSubscription.onError(new Error('stale failure'));
+    firstSubscription.emitErrorAfterUnsubscribe(new Error('stale failure'));
 
     expect(fixture.componentInstance.todos.results()).toEqual(latestResults);
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
@@ -780,8 +796,8 @@ describe('injectPaginatedQuery', () => {
   }));
 
   it('should ignore callbacks from every subscription after destroy', fakeAsync(() => {
-    const staleLoadMore = jest.fn().mockReturnValue(true);
-    const latestLoadMore = jest.fn().mockReturnValue(true);
+    const staleLoadMore = jest.fn(() => true);
+    const latestLoadMore = jest.fn(() => true);
 
     @Component({
       template: '',
@@ -798,15 +814,15 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
-    const firstSubscription = subscriptions[0];
+    const firstSubscription = convex.paginatedSubscriptions[0];
 
     fixture.componentInstance.category.set('personal');
     fixture.detectChanges();
     tick();
 
-    const secondSubscription = subscriptions[1];
+    const secondSubscription = convex.paginatedSubscriptions[1];
     const latestResults = [{ _id: '2', name: 'Latest todo' }];
-    secondSubscription.onUpdate({
+    secondSubscription.emit({
       results: latestResults,
       status: 'CanLoadMore',
       loadMore: latestLoadMore,
@@ -815,18 +831,18 @@ describe('injectPaginatedQuery', () => {
     fixture.destroy();
 
     // Destroying must retire every generation, not just the newest one.
-    firstSubscription.onUpdate({
+    firstSubscription.emitAfterUnsubscribe({
       results: [{ _id: '1', name: 'Stale todo' }],
       status: 'Exhausted',
       loadMore: staleLoadMore,
     });
-    firstSubscription.onError(new Error('stale failure'));
-    secondSubscription.onUpdate({
+    firstSubscription.emitErrorAfterUnsubscribe(new Error('stale failure'));
+    secondSubscription.emitAfterUnsubscribe({
       results: [{ _id: '3', name: 'Post-destroy todo' }],
       status: 'Exhausted',
       loadMore: staleLoadMore,
     });
-    secondSubscription.onError(new Error('post-destroy failure'));
+    secondSubscription.emitErrorAfterUnsubscribe(new Error('post-destroy failure'));
 
     expect(fixture.componentInstance.todos.results()).toEqual(latestResults);
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
@@ -853,9 +869,11 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
+    const subscription = requireLastPaginatedSubscription(convex);
+
     fixture.destroy();
 
-    expect(mockUnsubscribe).toHaveBeenCalled();
+    expect(subscription.unsubscribed).toBe(true);
   }));
 
   it('should clear error on successful update', fakeAsync(() => {
@@ -873,17 +891,19 @@ describe('injectPaginatedQuery', () => {
     fixture.detectChanges();
     tick();
 
+    const subscription = requireLastPaginatedSubscription(convex);
+
     // Trigger an error first
-    onErrorCallback(new Error('Test error'));
+    subscription.emitError(new Error('Test error'));
     fixture.detectChanges();
 
     expect(fixture.componentInstance.todos.error()).toBeDefined();
 
     // Then successful update
-    onUpdateCallback({
+    subscription.emit({
       results: [{ _id: '1', name: 'Todo 1' }],
       status: 'CanLoadMore',
-      loadMore: jest.fn(),
+      loadMore: () => false,
     });
     fixture.detectChanges();
 
@@ -907,15 +927,16 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+      expect(convex.paginatedSubscriptions).toHaveLength(1);
+      const subscription = requireLastPaginatedSubscription(convex);
 
       // Changes to a value that serializes to the same first-page args
       fixture.componentInstance.sig.set(30);
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      expect(convex.paginatedSubscriptions).toHaveLength(1);
+      expect(subscription.unsubscribed).toBe(false);
     }));
 
     it('should still resubscribe via reset() when args serialize identically', fakeAsync(() => {
@@ -938,13 +959,13 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+      expect(convex.paginatedSubscriptions).toHaveLength(1);
 
       fixture.componentInstance.todos.reset();
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+      expect(convex.paginatedSubscriptions).toHaveLength(2);
     }));
 
     it('should resubscribe after a skipToken transition even when args return to the same value', fakeAsync(() => {
@@ -963,7 +984,7 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(1);
+      expect(convex.paginatedSubscriptions).toHaveLength(1);
 
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
@@ -973,7 +994,7 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledTimes(2);
+      expect(convex.paginatedSubscriptions).toHaveLength(2);
     }));
   });
 
@@ -991,7 +1012,7 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
+      expect(convex.paginatedSubscriptions).toHaveLength(0);
     }));
 
     it('should set isSkipped to true when skipToken is returned', fakeAsync(() => {
@@ -1066,7 +1087,7 @@ describe('injectPaginatedQuery', () => {
 
       // Initially skipped
       expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
-      expect(mockConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
+      expect(convex.paginatedSubscriptions).toHaveLength(0);
 
       // Set category to enable query
       fixture.componentInstance.category.set('work');
@@ -1074,7 +1095,7 @@ describe('injectPaginatedQuery', () => {
       tick();
 
       expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalled();
+      expect(convex.paginatedSubscriptions).toHaveLength(1);
     }));
 
     it('should clear results when transitioning to skipped', fakeAsync(() => {
@@ -1094,10 +1115,10 @@ describe('injectPaginatedQuery', () => {
       tick();
 
       // Load some data
-      onUpdateCallback({
+      requireLastPaginatedSubscription(convex).emit({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: () => false,
       });
       fixture.detectChanges();
 
@@ -1130,15 +1151,16 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalled();
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      expect(convex.paginatedSubscriptions).toHaveLength(1);
+      const subscription = requireLastPaginatedSubscription(convex);
+      expect(subscription.unsubscribed).toBe(false);
 
       // Skip the query
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
 
-      expect(mockUnsubscribe).toHaveBeenCalled();
+      expect(subscription.unsubscribed).toBe(true);
     }));
 
     it('should not double-unsubscribe when toggling skipToken', fakeAsync(() => {
@@ -1157,25 +1179,30 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      const firstSubscription = requireLastPaginatedSubscription(convex);
+      expect(firstSubscription.unsubscribeCount).toBe(0);
 
       // Skip the query - should unsubscribe once
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(firstSubscription.unsubscribeCount).toBe(1);
 
       // Resume the query - should not unsubscribe again
       fixture.componentInstance.shouldSkip.set(false);
       fixture.detectChanges();
       tick();
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(firstSubscription.unsubscribeCount).toBe(1);
+
+      const secondSubscription = requireLastPaginatedSubscription(convex);
+      expect(secondSubscription.unsubscribeCount).toBe(0);
 
       // Skip again - should unsubscribe once more
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(2);
+      expect(firstSubscription.unsubscribeCount).toBe(1);
+      expect(secondSubscription.unsubscribeCount).toBe(1);
     }));
 
     it('should ignore stale callbacks after transitioning to skipped', fakeAsync(() => {
@@ -1194,18 +1221,18 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      const firstSubscription = subscriptions[0];
+      const firstSubscription = convex.paginatedSubscriptions[0];
 
       fixture.componentInstance.shouldSkip.set(true);
       fixture.detectChanges();
       tick();
 
-      firstSubscription.onUpdate({
+      firstSubscription.emitAfterUnsubscribe({
         results: [{ _id: '1', name: 'Stale todo' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: () => false,
       });
-      firstSubscription.onError(new Error('stale failure'));
+      firstSubscription.emitErrorAfterUnsubscribe(new Error('stale failure'));
 
       expect(fixture.componentInstance.todos.results()).toEqual([]);
       expect(fixture.componentInstance.todos.error()).toBeUndefined();
@@ -1229,7 +1256,7 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).not.toHaveBeenCalled();
+      expect(convex.paginatedSubscriptions).toHaveLength(0);
       expect(fixture.componentInstance.todos.isSkipped()).toBe(true);
 
       // Enable the query
@@ -1237,7 +1264,7 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalled();
+      expect(convex.paginatedSubscriptions).toHaveLength(1);
       expect(fixture.componentInstance.todos.isSkipped()).toBe(false);
       expect(fixture.componentInstance.todos.isLoadingFirstPage()).toBe(true);
     }));
@@ -1294,10 +1321,10 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback({
+      requireLastPaginatedSubscription(convex).emit({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: () => false,
       });
       fixture.detectChanges();
 
@@ -1319,10 +1346,10 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback({
+      requireLastPaginatedSubscription(convex).emit({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'Exhausted',
-        loadMore: jest.fn(),
+        loadMore: () => false,
       });
       fixture.detectChanges();
 
@@ -1344,7 +1371,7 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onErrorCallback(new Error('Query failed'));
+      requireLastPaginatedSubscription(convex).emitError(new Error('Query failed'));
       fixture.detectChanges();
 
       expect(fixture.componentInstance.todos.status()).toBe('error');
@@ -1401,10 +1428,10 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback({
+      requireLastPaginatedSubscription(convex).emit({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: () => false,
       });
       fixture.detectChanges();
 
@@ -1426,7 +1453,7 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onErrorCallback(new Error('Query failed'));
+      requireLastPaginatedSubscription(convex).emitError(new Error('Query failed'));
       fixture.detectChanges();
 
       expect(fixture.componentInstance.todos.isSuccess()).toBe(false);
@@ -1469,10 +1496,10 @@ describe('injectPaginatedQuery', () => {
       tick();
 
       const mockResults = [{ _id: '1', name: 'Todo 1' }];
-      onUpdateCallback({
+      requireLastPaginatedSubscription(convex).emit({
         results: mockResults,
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: () => false,
       });
       fixture.detectChanges();
 
@@ -1497,10 +1524,10 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback({
+      requireLastPaginatedSubscription(convex).emit({
         results: [],
         status: 'LoadingFirstPage',
-        loadMore: jest.fn(),
+        loadMore: () => false,
       });
       fixture.detectChanges();
 
@@ -1526,7 +1553,7 @@ describe('injectPaginatedQuery', () => {
       tick();
 
       const error = new Error('Query failed');
-      onErrorCallback(error);
+      requireLastPaginatedSubscription(convex).emitError(error);
       fixture.detectChanges();
 
       expect(onError).toHaveBeenCalledWith(error);
@@ -1547,13 +1574,15 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
       tick();
 
+      const subscription = requireLastPaginatedSubscription(convex);
+
       // Should not throw
-      onUpdateCallback({
+      subscription.emit({
         results: [{ _id: '1', name: 'Todo 1' }],
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: () => false,
       });
-      onErrorCallback(new Error('Query failed'));
+      subscription.emitError(new Error('Query failed'));
 
       expect(fixture.componentInstance.todos.error()).toBeDefined();
     }));
@@ -1569,22 +1598,25 @@ describe('injectPaginatedQuery', () => {
       });
       tick();
 
-      expect(mockConvexClient.onPaginatedUpdate_experimental).toHaveBeenCalledWith(
-        mockPaginatedQuery,
-        {},
-        { initialNumItems: 10 },
-        expect.any(Function),
-        expect.any(Function),
-      );
+      const subscription = requireLastPaginatedSubscription(convex);
+      expect(subscription.query).toBe(mockPaginatedQuery);
+      expect(subscription.args).toEqual({});
+      expect(subscription.initialNumItems).toBe(10);
 
       const result = [{ _id: '1', name: 'Todo 1' }];
-      onUpdateCallback({
+      subscription.emit({
         results: result,
         status: 'CanLoadMore',
-        loadMore: jest.fn(),
+        loadMore: () => false,
       });
 
       expect(todos.results()).toEqual(result);
+
+      // Both subscription callbacks are wired through the injectRef path.
+      const subscriptionError = new Error('subscription failed');
+      subscription.emitError(subscriptionError);
+
+      expect(todos.error()).toBe(subscriptionError);
     }));
 
     it('should clean up subscriptions when the provided injector is destroyed', fakeAsync(() => {
@@ -1596,11 +1628,12 @@ describe('injectPaginatedQuery', () => {
       });
       tick();
 
-      expect(mockUnsubscribe).not.toHaveBeenCalled();
+      const subscription = requireLastPaginatedSubscription(convex);
+      expect(subscription.unsubscribeCount).toBe(0);
 
       childInjector.destroy();
 
-      expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+      expect(subscription.unsubscribeCount).toBe(1);
     }));
 
     it('should still throw outside an injection context without injectRef', () => {

@@ -4,6 +4,11 @@
 //
 // Run with `ngc`, not `tsc`: most examples are components, and plain TypeScript
 // does not check templates at all.
+//
+// `types: ["jest"]` is what lets the `convex-angular/testing` examples be real
+// specs — `describe`/`it`/`expect`/`jest.spyOn` — instead of prose that cannot
+// rot-check. `@types/jest` resolves from the workspace root, the same place the
+// `convex-angular` path aliases point.
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
@@ -13,7 +18,7 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "lib": ["es2022", "dom"],
-    "types": [],
+    "types": ["jest"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "skipLibCheck": true

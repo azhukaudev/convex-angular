@@ -1,10 +1,9 @@
 import { Component, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { ConvexClient } from 'convex/browser';
+import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
 import { skipToken } from '../skip-token';
-import { CONVEX } from '../tokens/convex';
 import { QueryReference, injectQuery } from './inject-query';
 
 // Mock getFunctionName to avoid needing a real FunctionReference
@@ -21,28 +20,22 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
   Array<{ _id: string; title: string }>
 > as QueryReference;
 
+function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscription {
+  const subscription = convex.lastQuerySubscription();
+  if (!subscription) {
+    throw new Error('Expected a captured query subscription');
+  }
+  return subscription;
+}
+
 describe('injectQuery placeholder and refetch states', () => {
-  let mockConvexClient: jest.Mocked<ConvexClient>;
-  let mockLocalQueryResult: jest.Mock;
-  let onUpdateCallback: (result: any) => void;
-  let onErrorCallback: (err: Error) => void;
+  let convex: MockConvexClient;
 
   beforeEach(() => {
-    mockLocalQueryResult = jest.fn().mockReturnValue(undefined);
-
-    mockConvexClient = {
-      client: {
-        localQueryResult: mockLocalQueryResult,
-      },
-      onUpdate: jest.fn((_query, _args, onUpdate, onError) => {
-        onUpdateCallback = onUpdate;
-        onErrorCallback = onError;
-        return jest.fn();
-      }),
-    } as unknown as jest.Mocked<ConvexClient>;
+    convex = new MockConvexClient();
 
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX, useValue: mockConvexClient }],
+      providers: [provideConvexTesting(convex)],
     });
   });
 
@@ -68,7 +61,7 @@ describe('injectQuery placeholder and refetch states', () => {
       expect(fixture.componentInstance.todos.isLoading()).toBe(true);
       expect(fixture.componentInstance.todos.isRefetching()).toBe(false);
 
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
 
       expect(fixture.componentInstance.todos.isRefetching()).toBe(false);
     }));
@@ -86,7 +79,7 @@ describe('injectQuery placeholder and refetch states', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
 
       fixture.componentInstance.todos.refetch();
       fixture.detectChanges();
@@ -95,7 +88,7 @@ describe('injectQuery placeholder and refetch states', () => {
       expect(fixture.componentInstance.todos.data()).toBeDefined();
       expect(fixture.componentInstance.todos.isRefetching()).toBe(true);
 
-      onUpdateCallback([{ _id: '1', title: 'Todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo' }]);
       expect(fixture.componentInstance.todos.isRefetching()).toBe(false);
     }));
 
@@ -113,7 +106,7 @@ describe('injectQuery placeholder and refetch states', () => {
       fixture.detectChanges();
       tick();
 
-      onUpdateCallback([{ _id: '1', title: 'Todo 10' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Todo 10' }]);
 
       fixture.componentInstance.count.set(20);
       fixture.detectChanges();
@@ -123,7 +116,7 @@ describe('injectQuery placeholder and refetch states', () => {
     }));
 
     it('should be true when seeded from the warm cache while awaiting the live result', fakeAsync(() => {
-      mockLocalQueryResult.mockReturnValue([{ _id: '1', title: 'Cached todo' }]);
+      convex.seedQueryResult('todos:listTodos', { count: 10 }, [{ _id: '1', title: 'Cached todo' }]);
 
       @Component({
         template: '',
@@ -139,7 +132,7 @@ describe('injectQuery placeholder and refetch states', () => {
 
       expect(fixture.componentInstance.todos.isRefetching()).toBe(true);
 
-      onUpdateCallback([{ _id: '1', title: 'Cached todo' }]);
+      requireLastQuerySubscription(convex).emit([{ _id: '1', title: 'Cached todo' }]);
       expect(fixture.componentInstance.todos.isRefetching()).toBe(false);
     }));
 
@@ -198,7 +191,7 @@ describe('injectQuery placeholder and refetch states', () => {
 
       // Nothing invented was shown, so the error path has no placeholder to clear.
       const error = new Error('Query failed');
-      onErrorCallback(error);
+      requireLastQuerySubscription(convex).emitError(error);
 
       expect(fixture.componentInstance.todos.error()).toBe(error);
       expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(false);
@@ -244,7 +237,7 @@ describe('injectQuery placeholder and refetch states', () => {
       tick();
 
       const liveData = [{ _id: '1', title: 'Live todo' }];
-      onUpdateCallback(liveData);
+      requireLastQuerySubscription(convex).emit(liveData);
 
       expect(fixture.componentInstance.todos.data()).toEqual(liveData);
       expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(false);
@@ -269,7 +262,7 @@ describe('injectQuery placeholder and refetch states', () => {
       expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(true);
 
       const error = new Error('Query failed');
-      onErrorCallback(error);
+      requireLastQuerySubscription(convex).emitError(error);
 
       // Invented data must never sit next to an error state.
       expect(fixture.componentInstance.todos.data()).toBeUndefined();
@@ -294,9 +287,10 @@ describe('injectQuery placeholder and refetch states', () => {
       tick();
 
       const liveData = [{ _id: '1', title: 'Live todo' }];
-      onUpdateCallback(liveData);
+      const subscription = requireLastQuerySubscription(convex);
+      subscription.emit(liveData);
 
-      onErrorCallback(new Error('Query failed'));
+      subscription.emitError(new Error('Query failed'));
 
       expect(fixture.componentInstance.todos.data()).toEqual(liveData);
       expect(fixture.componentInstance.todos.status()).toBe('error');
@@ -325,7 +319,7 @@ describe('injectQuery placeholder and refetch states', () => {
 
     it('should prefer the warm cache over the placeholder', fakeAsync(() => {
       const cachedData = [{ _id: '1', title: 'Cached todo' }];
-      mockLocalQueryResult.mockReturnValue(cachedData);
+      convex.seedQueryResult('todos:listTodos', { count: 10 }, cachedData);
 
       @Component({
         template: '',
@@ -362,7 +356,7 @@ describe('injectQuery placeholder and refetch states', () => {
       tick();
 
       const realData = [{ _id: '1', title: 'Todo 10' }];
-      onUpdateCallback(realData);
+      requireLastQuerySubscription(convex).emit(realData);
 
       fixture.componentInstance.count.set(20);
       fixture.detectChanges();
@@ -446,7 +440,7 @@ describe('injectQuery placeholder and refetch states', () => {
       expect(onSuccess).not.toHaveBeenCalled();
 
       const liveData = [{ _id: '1', title: 'Live todo' }];
-      onUpdateCallback(liveData);
+      requireLastQuerySubscription(convex).emit(liveData);
       expect(onSuccess).toHaveBeenCalledWith(liveData);
     }));
 
@@ -467,14 +461,14 @@ describe('injectQuery placeholder and refetch states', () => {
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+      expect(convex.querySubscriptions).toHaveLength(1);
 
       // Changing the signal read inside the factory must not resubscribe
       seed.set([{ _id: 'p', title: 'Placeholder v2' }]);
       fixture.detectChanges();
       tick();
 
-      expect(mockConvexClient.onUpdate).toHaveBeenCalledTimes(1);
+      expect(convex.querySubscriptions).toHaveLength(1);
     }));
   });
 });
