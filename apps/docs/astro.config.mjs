@@ -1,5 +1,6 @@
 // @ts-check
 import starlight from '@astrojs/starlight';
+import vercel from '@astrojs/vercel';
 import { defineConfig, passthroughImageService } from 'astro/config';
 import starlightLinksValidator from 'starlight-links-validator';
 
@@ -67,4 +68,9 @@ export default defineConfig({
       ],
     }),
   ],
+  adapter: vercel({
+    webAnalytics: {
+      enabled: true,
+    },
+  }),
 });
