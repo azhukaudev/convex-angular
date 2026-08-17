@@ -70,11 +70,9 @@ describe('CategoryTodos staleness guards', () => {
     first.emit([workTodo]);
     expect(fixture.componentInstance.todos.data()).toBeUndefined();
 
-    // `emitAfterUnsubscribe` invokes the retired callback directly, past that
-    // gate. The real client cannot do this — `unsubscribe()` removes the
-    // listener synchronously — so this asserts nothing about production
-    // behaviour. It exists purely to reach the helper's defensive generation
-    // guard, which is otherwise unreachable.
+    // `emitAfterUnsubscribe` invokes the retired callback past that gate. The
+    // real client cannot do this, so this reaches the helper's defensive
+    // generation guard and asserts nothing about production behaviour.
     first.emitAfterUnsubscribe([workTodo]);
     expect(fixture.componentInstance.todos.data()).toBeUndefined();
 

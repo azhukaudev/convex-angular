@@ -12,19 +12,26 @@
 
 - Swap the library test toolchain from Vitest to Jest (`jest-preset-angular`).
 - Add Stryker mutation testing over the published entry points (`pnpm test:mutation`).
+- Migrate the library's own specs onto `MockConvexClient` and `provideConvexTesting()`; they previously hand-rolled a `jest.Mocked<ConvexClient>` literal per file, so nothing exercised the double shipped to consumers.
+- Lint the workspace to zero warnings as well as zero errors, and record that as a ratchet alongside knip and jscpd.
 
 ### ✨ Features
 
 - Add a `convex-angular/better-auth` entry point with `provideBetterAuth()` and `injectBetterAuth()`: built-in Better Auth integration (session tracking, Convex token exchange with caching/refresh/dedup) with no dependency on better-auth packages — the client is consumer-provided and typed structurally.
 - Add an optional `ClerkAuthProvider.sessionAudience` signal: when the session token's `aud` claim is `'convex'`, `provideClerkAuth()` uses Clerk's native Convex integration instead of requesting the `'convex'` JWT template.
 - Add `ssr.transferAuthenticatedResults` (default `true`) to `provideConvex(...)`: set to `false` to keep authenticated SSR query results out of `TransferState`/the rendered HTML, trading a brief post-hydration loading state for avoiding shared-cache exposure of per-user data.
+- Add an auth surface to `convex-angular/testing`'s `MockConvexClient`, so components using `injectAuth()` can be tested against it: `client.setAuth()` records a `MockAuthRegistration` (`authRegistrations`, `lastAuthRegistration()`) whose `fetchToken()`, `setAuthenticated()` and `setRefreshing()` play the client's side of the handshake, `seedAuth()` gives the client the token that `getAuth()` reports and that makes `client.hasAuth()` true, and `clearAuthCount`/`hasAuthCount` record the calls. The surface was previously an inert no-op with `hasAuth()` hard-coded to `false`.
+- Add `MockConvexClient.query()` for one-shot reads, following the real client: a warm-cache hit seeded by `seedQueryResult()` resolves immediately, and a miss opens a subscription that stays pending until the test settles it.
+- Add capture surfaces to `MockConvexClient` for assertions that previously needed a hand-rolled spy — `MockCallableCall.options` (the `{ optimisticUpdate }` object `injectMutation()` forwards), `localQueryResultCalls`, per-subscription `unsubscribeCount`, and `connectionStateReads`/`connectionStateSubscriptions`/`connectionStateUnsubscribes` — plus `refusedSubscriptions`, which records the subscriptions a disabled client skips so their absence is provable. The `client` getter now returns a stable object, so `jest.spyOn(convex.client, ...)` works for error paths the mock cannot arm itself.
+- Add `emitAfterUnsubscribe()`/`emitErrorAfterUnsubscribe()` to both `MockConvexClient` subscription records, for tests that target a helper's defensive staleness guard. The real client removes its listener synchronously on unsubscribe and can never deliver there, so these assert against behaviour a deployment does not produce.
 
 ### ⚠️ Breaking Changes
 
 - Raise the `@angular/common`, `@angular/core`, and `@angular/router` peer dependency floors from `>=21.0.0` to `>=21.2.17`, which patches three high-severity advisories (hydration DOM clobbering/cache poisoning, `HttpTransferCache` weak key hashing, `formatDate` DoS) and one moderate advisory (two-way binding sanitization bypass); consumers on an older Angular must upgrade to install.
 - `provideClerkAuth()` and `provideAuth0Auth()`: a vendor token-fetch failure (e.g. an expired Auth0 SSO session throwing `login_required`) now resolves `null` — the normal signed-out outcome — instead of rejecting and surfacing through `injectAuth().error()`, matching convex-react's Clerk/Auth0 adapters.
 - `Auth0AuthProvider.getAccessTokenSilently` return type is now `Promise<string | null>`; the documented implementation requests `detailedResponse: true` and returns the OIDC `id_token` (the token Convex validates) instead of the access token.
-- `convex-angular/testing`: `MockConvexClient` subscriptions no longer deliver `emit`/`emitError` after unsubscribe, matching the real client. This is a test-fidelity fix, but tests that emitted to a torn-down subscription will now observe no delivery.
+- `convex-angular/testing`: `MockConvexClient` subscriptions no longer deliver `emit`/`emitError` after unsubscribe, matching the real client. This is a test-fidelity fix, but tests that emitted to a torn-down subscription will now observe no delivery. A test that deliberately targets a staleness guard can use the new `emitAfterUnsubscribe()`/`emitErrorAfterUnsubscribe()`.
+- `convex-angular/testing`: `MockConvexClient.subscribeToConnectionState()` no longer registers the listener when the client is `disabled`, matching the real client, which returns a no-op without subscribing. Tests that pushed connection state into a disabled mock will now observe no delivery.
 - `convex-angular/better-auth`: on a 401/403 session response, `refreshSession()` no longer falls back to the cross-domain plugin's cached `getSessionData()` (which could resurrect a session the server just rejected) — it signs out instead.
 
 ### 🐛 Bug Fixes

@@ -210,9 +210,8 @@ describe('AccountBadge', () => {
   it('surfaces a failure raised by the client itself', fakeAsync(() => {
     const fixture = createFixture();
 
-    // Deliberate fault injection. The mock has no knob for making `setAuth`
-    // throw, so arm the failure on the mock's own client object — do not swap
-    // in a hand-rolled ConvexClient fake.
+    // Fault injection: the mock cannot arm a throwing `setAuth`, so spy on its
+    // own client object. `convex.client` is stable, which is what makes it work.
     jest.spyOn(convex.client, 'setAuth').mockImplementation(() => {
       throw new Error('sync exploded');
     });
