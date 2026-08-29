@@ -1,4 +1,4 @@
-import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
+import { Component, EnvironmentInjector, createEnvironmentInjector, effect, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockCallableCall, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
@@ -904,6 +904,47 @@ describe('injectMutation', () => {
       expect(fixture.componentInstance.addTodo.error()).toBeUndefined();
       expect(fixture.componentInstance.addTodo.status()).toBe('idle');
       expect(fixture.componentInstance.addTodo.isLoading()).toBe(false);
+    }));
+  });
+
+  describe('effect safety', () => {
+    it('does not re-trigger a calling effect when mutate() is called from inside it', fakeAsync(() => {
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation);
+        readonly trigger = signal(false);
+        runCount = 0;
+
+        constructor() {
+          effect(() => {
+            const shouldRun = this.trigger();
+            this.runCount++;
+            if (shouldRun) {
+              this.addTodo.mutate({ title: 'test' });
+            }
+          });
+        }
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      const runCountAfterInit = fixture.componentInstance.runCount;
+      expect(runCountAfterInit).toBe(1);
+
+      fixture.componentInstance.trigger.set(true);
+      fixture.detectChanges();
+      fixture.detectChanges();
+
+      // If mutate() tracked/wrote the internal version signal, the effect
+      // would re-schedule itself and this count would keep climbing.
+      expect(fixture.componentInstance.runCount).toBe(runCountAfterInit + 1);
+
+      requireCall(convex.mutationCalls).resolve({ id: '123' });
+      tick();
     }));
   });
 

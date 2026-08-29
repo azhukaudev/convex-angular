@@ -1,4 +1,4 @@
-# Force a single @better-fetch/fetch copy. better-auth pins 1.2.2 exactly while
+# Force a single @better-fetch/fetch copy. better-auth pins 1.3.1 exactly while
 # @convex-dev/better-auth resolves ^1.1.18 independently; two copies produce
 # incompatible BetterFetch type identities and break the better-auth client
 # plugin types (crossDomainClient/convexClient) during the Angular build.
@@ -9,7 +9,7 @@
 packages:
   - apps/docs
 overrides:
-  '@better-fetch/fetch': 1.1.21
+  '@better-fetch/fetch': 1.3.1
 allowBuilds:
   '@parcel/watcher': true
   '@swc/core': true
@@ -26,38 +26,38 @@ allowBuilds:
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - jscpd@5.0.6
-  - '@angular-devkit/architect@0.2102.14'
-  - '@angular-devkit/build-angular@21.2.14'
-  - '@angular-devkit/build-webpack@0.2102.14'
-  - '@angular-devkit/core@21.2.14'
-  - '@angular-devkit/schematics@21.2.14'
-  - '@angular/animations@21.2.16'
-  - '@angular/build@21.2.14'
+  - '@angular-devkit/architect@0.2102.22'
+  - '@angular-devkit/build-angular@21.2.22'
+  - '@angular-devkit/build-webpack@0.2102.22'
+  - '@angular-devkit/core@21.2.22'
+  - '@angular-devkit/schematics@21.2.22'
+  - '@angular/animations@21.2.22'
+  - '@angular/build@21.2.22'
   - '@angular/cdk@21.2.14'
-  - '@angular/cli@21.2.14'
-  - '@angular/common@21.2.16'
-  - '@angular/compiler-cli@21.2.16'
-  - '@angular/compiler@21.2.16'
-  - '@angular/core@21.2.16'
-  - '@angular/forms@21.2.16'
-  - '@angular/language-service@21.2.16'
-  - '@angular/platform-browser-dynamic@21.2.16'
-  - '@angular/platform-browser@21.2.16'
-  - '@angular/router@21.2.16'
-  - '@better-auth/core@1.6.14 || 1.6.16'
-  - '@better-auth/drizzle-adapter@1.6.14 || 1.6.16'
-  - '@better-auth/kysely-adapter@1.6.14 || 1.6.16'
-  - '@better-auth/memory-adapter@1.6.14 || 1.6.16'
-  - '@better-auth/mongo-adapter@1.6.14 || 1.6.16'
-  - '@better-auth/prisma-adapter@1.6.14 || 1.6.16'
-  - '@better-auth/telemetry@1.6.14 || 1.6.16'
-  - '@ngtools/webpack@21.2.14'
-  - '@schematics/angular@21.2.14'
-  - better-auth@1.6.14 || 1.6.16
+  - '@angular/cli@21.2.22'
+  - '@angular/common@21.2.22'
+  - '@angular/compiler-cli@21.2.22'
+  - '@angular/compiler@21.2.22'
+  - '@angular/core@21.2.22'
+  - '@angular/forms@21.2.22'
+  - '@angular/language-service@21.2.22'
+  - '@angular/platform-browser-dynamic@21.2.22'
+  - '@angular/platform-browser@21.2.22'
+  - '@angular/router@21.2.22'
+  - '@better-auth/core@1.6.22'
+  - '@better-auth/drizzle-adapter@1.6.22'
+  - '@better-auth/kysely-adapter@1.6.22'
+  - '@better-auth/memory-adapter@1.6.22'
+  - '@better-auth/mongo-adapter@1.6.22'
+  - '@better-auth/prisma-adapter@1.6.22'
+  - '@better-auth/telemetry@1.6.22'
+  - '@ngtools/webpack@21.2.22'
+  - '@schematics/angular@21.2.22'
+  - better-auth@1.6.22
   - convex@1.41.0
   - jest-preset-angular@17.0.0
-  - '@better-fetch/fetch@1.2.2'
-  - '@convex-dev/better-auth@0.12.3'
+  - '@better-fetch/fetch@1.3.1'
+  - '@convex-dev/better-auth@0.12.5'
   - '@swc/core-darwin-arm64@1.15.41'
   - '@swc/core-darwin-x64@1.15.41'
   - '@swc/core-linux-arm-gnueabihf@1.15.41'
@@ -71,7 +71,7 @@ minimumReleaseAgeExclude:
   - '@swc/core-win32-ia32-msvc@1.15.41'
   - '@swc/core-win32-x64-msvc@1.15.41'
   - '@swc/core@1.15.41'
-  - better-call@1.3.6
+  - better-call@1.3.7
   - cpd-darwin-arm64@5.0.6
   - cpd-darwin-x64@5.0.6
   - cpd-linux-arm64-gnu@5.0.6

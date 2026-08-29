@@ -338,7 +338,11 @@ export function injectQuery<Query extends QueryReference>(
       // transferred from the server render so a hydrated app shows content
       // immediately; otherwise preserve the previous real value during the
       // pending resubscribe, or show the placeholder when nothing local is
-      // available.
+      // available. An `initial.kind` of `'error'` (a warmed query that failed
+      // on the server) falls through like a cache miss: the real client
+      // replays the cached error to a fresh listener within a tick, so the
+      // subscription below surfaces it — delivering onError exactly once and
+      // keeping placeholder/preserved-data semantics intact.
       const initial = readInitialQueryData(convex, hydration, getFunctionName(query), args, argsKey);
       if (initial?.kind === 'cache') {
         data.set(initial.value as FunctionReturnType<Query>);

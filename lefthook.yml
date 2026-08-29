@@ -12,9 +12,11 @@ pre-commit:
       stage_fixed: true
 
     - name: duplication
+      glob: '*.{ts,mts,cts,js,mjs,cjs,html}'
       run: pnpm check:duplication
 
     - name: deadcode
+      glob: '*.{ts,mts,cts,js,mjs,cjs,astro,mdx,json}'
       run: pnpm check:deadcode
 
 pre-push:

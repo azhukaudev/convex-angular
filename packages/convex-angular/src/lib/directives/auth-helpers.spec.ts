@@ -1,9 +1,13 @@
-import { Component, Directive, TemplateRef, ViewContainerRef, inject, signal } from '@angular/core';
+import { Component, Directive, TemplateRef, ViewContainerRef, inject } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import {
+  MockAuthRegistration,
+  MockConvexAuthProvider,
+  MockConvexClient,
+  provideConvexAuthTesting,
+  provideConvexTesting,
+} from 'convex-angular/testing';
 
-import { provideConvexAuth } from '../providers/inject-auth';
-import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import {
   CvaAuthLoadingDirective,
   CvaAuthRefreshingDirective,
@@ -21,14 +25,12 @@ function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistra
 
 describe('Auth Helper Directives', () => {
   let convex: MockConvexClient;
-  let isLoading: ReturnType<typeof signal<boolean>>;
-  let isAuthenticated: ReturnType<typeof signal<boolean>>;
+  let provider: MockConvexAuthProvider;
 
   beforeEach(() => {
     convex = new MockConvexClient();
 
-    isLoading = signal(true);
-    isAuthenticated = signal(false);
+    provider = new MockConvexAuthProvider({ initiallyLoading: true });
   });
 
   afterEach(() => {
@@ -36,14 +38,8 @@ describe('Auth Helper Directives', () => {
   });
 
   function setupTestBed() {
-    const mockProvider: ConvexAuthProvider = {
-      isLoading,
-      isAuthenticated,
-      fetchAccessToken: async () => 'token',
-    };
-
     TestBed.configureTestingModule({
-      providers: [provideConvexTesting(convex), { provide: CONVEX_AUTH, useValue: mockProvider }, provideConvexAuth()],
+      providers: [provideConvexTesting(convex), provideConvexAuthTesting(provider)],
     });
   }
 
@@ -66,8 +62,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should not render when not authenticated', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(false);
+      provider.setLoading(false);
       setupTestBed();
 
       @Component({
@@ -85,8 +80,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should render when authenticated', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(true);
+      provider.signIn();
       setupTestBed();
 
       @Component({
@@ -108,8 +102,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should hide when authentication is lost', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(true);
+      provider.signIn();
       setupTestBed();
 
       @Component({
@@ -129,7 +122,7 @@ describe('Auth Helper Directives', () => {
       expect(fixture.nativeElement.textContent).toContain('Authenticated content');
 
       // User logs out
-      isAuthenticated.set(false);
+      provider.signOut();
       fixture.detectChanges();
       tick();
 
@@ -156,8 +149,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should render when not authenticated', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(false);
+      provider.setLoading(false);
       setupTestBed();
 
       @Component({
@@ -175,8 +167,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should not render when authenticated', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(true);
+      provider.signIn();
       setupTestBed();
 
       @Component({
@@ -198,8 +189,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should show when authentication is lost', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(true);
+      provider.signIn();
       setupTestBed();
 
       @Component({
@@ -219,7 +209,7 @@ describe('Auth Helper Directives', () => {
       expect(fixture.nativeElement.textContent).not.toContain('Login form');
 
       // User logs out
-      isAuthenticated.set(false);
+      provider.signOut();
       fixture.detectChanges();
       tick();
 
@@ -246,8 +236,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should not render when not loading (unauthenticated)', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(false);
+      provider.setLoading(false);
       setupTestBed();
 
       @Component({
@@ -265,8 +254,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should not render when not loading (authenticated)', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(true);
+      provider.signIn();
       setupTestBed();
 
       @Component({
@@ -288,8 +276,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should show when going back to loading', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(true);
+      provider.signIn();
       setupTestBed();
 
       @Component({
@@ -309,7 +296,7 @@ describe('Auth Helper Directives', () => {
       expect(fixture.nativeElement.textContent).not.toContain('Loading...');
 
       // Go back to loading
-      isLoading.set(true);
+      provider.setLoading(true);
       fixture.detectChanges();
       tick();
 
@@ -319,8 +306,7 @@ describe('Auth Helper Directives', () => {
 
   describe('CvaAuthRefreshingDirective', () => {
     it('should not render while authenticated and not refreshing', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(true);
+      provider.signIn();
       setupTestBed();
 
       @Component({
@@ -341,8 +327,7 @@ describe('Auth Helper Directives', () => {
     }));
 
     it('should render when refreshing while authenticated', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(true);
+      provider.signIn();
       setupTestBed();
 
       @Component({
@@ -384,8 +369,7 @@ describe('Auth Helper Directives', () => {
     }
 
     it('should leave views it did not create alone while hidden', fakeAsync(() => {
-      isLoading.set(false);
-      isAuthenticated.set(false);
+      provider.setLoading(false);
       setupTestBed();
 
       @Component({
@@ -428,7 +412,7 @@ describe('Auth Helper Directives', () => {
       expect(fixture.nativeElement.textContent).not.toContain('Please sign in');
 
       // Finish loading, not authenticated
-      isLoading.set(false);
+      provider.setLoading(false);
       fixture.detectChanges();
       tick();
 
@@ -437,7 +421,7 @@ describe('Auth Helper Directives', () => {
       expect(fixture.nativeElement.textContent).toContain('Please sign in');
 
       // Authenticate
-      isAuthenticated.set(true);
+      provider.signIn();
       fixture.detectChanges();
       tick();
 

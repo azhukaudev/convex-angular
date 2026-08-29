@@ -848,10 +848,43 @@ describe('injectPaginatedQuery', () => {
     expect(fixture.componentInstance.todos.error()).toBeUndefined();
     expect(fixture.componentInstance.todos.isExhausted()).toBe(false);
 
-    fixture.componentInstance.todos.loadMore(5);
+    // loadMore() must not resurrect the retained closure after destroy — it
+    // returns false instead of delegating to it.
+    expect(fixture.componentInstance.todos.loadMore(5)).toBe(false);
 
-    expect(latestLoadMore).toHaveBeenCalledWith(5);
+    expect(latestLoadMore).not.toHaveBeenCalled();
     expect(staleLoadMore).not.toHaveBeenCalled();
+  }));
+
+  it('should return false from loadMore() after destroy instead of calling the retained client loadMore', fakeAsync(() => {
+    const clientLoadMore = jest.fn(() => true);
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+        initialNumItems: 10,
+      });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    tick();
+
+    requireLastPaginatedSubscription(convex).emit({
+      results: [{ _id: '1', name: 'Todo' }],
+      status: 'CanLoadMore',
+      loadMore: clientLoadMore,
+    });
+
+    const { loadMore } = fixture.componentInstance.todos;
+
+    fixture.destroy();
+
+    expect(loadMore(10)).toBe(false);
+    expect(clientLoadMore).not.toHaveBeenCalled();
   }));
 
   it('should unsubscribe on component destroy', fakeAsync(() => {

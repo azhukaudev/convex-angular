@@ -2,6 +2,7 @@ import { OptimisticLocalStore } from 'convex/browser';
 import { FunctionArgs, FunctionReference, FunctionReturnType, PaginationOptions } from 'convex/server';
 import { Value, compareValues, convexToJson } from 'convex/values';
 
+import { paginationOptsId } from '../internal/convex-client-internals';
 import { PaginatedQueryArgs, PaginatedQueryItem, PaginatedQueryReference } from './inject-paginated-query';
 
 type LocalQueryResult<Query extends FunctionReference<'query'>> = {
@@ -181,7 +182,7 @@ export function insertAtPosition<Query extends PaginatedQueryReference>(options:
         Object.fromEntries(
           Object.entries(queryResult.args).map(([argKey, value]) => [
             argKey,
-            argKey === 'paginationOpts' ? { id: (value as PaginationOptions & { id: string }).id } : value,
+            argKey === 'paginationOpts' ? { id: paginationOptsId(value as PaginationOptions) } : value,
           ]),
         ) as Value,
       ),

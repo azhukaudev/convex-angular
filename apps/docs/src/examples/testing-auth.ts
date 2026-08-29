@@ -1,7 +1,13 @@
-import { Component, signal } from '@angular/core';
+import { Component } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { CONVEX_AUTH, ConvexAuthProvider, injectAuth, provideConvexAuth } from 'convex-angular';
-import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import { injectAuth } from 'convex-angular';
+import {
+  MockAuthRegistration,
+  MockConvexAuthProvider,
+  MockConvexClient,
+  provideConvexAuthTesting,
+  provideConvexTesting,
+} from 'convex-angular/testing';
 
 @Component({
   selector: 'app-account-badge',
@@ -30,46 +36,21 @@ export class AccountBadge {
   }
 }
 
-/**
- * A minimal `ConvexAuthProvider` standing in for Clerk, Auth0 or Better Auth.
- * The test flips its signals to model the identity provider; the mock's auth
- * registration models Convex answering back.
- */
-class FakeAuthProvider implements ConvexAuthProvider {
-  readonly isLoading = signal(false);
-  readonly isAuthenticated = signal(false);
-  readonly error = signal<Error | undefined>(undefined);
-
-  /** What the identity provider's token endpoint hands back. */
-  token: string | null = 'jwt-token';
-  /** How many times Convex asked for a bypass-the-cache token. */
-  forceRefreshCount = 0;
-
-  fetchAccessToken = async ({ forceRefreshToken }: { forceRefreshToken: boolean }): Promise<string | null> => {
-    if (forceRefreshToken) {
-      this.forceRefreshCount += 1;
-    }
-    return this.token;
-  };
-}
-
 describe('AccountBadge', () => {
   let convex: MockConvexClient;
-  let provider: FakeAuthProvider;
+  let provider: MockConvexAuthProvider;
 
   beforeEach(() => {
     convex = new MockConvexClient();
-    provider = new FakeAuthProvider();
+    provider = new MockConvexAuthProvider({ token: 'jwt-token' });
 
     TestBed.configureTestingModule({
       imports: [AccountBadge],
-      providers: [
-        provideConvexTesting(convex),
-        { provide: CONVEX_AUTH, useValue: provider },
-        // `provideConvexAuth()` is what calls `client.setAuth`, so the mock
-        // captures nothing until it is registered.
-        provideConvexAuth(),
-      ],
+      // `MockConvexAuthProvider` plays the identity provider (Clerk, Auth0,
+      // Better Auth, your own session service); `provideConvexAuthTesting()`
+      // registers it under `CONVEX_AUTH` and calls `provideConvexAuth()`,
+      // which is what makes the mock capture `client.setAuth`.
+      providers: [provideConvexTesting(convex), provideConvexAuthTesting(provider)],
     });
   });
 
@@ -94,7 +75,7 @@ describe('AccountBadge', () => {
   }
 
   it('stays loading until Convex confirms the token', fakeAsync(() => {
-    provider.isAuthenticated.set(true);
+    provider.signIn();
     const fixture = createFixture();
 
     // The provider says signed in, so auth was registered — but nobody has
@@ -110,7 +91,7 @@ describe('AccountBadge', () => {
   }));
 
   it('asks the provider for a fresh token when Convex forces a refresh', fakeAsync(() => {
-    provider.isAuthenticated.set(true);
+    provider.signIn();
     createFixture();
 
     let resolved: string | null | undefined;
@@ -119,12 +100,12 @@ describe('AccountBadge', () => {
       .then((token) => (resolved = token));
     tick();
 
-    expect(provider.forceRefreshCount).toBe(1);
+    expect(provider.fetchCalls).toContainEqual({ forceRefreshToken: true });
     expect(resolved).toBe('jwt-token');
   }));
 
   it('reports the refreshing status while a token is renewed', fakeAsync(() => {
-    provider.isAuthenticated.set(true);
+    provider.signIn();
     const fixture = createFixture();
 
     lastRegistration().setAuthenticated(true);
@@ -145,7 +126,7 @@ describe('AccountBadge', () => {
     // `seedAuth` is the client's token: it is what `getAuth()` reports and what
     // makes `client.hasAuth()` true. Registering a fetcher does neither.
     convex.seedAuth({ token: 'jwt-token', decoded: { sub: 'user-1' } });
-    provider.isAuthenticated.set(true);
+    provider.signIn();
     const fixture = createFixture();
 
     lastRegistration().setAuthenticated(true);
@@ -157,7 +138,7 @@ describe('AccountBadge', () => {
 
   it('clears the held token when the user signs out', fakeAsync(() => {
     convex.seedAuth({ token: 'jwt-token', decoded: { sub: 'user-1' } });
-    provider.isAuthenticated.set(true);
+    provider.signIn();
     const fixture = createFixture();
 
     lastRegistration().setAuthenticated(true);
@@ -165,7 +146,7 @@ describe('AccountBadge', () => {
     tick();
 
     const registration = lastRegistration();
-    provider.isAuthenticated.set(false);
+    provider.signOut();
     fixture.detectChanges();
     tick();
 
@@ -189,7 +170,7 @@ describe('AccountBadge', () => {
   it('leaves a client that holds no token alone', fakeAsync(() => {
     // No `seedAuth`, so `hasAuth()` is false: the helper must look, then
     // decide not to clear. `hasAuthCount` is what tells those two apart.
-    provider.isLoading.set(true);
+    provider.setLoading(true);
     createFixture();
 
     expect(convex.hasAuthCount).toBeGreaterThan(0);
@@ -200,7 +181,7 @@ describe('AccountBadge', () => {
     // A token seeded before the fixture exists stands in for a client that was
     // already authenticated when this component was created.
     convex.seedAuth({ token: 'stale-token', decoded: { sub: 'user-1' } });
-    provider.isLoading.set(true);
+    provider.setLoading(true);
     createFixture();
 
     expect(convex.authRegistrations).toHaveLength(0);
@@ -216,7 +197,7 @@ describe('AccountBadge', () => {
       throw new Error('sync exploded');
     });
 
-    provider.isAuthenticated.set(true);
+    provider.signIn();
     fixture.detectChanges();
     tick();
 

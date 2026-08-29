@@ -335,6 +335,37 @@ describe('MockConvexClient contract', () => {
     });
   });
 
+  describe('seedQueryError', () => {
+    it('makes localQueryResult throw the seeded error, like the real client', () => {
+      const queryError = new Error('boom');
+      convex.seedQueryError('todos:list', { a: 1 }, queryError);
+
+      expect(() => convex.client.localQueryResult('todos:list', { a: 1 })).toThrow(queryError);
+    });
+
+    it('still records the lookup that threw', () => {
+      const queryError = new Error('boom');
+      convex.seedQueryError('todos:list', { a: 1 }, queryError);
+
+      expect(() => convex.client.localQueryResult('todos:list', { a: 1 })).toThrow(queryError);
+      expect(convex.localQueryResultCalls).toEqual([{ queryName: 'todos:list', args: { a: 1 } }]);
+    });
+
+    it('leaves seeded successes unaffected', () => {
+      convex.seedQueryResult('todos:list', { a: 1 }, 'seeded');
+      convex.seedQueryError('todos:list', { a: 2 }, new Error('boom'));
+
+      expect(convex.client.localQueryResult('todos:list', { a: 1 })).toBe('seeded');
+    });
+
+    it('makes the one-shot query() reject with the seeded error', async () => {
+      const queryError = new Error('boom');
+      convex.seedQueryError('todos:list', { a: 1 }, queryError);
+
+      await expect(convex.query(mockQuery, { a: 1 })).rejects.toBe(queryError);
+    });
+  });
+
   describe('client auth surface', () => {
     const fetchToken = async () => 'token';
 

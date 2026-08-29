@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { ConvexClient } from 'convex/browser';
 
+import { clearAuth, hasAuth, setAuthWithRefresh } from '../internal/convex-client-internals';
 import { CONVEX_AUTH, ConvexAuthProvider, ConvexAuthState, ConvexAuthStatus } from '../tokens/auth';
 import { CONVEX } from '../tokens/convex';
 import { runInResolvedInjectionContext } from './injection-context';
@@ -153,8 +154,8 @@ function createConvexAuthState(): ConvexAuthState {
       return;
     }
     try {
-      if (convex.client.hasAuth()) {
-        convex.client.clearAuth();
+      if (hasAuth(convex)) {
+        clearAuth(convex);
       }
     } catch (error) {
       errors.setInternalError(error, '[convex-angular auth] Convex auth sync failed');
@@ -280,7 +281,7 @@ function createConvexAuthState(): ConvexAuthState {
       } else {
         // Use the underlying base client directly: `ConvexClient.setAuth` drops
         // the `onRefreshChange` callback, but `BaseConvexClient.setAuth` forwards it.
-        convex.client.setAuth(fetchToken, onAuthChange, onRefreshChange);
+        setAuthWithRefresh(convex, fetchToken, onAuthChange, onRefreshChange);
       }
     } catch (syncError) {
       if (generation === currentGeneration) {

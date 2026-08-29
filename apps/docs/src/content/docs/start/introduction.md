@@ -43,11 +43,11 @@ NgModules.
 
 ## Requirements
 
-| Package                                               | Version     |
-| ----------------------------------------------------- | ----------- |
-| `@angular/core`, `@angular/common`, `@angular/router` | `>=21.2.17` |
-| `convex`                                              | `>=1.42.1`  |
-| `rxjs`                                                | `>=7.8.0`   |
+| Package                                               | Version             |
+| ----------------------------------------------------- | ------------------- |
+| `@angular/core`, `@angular/common`, `@angular/router` | `>=21.2.19 <22.0.0` |
+| `convex`                                              | `>=1.42.1 <2.0.0`   |
+| `rxjs`                                                | `>=7.8.0`           |
 
 These are peer dependencies, so your application controls the versions.
 

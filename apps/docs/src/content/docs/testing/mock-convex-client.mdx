@@ -7,7 +7,9 @@ sidebar:
 
 import { Aside } from '@astrojs/starlight/components';
 
-The `convex-angular/testing` entry point exports two runtime values and seven types:
+The `convex-angular/testing` entry point exports two pairs of runtime values — `MockConvexClient`/`provideConvexTesting()`
+and `MockConvexAuthProvider`/`provideConvexAuthTesting()` — plus the types each captures. This page covers the
+client pair, shown below; see the [API reference](/reference/#testing) for the complete list.
 
 ```typescript
 import {
@@ -102,23 +104,24 @@ Every array is readonly, ordered oldest first, and **never cleared** — build a
 The `client` getter returns the mock's own low-level client object — the same instance every time, so
 `jest.spyOn(convex.client, 'setAuth')` sticks. It exposes exactly four members:
 
-| Member                                                                | Behavior                                                                                                                                 |
-| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `localQueryResult(queryName: string, args?: Record<string, unknown>)` | Records the lookup on `localQueryResultCalls`, then reads the warm cache populated by `seedQueryResult()`; `undefined` on a miss.        |
-| `setAuth(fetchToken, onChange?, onRefreshChange?)`                    | Pushes a `MockAuthRegistration` onto `authRegistrations`. Registration is configuration — it does not make the client authenticated.     |
-| `clearAuth()`                                                         | Increments `clearAuthCount`, drops the held token, and marks every registration `cleared`.                                               |
-| `hasAuth()`                                                           | Increments `hasAuthCount` and reports whether a **token** is held — that is, whether `seedAuth()` gave it one that has not been cleared. |
+| Member                                                                | Behavior                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `localQueryResult(queryName: string, args?: Record<string, unknown>)` | Records the lookup on `localQueryResultCalls`, then reads the warm cache populated by `seedQueryResult()`/`seedQueryError()`; `undefined` on a miss, and **throws** for an entry seeded with `seedQueryError()`, matching the real client. |
+| `setAuth(fetchToken, onChange?, onRefreshChange?)`                    | Pushes a `MockAuthRegistration` onto `authRegistrations`. Registration is configuration — it does not make the client authenticated.                                                                                                       |
+| `clearAuth()`                                                         | Increments `clearAuthCount`, drops the held token, and marks every registration `cleared`.                                                                                                                                                 |
+| `hasAuth()`                                                           | Increments `hasAuthCount` and reports whether a **token** is held — that is, whether `seedAuth()` gave it one that has not been cleared.                                                                                                   |
 
 ### Test-driving methods
 
-| Method                                                                               | Returns                                  | Purpose                                                                                                        |
-| ------------------------------------------------------------------------------------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `lastQuerySubscription()`                                                            | `MockQuerySubscription \| undefined`     | The most recent live-query subscription, if any.                                                               |
-| `lastPaginatedSubscription()`                                                        | `MockPaginatedSubscription \| undefined` | The most recent paginated subscription, if any.                                                                |
-| `lastAuthRegistration()`                                                             | `MockAuthRegistration \| undefined`      | The most recent auth registration, if any.                                                                     |
-| `seedQueryResult(queryName: string, args: Record<string, unknown>, result: unknown)` | `void`                                   | Pre-seed the warm local cache consulted by `injectQuery`/`injectQueries` before their subscription delivers.   |
-| `seedAuth(auth: { token, decoded } \| undefined)`                                    | `void`                                   | Give the client a token. The single source of current auth: it drives both `getAuth()` and `client.hasAuth()`. |
-| `setConnectionState(state: Partial<ConnectionState>)`                                | `void`                                   | Shallow-merge into the current state and push it to every connection-state listener.                           |
+| Method                                                                               | Returns                                  | Purpose                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------ | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lastQuerySubscription()`                                                            | `MockQuerySubscription \| undefined`     | The most recent live-query subscription, if any.                                                                                                                                                                                                                                                                                                                  |
+| `lastPaginatedSubscription()`                                                        | `MockPaginatedSubscription \| undefined` | The most recent paginated subscription, if any.                                                                                                                                                                                                                                                                                                                   |
+| `lastAuthRegistration()`                                                             | `MockAuthRegistration \| undefined`      | The most recent auth registration, if any.                                                                                                                                                                                                                                                                                                                        |
+| `seedQueryResult(queryName: string, args: Record<string, unknown>, result: unknown)` | `void`                                   | Pre-seed the warm local cache consulted by `injectQuery`/`injectQueries` before their subscription delivers.                                                                                                                                                                                                                                                      |
+| `seedQueryError(queryName: string, args: Record<string, unknown>, error: Error)`     | `void`                                   | Pre-seed the warm local cache with a failed result. `injectQuery`/`injectQueries` treat it like a cache miss — they still open a live subscription and stay `'pending'` until you drive delivery with `emitError()` — while the one-shot `query()` rejects with it immediately, without opening a subscription; `client.localQueryResult()` throws it either way. |
+| `seedAuth(auth: { token, decoded } \| undefined)`                                    | `void`                                   | Give the client a token. The single source of current auth: it drives both `getAuth()` and `client.hasAuth()`.                                                                                                                                                                                                                                                    |
+| `setConnectionState(state: Partial<ConnectionState>)`                                | `void`                                   | Shallow-merge into the current state and push it to every connection-state listener.                                                                                                                                                                                                                                                                              |
 
 ### ConvexClient surface
 
@@ -173,10 +176,12 @@ Behavior worth knowing:
 - `query()` is the one-shot read used by code that injects the client directly, and it follows the
   real client down both paths. Every call records the lookup on `localQueryResultCalls`. On a warm-cache
   **hit** (seeded by `seedQueryResult()`) it resolves immediately and opens no subscription. On a
-  **miss** it falls back to `onUpdate` — so the call appears in `querySubscriptions` and the promise
-  stays pending until that subscription's `emit()` or `emitError()` settles it, at which point the
-  read unsubscribes (`unsubscribeCount` becomes `1`). It never resolves `undefined` for a miss. When
-  `disabled` is true it rejects with `Error('ConvexClient is disabled')` before either path.
+  warm-cache entry seeded with `seedQueryError()` it **rejects** immediately with that error, also
+  without opening a subscription. On a **miss** it falls back to `onUpdate` — so the call appears in
+  `querySubscriptions` and the promise stays pending until that subscription's `emit()` or
+  `emitError()` settles it, at which point the read unsubscribes (`unsubscribeCount` becomes `1`). It
+  never resolves `undefined` for a miss. When `disabled` is true it rejects with
+  `Error('ConvexClient is disabled')` before any of these paths.
 - `getAuth()` returns whatever `seedAuth()` last gave the client, or `undefined` — including when
   `disabled` is true, where the real client has no auth state at all.
 - `connectionState()` increments `connectionStateReads` **before** throwing
@@ -370,9 +375,10 @@ says so rather than pretending.
 <Aside type="caution">
   **The auth surface is a conversation, not a state machine.** The mock captures `setAuth` and lets you answer as Convex
   would, but it decides nothing itself: it never calls `fetchToken` on its own, never validates a token, and never flips
-  `setAuthenticated` for you. A registration is inert until the test drives it. You still supply the identity side — a
-  `ConvexAuthProvider` behind `CONVEX_AUTH` plus `provideConvexAuth()` — because `provideConvexTesting()` registers none
-  of it. See [Authentication](/testing/driving-state/#authentication).
+  `setAuthenticated` for you. A registration is inert until the test drives it. You still supply the identity side —
+  `provideConvexAuthTesting()` registers a `MockConvexAuthProvider` you drive in one call (a custom `ConvexAuthProvider`
+  behind `CONVEX_AUTH` plus `provideConvexAuth()` remains valid for unusual shapes) — because `provideConvexTesting()`
+  registers none of it. See [Authentication](/testing/driving-state/#authentication).
 </Aside>
 
 <Aside type="caution">

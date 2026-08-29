@@ -1,6 +1,7 @@
 import { DestroyRef, EnvironmentInjector, Signal, inject, signal } from '@angular/core';
 import { ConnectionState } from 'convex/browser';
 
+import { DISABLED_CONNECTION_STATE } from '../internal/convex-client-internals';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 
@@ -37,16 +38,7 @@ export function injectConvexConnectionState(options?: InjectConvexConnectionStat
     // A disabled client (server-side rendering) has no connection and its
     // connection-state accessors throw; report a static disconnected state.
     if (convex.disabled) {
-      return signal<ConnectionState>({
-        hasInflightRequests: false,
-        isWebSocketConnected: false,
-        timeOfOldestInflightRequest: null,
-        hasEverConnected: false,
-        connectionCount: 0,
-        connectionRetries: 0,
-        inflightMutations: 0,
-        inflightActions: 0,
-      }).asReadonly();
+      return signal(DISABLED_CONNECTION_STATE).asReadonly();
     }
 
     const connectionState = signal<ConnectionState>(convex.connectionState());

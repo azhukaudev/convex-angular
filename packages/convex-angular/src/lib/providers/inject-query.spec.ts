@@ -266,6 +266,142 @@ describe('injectQuery', () => {
     }));
   });
 
+  describe('cached query error', () => {
+    it('does not throw and opens exactly one live subscription instead of wedging in pending', fakeAsync(() => {
+      const queryError = new Error('Query failed on the server');
+      convex.seedQueryError('todos:listTodos', { count: 10 }, queryError);
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      // Regression: reading a cached error must not throw from the
+      // subscription effect — mounting must succeed and still open a
+      // subscription.
+      expect(() => {
+        const fixture = TestBed.createComponent(TestComponent);
+        fixture.detectChanges();
+        tick();
+
+        expect(fixture.componentInstance.todos.isLoading()).toBe(true);
+        expect(fixture.componentInstance.todos.status()).toBe('pending');
+      }).not.toThrow();
+
+      expect(convex.querySubscriptions).toHaveLength(1);
+      expect(requireLastQuerySubscription(convex).query).toBe(mockQuery);
+      expect(requireLastQuerySubscription(convex).args).toEqual({ count: 10 });
+    }));
+
+    it('surfaces the cached error once the subscription delivers it', fakeAsync(() => {
+      const queryError = new Error('Query failed on the server');
+      convex.seedQueryError('todos:listTodos', { count: 10 }, queryError);
+      const onError = jest.fn();
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), { onError });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // In production the real client replays the cached error to the fresh
+      // listener within a tick; the mock does not auto-replay, so the test
+      // drives delivery explicitly with emitError, consistent with how every
+      // other subscription result is driven.
+      requireLastQuerySubscription(convex).emitError(queryError);
+
+      expect(fixture.componentInstance.todos.status()).toBe('error');
+      expect(fixture.componentInstance.todos.error()).toBe(queryError);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(queryError);
+    }));
+
+    it('recovers once the live subscription later delivers a success value', fakeAsync(() => {
+      const queryError = new Error('Query failed on the server');
+      convex.seedQueryError('todos:listTodos', { count: 10 }, queryError);
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }));
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      requireLastQuerySubscription(convex).emitError(queryError);
+      expect(fixture.componentInstance.todos.status()).toBe('error');
+
+      // The server later transitions the query to success; the same
+      // subscription that delivered the error delivers the recovery too.
+      const recovered = [{ _id: '1', title: 'Recovered todo' }];
+      requireLastQuerySubscription(convex).emit(recovered);
+
+      expect(fixture.componentInstance.todos.error()).toBeUndefined();
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+      expect(fixture.componentInstance.todos.data()).toEqual(recovered);
+    }));
+
+    it('shows the placeholder rather than stale data when args change to a cached error', fakeAsync(() => {
+      const placeholder = [{ _id: 'p', title: 'Placeholder' }];
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly count = signal(10);
+        readonly todos = injectQuery(mockQuery, () => ({ count: this.count() }), {
+          placeholderData: placeholder,
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      // Nothing has settled yet, so the initial placeholder is still showing.
+      expect(fixture.componentInstance.todos.data()).toEqual(placeholder);
+      expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(true);
+
+      // Change args to a warm-cache entry that already failed.
+      const queryError = new Error('Query failed on the server');
+      convex.seedQueryError('todos:listTodos', { count: 20 }, queryError);
+      fixture.componentInstance.count.set(20);
+      fixture.detectChanges();
+      tick();
+
+      // The cached error is not treated as real local data: the placeholder
+      // (re-evaluated for the new args) is shown instead, pending like any
+      // other resubscribe — not the failed value, and not left over from the
+      // previous args.
+      expect(fixture.componentInstance.todos.data()).toEqual(placeholder);
+      expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(true);
+      expect(fixture.componentInstance.todos.status()).toBe('pending');
+
+      // Delivery still clears the placeholder like any other error, per the
+      // existing fail() contract — invented data is never shown next to an
+      // error state.
+      requireLastQuerySubscription(convex).emitError(queryError);
+
+      expect(fixture.componentInstance.todos.data()).toBeUndefined();
+      expect(fixture.componentInstance.todos.isPlaceholderData()).toBe(false);
+      expect(fixture.componentInstance.todos.error()).toBe(queryError);
+    }));
+  });
+
   describe('error handling', () => {
     it('should set error signal on query error', fakeAsync(() => {
       @Component({

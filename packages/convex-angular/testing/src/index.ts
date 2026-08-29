@@ -1,4 +1,9 @@
 export {
+  MockConvexAuthProvider,
+  provideConvexAuthTesting,
+  type MockConvexAuthProviderOptions,
+} from './mock-auth-provider';
+export {
   MockConvexClient,
   provideConvexTesting,
   type MockAuthRegistration,

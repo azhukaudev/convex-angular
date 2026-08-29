@@ -1,4 +1,4 @@
-import { DestroyRef, Signal, computed, signal } from '@angular/core';
+import { DestroyRef, Signal, computed, signal, untracked } from '@angular/core';
 
 import { MutationStatus } from '../types';
 
@@ -88,7 +88,8 @@ export function createCallableState<TArgs, TResult>(
       return invoke(args);
     }
 
-    const callVersion = currentVersion() + 1;
+    // untracked: mutate()/run() must not register this signal as a dependency of a calling effect.
+    const callVersion = untracked(currentVersion) + 1;
     currentVersion.set(callVersion);
 
     try {
@@ -100,7 +101,7 @@ export function createCallableState<TArgs, TResult>(
       isLoading.set(true);
 
       const result = await invoke(args);
-      if (currentVersion() === callVersion) {
+      if (untracked(currentVersion) === callVersion) {
         data.set(result);
         hasCompleted.set(true);
         options?.onSuccess?.(result);
@@ -108,7 +109,7 @@ export function createCallableState<TArgs, TResult>(
       return result;
     } catch (err) {
       const errorObj = err instanceof Error ? err : new Error(String(err));
-      if (currentVersion() === callVersion) {
+      if (untracked(currentVersion) === callVersion) {
         error.set(errorObj);
         // Stryker disable next-line BooleanLiteral: masked by error() in the current derivation.
         hasCompleted.set(true);
@@ -116,7 +117,7 @@ export function createCallableState<TArgs, TResult>(
       }
       throw errorObj;
     } finally {
-      if (currentVersion() === callVersion) {
+      if (untracked(currentVersion) === callVersion) {
         isLoading.set(false);
       }
     }

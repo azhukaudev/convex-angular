@@ -10,7 +10,6 @@ import {
   isSignal,
   signal,
 } from '@angular/core';
-import { ConvexClient } from 'convex/browser';
 import {
   FunctionArgs,
   FunctionReference,
@@ -20,66 +19,13 @@ import {
   getFunctionName,
 } from 'convex/server';
 
+import { subscribeToPaginatedQuery } from '../internal/convex-client-internals';
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { ConvexHydrationState, serializeQueryArgs } from '../ssr/state-transfer';
 import { PaginatedQueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
-
-/**
- * Pagination status returned by the Convex client.
- * @internal
- */
-type ClientPaginationStatus = 'LoadingFirstPage' | 'CanLoadMore' | 'LoadingMore' | 'Exhausted';
-
-/**
- * The result from a paginated query subscription callback.
- * This matches the actual runtime type from ConvexClient.onPaginatedUpdate_experimental.
- * @internal
- */
-interface ClientPaginatedResult<T> {
-  results: T[];
-  status: ClientPaginationStatus;
-  loadMore: (numItems: number) => boolean;
-}
-
-type ExperimentalPaginatedSubscriptionClient = {
-  onPaginatedUpdate_experimental: ConvexClient['onPaginatedUpdate_experimental'];
-};
-
-function getPaginatedSubscriptionClient(convex: ConvexClient): ExperimentalPaginatedSubscriptionClient {
-  const paginatedClient = convex as ConvexClient & Partial<ExperimentalPaginatedSubscriptionClient>;
-
-  if (typeof paginatedClient.onPaginatedUpdate_experimental !== 'function') {
-    throw new Error(
-      '[convex-angular] `injectPaginatedQuery()` requires a Convex client with experimental paginated query support.',
-    );
-  }
-
-  return paginatedClient as ExperimentalPaginatedSubscriptionClient;
-}
-
-function subscribeToPaginatedQuery<Query extends PaginatedQueryReference>(
-  convex: ConvexClient,
-  query: Query,
-  args: PaginatedQueryArgs<Query>,
-  initialNumItems: number,
-  onUpdate: (result: ClientPaginatedResult<PaginatedQueryItem<Query>>) => void,
-  onError: (err: Error) => void,
-): () => void {
-  const paginatedClient = getPaginatedSubscriptionClient(convex);
-
-  return paginatedClient.onPaginatedUpdate_experimental(
-    query,
-    args as FunctionArgs<Query>,
-    { initialNumItems },
-    (rawResult) => {
-      onUpdate(rawResult as unknown as ClientPaginatedResult<PaginatedQueryItem<Query>>);
-    },
-    onError,
-  );
-}
 
 /**
  * A FunctionReference that is usable with injectPaginatedQuery.
@@ -526,6 +472,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
     destroyRef.onDestroy(() => {
       activeGeneration += 1;
+      currentLoadMore = undefined;
       cleanupSubscription();
     });
 

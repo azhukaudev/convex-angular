@@ -1,10 +1,14 @@
-import { Component, EnvironmentProviders, Provider, signal } from '@angular/core';
+import { Component, EnvironmentProviders, Provider } from '@angular/core';
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { Router, Routes, provideRouter } from '@angular/router';
-import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import {
+  MockAuthRegistration,
+  MockConvexAuthProvider,
+  MockConvexClient,
+  provideConvexAuthTesting,
+  provideConvexTesting,
+} from 'convex-angular/testing';
 
-import { provideConvexAuth } from '../providers/inject-auth';
-import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import {
   CONVEX_AUTH_GUARD_CONFIG,
   ConvexAuthGuardConfig,
@@ -23,14 +27,11 @@ function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistra
 
 describe('Auth Guards', () => {
   let convex: MockConvexClient;
-  let isLoading: ReturnType<typeof signal<boolean>>;
-  let isAuthenticated: ReturnType<typeof signal<boolean>>;
+  let provider: MockConvexAuthProvider;
 
   beforeEach(() => {
     convex = new MockConvexClient();
-
-    isLoading = signal(false);
-    isAuthenticated = signal(false);
+    provider = new MockConvexAuthProvider();
   });
 
   afterEach(() => {
@@ -44,16 +45,9 @@ describe('Auth Guards', () => {
   class BlankComponent {}
 
   function setupGuardTestBed(routes: Routes, config?: ConvexAuthGuardConfig): Router {
-    const mockProvider: ConvexAuthProvider = {
-      isLoading,
-      isAuthenticated,
-      fetchAccessToken: async () => 'token',
-    };
-
     const providers: Array<Provider | EnvironmentProviders> = [
       provideConvexTesting(convex),
-      { provide: CONVEX_AUTH, useValue: mockProvider },
-      provideConvexAuth(),
+      provideConvexAuthTesting(provider),
       provideRouter(routes),
     ];
 
@@ -135,7 +129,7 @@ describe('Auth Guards', () => {
     }));
 
     it('waits for Convex confirmation before allowing navigation', fakeAsync(() => {
-      isAuthenticated.set(true);
+      provider.signIn();
       const router = setupGuardTestBed(routes);
 
       router.navigate(['/dashboard']);
@@ -151,7 +145,7 @@ describe('Auth Guards', () => {
     }));
 
     it('allows navigation while a rejected token is being refreshed', fakeAsync(() => {
-      isAuthenticated.set(true);
+      provider.signIn();
       const router = setupGuardTestBed(routes);
 
       authenticateAndNavigate(router, '/dashboard');
@@ -198,7 +192,7 @@ describe('Auth Guards', () => {
     }));
 
     it('allows matching once Convex confirms authentication', fakeAsync(() => {
-      isAuthenticated.set(true);
+      provider.signIn();
       const router = setupGuardTestBed(routes);
 
       authenticateAndNavigate(router, '/dashboard');
@@ -229,7 +223,7 @@ describe('Auth Guards', () => {
     }));
 
     it('redirects authenticated users to / by default', fakeAsync(() => {
-      isAuthenticated.set(true);
+      provider.signIn();
       const router = setupGuardTestBed(routes);
 
       authenticateAndNavigate(router, '/login');
@@ -238,7 +232,7 @@ describe('Auth Guards', () => {
     }));
 
     it('redirects authenticated users while a rejected token is being refreshed', fakeAsync(() => {
-      isAuthenticated.set(true);
+      provider.signIn();
       const router = setupGuardTestBed(routes);
 
       authenticateAndNavigate(router, '/home');
@@ -257,7 +251,7 @@ describe('Auth Guards', () => {
     }));
 
     it('redirects authenticated users to the configured authenticatedRoute', fakeAsync(() => {
-      isAuthenticated.set(true);
+      provider.signIn();
       const router = setupGuardTestBed(routes, { authenticatedRoute: '/home' });
 
       authenticateAndNavigate(router, '/login');
@@ -293,7 +287,7 @@ describe('Auth Guards', () => {
     it('passes the current token and claims to allow', fakeAsync(() => {
       const allow = jest.fn().mockReturnValue(true);
       convex.seedAuth({ token: 'jwt-token', decoded: { role: 'admin' } });
-      isAuthenticated.set(true);
+      provider.signIn();
 
       const router = setupGuardTestBed(adminRoutes({ allow }));
       authenticateAndNavigate(router, '/admin');
@@ -304,7 +298,7 @@ describe('Auth Guards', () => {
 
     it('blocks navigation when allow fails and no forbiddenRoute is set', fakeAsync(() => {
       convex.seedAuth({ token: 'jwt-token', decoded: { role: 'viewer' } });
-      isAuthenticated.set(true);
+      provider.signIn();
 
       const router = setupGuardTestBed(adminRoutes({ allow: ({ claims }) => claims['role'] === 'admin' }));
       authenticateAndNavigate(router, '/admin');
@@ -314,7 +308,7 @@ describe('Auth Guards', () => {
 
     it('redirects to forbiddenRoute when allow fails', fakeAsync(() => {
       convex.seedAuth({ token: 'jwt-token', decoded: { role: 'viewer' } });
-      isAuthenticated.set(true);
+      provider.signIn();
 
       const router = setupGuardTestBed(
         adminRoutes({
@@ -329,7 +323,7 @@ describe('Auth Guards', () => {
 
     it('blocks when no auth snapshot is available even if authenticated', fakeAsync(() => {
       convex.seedAuth(undefined);
-      isAuthenticated.set(true);
+      provider.signIn();
 
       const router = setupGuardTestBed(adminRoutes({ allow: () => true }));
       authenticateAndNavigate(router, '/admin');
@@ -339,7 +333,7 @@ describe('Auth Guards', () => {
 
     it('waits for a token refresh to settle before running allow', fakeAsync(() => {
       const allow = jest.fn(({ claims }) => claims['role'] === 'admin');
-      isAuthenticated.set(true);
+      provider.signIn();
 
       const router = setupGuardTestBed(adminRoutes({ allow }));
       authenticateAndNavigate(router, '/');
@@ -369,7 +363,7 @@ describe('Auth Guards', () => {
 
     it('works as a canMatch guard', fakeAsync(() => {
       convex.seedAuth({ token: 'jwt-token', decoded: { role: 'admin' } });
-      isAuthenticated.set(true);
+      provider.signIn();
 
       const routes: Routes = [
         { path: '', component: BlankComponent },

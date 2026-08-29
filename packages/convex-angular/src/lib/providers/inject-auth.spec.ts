@@ -1,6 +1,11 @@
 import { Component, EnvironmentInjector, Injectable, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import {
+  MockAuthRegistration,
+  MockConvexAuthProvider,
+  MockConvexClient,
+  provideConvexTesting,
+} from 'convex-angular/testing';
 
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import { injectAuth, provideConvexAuth, provideConvexAuthFromExisting } from './inject-auth';
@@ -23,25 +28,27 @@ function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistra
 
 describe('injectAuth', () => {
   let convex: MockConvexClient;
+  let provider: MockConvexAuthProvider;
+  // Kept only for the two tests below that need jest.fn assertions or a
+  // non-Error rejection value the double's typed `failNextFetch(error: Error)`
+  // cannot express — see 'hands the provider token to Convex unchanged' and
+  // 'records non-Error token fetch failures with their string form'.
   let fetchAccessToken: jest.MockedFunction<
     (opts: { forceRefreshToken: boolean }) => Promise<string | null | undefined>
   >;
-  let providerLoading: ReturnType<typeof signal<boolean>>;
   let providerAuthenticated: ReturnType<typeof signal<boolean>>;
-  let providerError: ReturnType<typeof signal<Error | undefined>>;
-  let reauthVersion: ReturnType<typeof signal<number>>;
 
   function createProvider(): ConvexAuthProvider {
     return {
-      isLoading: providerLoading,
+      isLoading: signal(false),
       isAuthenticated: providerAuthenticated,
-      error: providerError,
-      reauthVersion,
+      error: signal<Error | undefined>(undefined),
+      reauthVersion: signal(0),
       fetchAccessToken,
     };
   }
 
-  function configureTestingModule(authProvider: ConvexAuthProvider = createProvider(), extraProviders: unknown[] = []) {
+  function configureTestingModule(authProvider: ConvexAuthProvider = provider, extraProviders: unknown[] = []) {
     TestBed.configureTestingModule({
       providers: [
         provideConvexTesting(convex),
@@ -68,13 +75,11 @@ describe('injectAuth', () => {
   }
 
   beforeEach(() => {
-    providerLoading = signal(false);
     providerAuthenticated = signal(false);
-    providerError = signal<Error | undefined>(undefined);
-    reauthVersion = signal(0);
     fetchAccessToken = jest.fn().mockResolvedValue('token');
 
     convex = new MockConvexClient();
+    provider = new MockConvexAuthProvider();
   });
 
   afterEach(() => {
@@ -84,7 +89,7 @@ describe('injectAuth', () => {
   it('exposes the current token and decoded claims via getAuth()', fakeAsync(() => {
     // The client only holds a token while the provider is signed in; a signed-out
     // provider makes the helper clear it before the assertion can read it back.
-    providerAuthenticated.set(true);
+    provider.signIn();
     const authSnapshot = { token: 'jwt-token', decoded: { sub: 'user-1' } };
     convex.seedAuth(authSnapshot);
     configureTestingModule();
@@ -137,7 +142,7 @@ describe('injectAuth', () => {
 
   it('throws when provideConvexAuth is configured without a Convex client', () => {
     TestBed.configureTestingModule({
-      providers: [{ provide: CONVEX_AUTH, useValue: createProvider() }, provideConvexAuth()],
+      providers: [{ provide: CONVEX_AUTH, useValue: provider }, provideConvexAuth()],
     });
 
     @Component({
@@ -154,7 +159,7 @@ describe('injectAuth', () => {
   });
 
   it('throws when provideConvexAuth is registered multiple times in one injector', () => {
-    configureTestingModule(createProvider(), [provideConvexAuth()]);
+    configureTestingModule(provider, [provideConvexAuth()]);
 
     @Component({
       template: '',
@@ -180,7 +185,7 @@ describe('injectAuth', () => {
   });
 
   it('is loading while the auth provider is loading', fakeAsync(() => {
-    providerLoading.set(true);
+    provider.setLoading(true);
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -191,7 +196,7 @@ describe('injectAuth', () => {
   }));
 
   it('waits for Convex confirmation when the provider is authenticated', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -203,8 +208,8 @@ describe('injectAuth', () => {
   }));
 
   it('does not wire Convex auth while the provider is still loading', fakeAsync(() => {
-    providerLoading.set(true);
-    providerAuthenticated.set(true);
+    provider.signIn();
+    provider.setLoading(true);
     // A token from a previous session is what makes the clear meaningful.
     convex.seedAuth({ token: 'previous-session-token', decoded: {} });
     configureTestingModule();
@@ -225,7 +230,7 @@ describe('injectAuth', () => {
 
     expect(auth.status()).toBe('unauthenticated');
 
-    providerAuthenticated.set(true);
+    provider.signIn();
 
     expect(auth.isAuthenticated()).toBe(false);
     expect(auth.status()).toBe('unauthenticated');
@@ -245,7 +250,7 @@ describe('injectAuth', () => {
   }));
 
   it('becomes authenticated only after Convex confirms the token', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -261,7 +266,7 @@ describe('injectAuth', () => {
   }));
 
   it('becomes unauthenticated when Convex rejects the token', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -277,7 +282,7 @@ describe('injectAuth', () => {
   }));
 
   it('enters the refreshing state while staying authenticated', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -299,7 +304,7 @@ describe('injectAuth', () => {
   }));
 
   it('returns to authenticated once the refresh completes', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -320,7 +325,7 @@ describe('injectAuth', () => {
   }));
 
   it('never reports refreshing while unauthenticated', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -335,7 +340,7 @@ describe('injectAuth', () => {
   }));
 
   it('clears the refreshing state when the provider signs out', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -347,7 +352,7 @@ describe('injectAuth', () => {
 
     expect(fixture.componentInstance.auth.status()).toBe('refreshing');
 
-    providerAuthenticated.set(false);
+    provider.signOut();
     fixture.detectChanges();
     tick();
 
@@ -356,7 +361,7 @@ describe('injectAuth', () => {
   }));
 
   it('ignores refresh callbacks from a superseded auth generation', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -367,7 +372,7 @@ describe('injectAuth', () => {
 
     const staleRegistration = requireLastAuthRegistration(convex);
 
-    reauthVersion.update((value) => value + 1);
+    provider.bumpReauth();
     tick();
     requireLastAuthRegistration(convex).setAuthenticated(true);
     fixture.detectChanges();
@@ -382,8 +387,8 @@ describe('injectAuth', () => {
   }));
 
   it('treats a null token as unauthenticated without setting an error', fakeAsync(() => {
-    providerAuthenticated.set(true);
-    fetchAccessToken.mockResolvedValue(null);
+    provider.signIn();
+    provider.token = null;
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -403,9 +408,11 @@ describe('injectAuth', () => {
   }));
 
   it('hands the provider token to Convex unchanged', fakeAsync(() => {
+    // Kept on the createProvider() literal: asserts with `toHaveBeenCalledWith`,
+    // which needs a jest.fn, not the double's `fetchCalls` record.
     providerAuthenticated.set(true);
     fetchAccessToken.mockResolvedValue('fresh-token');
-    configureTestingModule();
+    configureTestingModule(createProvider());
 
     const fixture = createAuthFixture();
 
@@ -425,13 +432,13 @@ describe('injectAuth', () => {
   }));
 
   it('discards a token resolved for a superseded auth generation', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
     const staleRegistration = requireLastAuthRegistration(convex);
 
-    reauthVersion.update((value) => value + 1);
+    provider.bumpReauth();
     fixture.detectChanges();
     tick();
 
@@ -448,17 +455,17 @@ describe('injectAuth', () => {
   }));
 
   it('ignores a token fetch failure from a superseded auth generation', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
     const staleRegistration = requireLastAuthRegistration(convex);
 
-    reauthVersion.update((value) => value + 1);
+    provider.bumpReauth();
     fixture.detectChanges();
     tick();
 
-    fetchAccessToken.mockRejectedValue(new Error('stale provider exploded'));
+    provider.failNextFetch(new Error('stale provider exploded'));
 
     let token: string | null | undefined = 'unresolved';
     staleRegistration.fetchToken({ forceRefreshToken: true }).then((value) => {
@@ -473,13 +480,13 @@ describe('injectAuth', () => {
   }));
 
   it('ignores auth confirmations from a superseded auth generation', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
     const staleRegistration = requireLastAuthRegistration(convex);
 
-    reauthVersion.update((value) => value + 1);
+    provider.bumpReauth();
     fixture.detectChanges();
     tick();
 
@@ -498,8 +505,8 @@ describe('injectAuth', () => {
   }));
 
   it('records token fetch failures as ordinary Error objects', fakeAsync(() => {
-    providerAuthenticated.set(true);
-    fetchAccessToken.mockRejectedValue(new Error('provider exploded'));
+    provider.signIn();
+    provider.failNextFetch(new Error('provider exploded'));
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -523,9 +530,11 @@ describe('injectAuth', () => {
   }));
 
   it('records non-Error token fetch failures with their string form', fakeAsync(() => {
+    // Kept on the createProvider() literal: a non-Error rejection value is not
+    // expressible through the double's typed `failNextFetch(error: Error)`.
     providerAuthenticated.set(true);
     fetchAccessToken.mockRejectedValue('provider rejected without an Error');
-    configureTestingModule();
+    configureTestingModule(createProvider());
 
     const fixture = createAuthFixture();
 
@@ -541,8 +550,8 @@ describe('injectAuth', () => {
   }));
 
   it('clears the internal error once Convex confirms the token', fakeAsync(() => {
-    providerAuthenticated.set(true);
-    fetchAccessToken.mockRejectedValue(new Error('provider exploded'));
+    provider.signIn();
+    provider.failNextFetch(new Error('provider exploded'));
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -566,8 +575,8 @@ describe('injectAuth', () => {
   }));
 
   it('keeps the internal error when Convex rejects the token', fakeAsync(() => {
-    providerAuthenticated.set(true);
-    fetchAccessToken.mockRejectedValue(new Error('provider exploded'));
+    provider.signIn();
+    provider.failNextFetch(new Error('provider exploded'));
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -594,13 +603,13 @@ describe('injectAuth', () => {
     const fixture = createAuthFixture();
     const providerFailure = new Error('upstream failed');
 
-    providerError.set(providerFailure);
+    provider.setError(providerFailure);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.error()).toBe(providerFailure);
 
-    providerError.set(undefined);
+    provider.setError(undefined);
     fixture.detectChanges();
     tick();
 
@@ -608,13 +617,13 @@ describe('injectAuth', () => {
   }));
 
   it('shows the most recent active error across provider and internal failures', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
     const providerFailure = new Error('provider failed');
 
-    providerError.set(providerFailure);
+    provider.setError(providerFailure);
     fixture.detectChanges();
     tick();
 
@@ -625,7 +634,7 @@ describe('injectAuth', () => {
       throw new Error('sync exploded');
     });
 
-    reauthVersion.update((value) => value + 1);
+    provider.bumpReauth();
     fixture.detectChanges();
     tick();
 
@@ -638,8 +647,8 @@ describe('injectAuth', () => {
   }));
 
   it('clears internal errors when the next auth attempt starts', fakeAsync(() => {
-    providerAuthenticated.set(true);
-    fetchAccessToken.mockRejectedValue(new Error('provider exploded'));
+    provider.signIn();
+    provider.failNextFetch(new Error('provider exploded'));
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -654,8 +663,7 @@ describe('injectAuth', () => {
       }),
     );
 
-    fetchAccessToken.mockResolvedValue('fresh-token');
-    reauthVersion.update((value) => value + 1);
+    provider.bumpReauth();
     fixture.detectChanges();
     tick();
 
@@ -664,8 +672,8 @@ describe('injectAuth', () => {
   }));
 
   it('clears auth and internal errors when the provider signs out', fakeAsync(() => {
-    providerAuthenticated.set(true);
-    fetchAccessToken.mockRejectedValue(new Error('provider exploded'));
+    provider.signIn();
+    provider.failNextFetch(new Error('provider exploded'));
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -675,7 +683,7 @@ describe('injectAuth', () => {
 
     // The client holds a token, so signing out has something to clear.
     convex.seedAuth({ token: 'live-token', decoded: {} });
-    providerAuthenticated.set(false);
+    provider.signOut();
     fixture.detectChanges();
     tick();
 
@@ -685,7 +693,7 @@ describe('injectAuth', () => {
   }));
 
   it('leaves the Convex client alone when it holds no auth', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     // No token: the helper should consult hasAuth and decline to clear.
     convex.seedAuth(undefined);
     configureTestingModule();
@@ -696,7 +704,7 @@ describe('injectAuth', () => {
     fixture.detectChanges();
     tick();
 
-    providerAuthenticated.set(false);
+    provider.signOut();
     fixture.detectChanges();
     tick();
 
@@ -710,8 +718,8 @@ describe('injectAuth', () => {
     jest.spyOn(convex.client, 'hasAuth').mockImplementation(() => {
       throw new Error('socket closed');
     });
-    providerLoading.set(true);
-    providerAuthenticated.set(true);
+    provider.signIn();
+    provider.setLoading(true);
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -726,7 +734,7 @@ describe('injectAuth', () => {
   }));
 
   it('clears Convex auth when the auth state is torn down', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -743,7 +751,7 @@ describe('injectAuth', () => {
   }));
 
   it('does not report a refresh after the auth state is torn down', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
@@ -762,9 +770,9 @@ describe('injectAuth', () => {
   }));
 
   it('does not surface a sync failure raised after the auth state was destroyed', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     TestBed.configureTestingModule({
-      providers: [provideConvexTesting(convex), { provide: CONVEX_AUTH, useValue: createProvider() }],
+      providers: [provideConvexTesting(convex), { provide: CONVEX_AUTH, useValue: provider }],
     });
 
     const rootInjector = TestBed.inject(EnvironmentInjector);
@@ -787,13 +795,13 @@ describe('injectAuth', () => {
   }));
 
   it('ignores callbacks from every superseded generation after teardown', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const fixture = createAuthFixture();
     const firstRegistration = requireLastAuthRegistration(convex);
 
-    reauthVersion.update((value) => value + 1);
+    provider.bumpReauth();
     fixture.detectChanges();
     tick();
 
@@ -809,20 +817,20 @@ describe('injectAuth', () => {
   }));
 
   it('re-runs auth when reauthVersion changes while signed in', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     createAuthFixture();
     expect(convex.authRegistrations).toHaveLength(1);
 
-    reauthVersion.update((value) => value + 1);
+    provider.bumpReauth();
     tick();
 
     expect(convex.authRegistrations).toHaveLength(2);
   }));
 
   it('returns the same auth state object for repeated calls in the same injector', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const injector = TestBed.inject(EnvironmentInjector);
@@ -835,7 +843,7 @@ describe('injectAuth', () => {
   }));
 
   it('reuses the root auth state across child injectors and does not clear auth on child destroy', fakeAsync(() => {
-    providerAuthenticated.set(true);
+    provider.signIn();
     configureTestingModule();
 
     const rootInjector = TestBed.inject(EnvironmentInjector);
@@ -862,7 +870,7 @@ describe('injectAuth', () => {
     });
 
     it('does not record an internal error while the provider is loading', fakeAsync(() => {
-      providerLoading.set(true);
+      provider.setLoading(true);
       configureTestingModule();
 
       const fixture = createAuthFixture();
@@ -871,8 +879,6 @@ describe('injectAuth', () => {
     }));
 
     it('does not record an internal error once the provider settles unauthenticated', fakeAsync(() => {
-      providerLoading.set(false);
-      providerAuthenticated.set(false);
       configureTestingModule();
 
       const fixture = createAuthFixture();
@@ -882,7 +888,7 @@ describe('injectAuth', () => {
     }));
 
     it('does not wire Convex auth or record an error once the provider is authenticated', fakeAsync(() => {
-      providerAuthenticated.set(true);
+      provider.signIn();
       configureTestingModule();
 
       const fixture = createAuthFixture();

@@ -30,6 +30,7 @@ page is the matrix of what you can drive and the call that drives it.
 | A token refresh in progress                | `convex.lastAuthRegistration()!.setRefreshing(bool)`                       |
 | The token the client holds                 | `convex.seedAuth({ token, decoded })`                                      |
 | Warm-cache data before the first emission  | `convex.seedQueryResult(queryName, args, result)` before `createComponent` |
+| A warm-cache entry that already failed     | `convex.seedQueryError(queryName, args, err)` before `createComponent`     |
 | A one-shot `convex.query()`                | `seedQueryResult` for a hit; on a miss, `emit()` the subscription it opens |
 | Connection state                           | `convex.setConnectionState(partial)`                                       |
 | Server-side rendering                      | `new MockConvexClient({ disabled: true })`                                 |
@@ -244,15 +245,16 @@ store for an optimistic update to write into, so the function is recorded and ne
 ## Authentication
 
 Auth is the one area where the mock is not the whole story. `provideConvexTesting()` registers the
-`CONVEX` token and nothing else, so the identity side is yours: a `ConvexAuthProvider` behind
-`CONVEX_AUTH`, plus `provideConvexAuth()`. That is what makes `injectAuth()` resolvable and what
-calls `client.setAuth` in the first place — without it the mock captures nothing.
+`CONVEX` token and nothing else, so the identity side is yours: `MockConvexAuthProvider` plus
+`provideConvexAuthTesting()` cover it in one call — see [Components that use
+auth](/testing/overview/#components-that-use-auth). That is what makes `injectAuth()` resolvable and
+what calls `client.setAuth` in the first place — without it the mock captures nothing.
 
 With those registered, the two halves split cleanly:
 
-- **Your fake provider** models the identity system — Clerk, Auth0, Better Auth, your own session
-  service. Flip its `isLoading` / `isAuthenticated` signals and decide what `fetchAccessToken`
-  returns.
+- **`MockConvexAuthProvider`** models the identity system — Clerk, Auth0, Better Auth, your own
+  session service. It is deliberately inert: nothing flips its own state, so drive it with
+  `setLoading()`, `signIn()` / `signOut()`, `setError()`, `bumpReauth()`, and `failNextFetch()`.
 - **`convex.lastAuthRegistration()`** models Convex answering back. Every `client.setAuth` call lands
   on `convex.authRegistrations` as a `MockAuthRegistration`.
 
@@ -361,17 +363,47 @@ expect(convex.localQueryResultCalls).toEqual([{ queryName: 'todos:list', args: {
 The array also grows on every re-subscribe, so it doubles as a record of which argument combinations
 a component walked through.
 
+**A warm cache entry can also be an error**, when the deployment already rejected this exact query +
+args before the component subscribed. `seedQueryError()` models that. `injectQuery()`/`injectQueries()`
+treat it exactly like a cache miss: they open a live subscription and stay `'pending'`, because in
+production the real client replays the cached error to a fresh listener within a tick (its `onUpdate`
+never throws synchronously here). The mock does not auto-replay, so drive that delivery yourself with
+`emitError()`, the same way you drive any other subscription result.
+
+```typescript
+convex.seedQueryError('todos:list', {}, new Error('Query failed on the server'));
+
+const fixture = TestBed.createComponent(TodoList);
+fixture.detectChanges();
+tick();
+
+// Pending, not error yet — the helper does not special-case the cached entry.
+expect(fixture.componentInstance.todos.status()).toBe('pending');
+expect(convex.querySubscriptions).toHaveLength(1);
+
+const queryError = new Error('Query failed on the server');
+convex.lastQuerySubscription()!.emitError(queryError);
+
+expect(fixture.componentInstance.todos.status()).toBe('error');
+
+// The same subscription can still recover the query on a later success.
+convex.lastQuerySubscription()!.emit([{ _id: '1', title: 'Recovered' }]);
+
+expect(fixture.componentInstance.todos.status()).toBe('success');
+```
+
 ### One-shot queries
 
 The same seeded cache backs `convex.query(fn, args)`, the one-shot read used by code that injects the
 client directly rather than through a query helper — a service method, a route resolver. It follows
 the real client down both paths, and which one you land on decides how the test drives it:
 
-| Cache        | What happens                                                                     |
-| ------------ | -------------------------------------------------------------------------------- |
-| **Hit**      | Resolves straight from the cache. No subscription is opened.                     |
-| **Miss**     | Opens a subscription and stays **pending** until it delivers, then unsubscribes. |
-| **Disabled** | Rejects with `'ConvexClient is disabled'`.                                       |
+| Cache        | What happens                                                                              |
+| ------------ | ----------------------------------------------------------------------------------------- |
+| **Hit**      | Resolves straight from the cache. No subscription is opened.                              |
+| **Error**    | Seeded error (`seedQueryError`) — rejects immediately with it; no subscription is opened. |
+| **Miss**     | Opens a subscription and stays **pending** until it delivers, then unsubscribes.          |
+| **Disabled** | Rejects with `'ConvexClient is disabled'`.                                                |
 
 The miss is the case you will actually hit, because it is what happens whenever you have not seeded
 anything. The promise does not resolve to `undefined` — it does not resolve at all until you settle

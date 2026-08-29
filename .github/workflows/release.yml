@@ -27,7 +27,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm verify:full
+      # The tagged commit already passed full CI (incl. mutation) on main; re-run the deterministic gate only.
+      - run: pnpm verify:ci
 
       - run: pnpm typecheck:spec
 

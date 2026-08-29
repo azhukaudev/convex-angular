@@ -6,7 +6,7 @@ import {
   createEnvironmentInjector,
   signal,
 } from '@angular/core';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
@@ -256,6 +256,58 @@ describe('injectQueries', () => {
       user: { name: 'Cached user' },
       todos: [{ _id: '1', title: 'Cached todo' }],
     });
+  }));
+
+  it('does not abort reconciliation when one key has a cached error, and both keys recover normally', fakeAsync(() => {
+    const queryError = new Error('Query failed on the server');
+    convex.seedQueryError('users:get', { userId: 'user-1' }, queryError);
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly queries = injectQueries(() => ({
+        user: { query: mockUserQuery, args: { userId: 'user-1' } },
+        todos: { query: mockTodosQuery, args: { count: 10 } },
+      }));
+    }
+
+    // Regression: reading a cached error must not throw from the
+    // reconciliation loop or abort it before later keys are reached.
+    let fixture!: ComponentFixture<TestComponent>;
+    expect(() => {
+      fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+    }).not.toThrow();
+
+    // Both keys get a live subscription and start pending — the cached error
+    // is not special-cased, so it does not leave the key stuck or prevent the
+    // sibling key from reconciling.
+    expect(convex.querySubscriptions).toHaveLength(2);
+    expect(fixture.componentInstance.queries.statuses()).toEqual({ user: 'pending', todos: 'pending' });
+
+    // The sibling key settles normally, unaffected by the other key's error.
+    requireQuerySubscription(convex, { count: 10 }).emit([{ _id: '1', title: 'Todo' }]);
+    expect(fixture.componentInstance.queries.statuses().todos).toBe('success');
+    expect(fixture.componentInstance.queries.results().todos).toEqual([{ _id: '1', title: 'Todo' }]);
+
+    // In production the real client replays the cached error to the fresh
+    // listener within a tick; the mock does not auto-replay, so the test
+    // drives delivery explicitly.
+    requireQuerySubscription(convex, { userId: 'user-1' }).emitError(queryError);
+
+    expect(fixture.componentInstance.queries.statuses().user).toBe('error');
+    expect(fixture.componentInstance.queries.errors().user).toBe(queryError);
+
+    // The errored key also recovers once the server transitions it to
+    // success, via the same subscription that delivered the error.
+    requireQuerySubscription(convex, { userId: 'user-1' }).emit({ name: 'Recovered' });
+
+    expect(fixture.componentInstance.queries.statuses().user).toBe('success');
+    expect(fixture.componentInstance.queries.errors().user).toBeUndefined();
+    expect(fixture.componentInstance.queries.results().user).toEqual({ name: 'Recovered' });
   }));
 
   it('tracks per-key errors without disturbing sibling data', fakeAsync(() => {

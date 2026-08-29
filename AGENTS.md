@@ -42,7 +42,7 @@ Jest 30 uses `--testPathPatterns` (plural). A bare argument forwarded after `--`
 - Plain Markdown-only change: `pnpm format:check` is sufficient.
 - Any change under `apps/docs` — including `.mdx`, which is executable content, not prose: run `pnpm check:docs` (or `pnpm build:docs`). `format:check` alone is not sufficient there.
 
-CI runs `pnpm verify:full` and `pnpm typecheck:spec` for every pull request and push to `main`. Treat both as required.
+CI runs `pnpm verify:ci` and `pnpm typecheck:spec` in one job, and the mutation suite (`pnpm test:mutation`) in a parallel job, for every pull request and push to `main`. `pnpm verify:full` (`verify:ci` plus the mutation suite) remains the single local everything-command. Treat CI's checks as required.
 
 Git hooks are managed by Lefthook. Pre-commit formats staged files and runs duplication/dead-code checks; pre-push runs lint, test, and build targets. Fix hook failures instead of bypassing them. `LEFTHOOK=0` is acceptable only during a rebase of already-reviewed commits.
 
@@ -116,4 +116,4 @@ Code samples resist drift by being real files. Anything substantial lives in `ap
 
 Copy `.env.sample` to `.env.local` for local demo development. Environment values are injected by `apps/frontend/plugins/env-var-plugin.js`; never commit secrets.
 
-Releases use Nx release and the version in `packages/convex-angular/package.json`. Pushing a `v*` tag triggers the release workflow, which verifies, builds, checks tag/version consistency, and publishes with provenance.
+Releases use Nx release and the version in `packages/convex-angular/package.json`. Pushing a `v*` tag triggers the release workflow, which verifies, builds, checks tag/version consistency, and publishes with provenance. See RELEASING.md for the step-by-step release runbook.

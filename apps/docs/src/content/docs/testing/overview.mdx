@@ -20,8 +20,9 @@ yours, so loading states, error states, and out-of-order responses are all reach
 import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 ```
 
-The entry point exports exactly two runtime values — `MockConvexClient` and `provideConvexTesting` —
-plus the seven types describing what it captures. See
+Alongside `MockConvexClient` and `provideConvexTesting`, the entry point exports
+`MockConvexAuthProvider` and `provideConvexAuthTesting` for testing components that use auth (see
+below), plus the types describing what each mock captures. See
 [Mock reference](/testing/mock-convex-client/) for the full API and
 [Driving state](/testing/driving-state/) for the how-to matrix.
 
@@ -63,18 +64,25 @@ mock — but then the test has no handle to drive it with.
 ### Components that use auth
 
 `provideConvexTesting()` registers the `CONVEX` token and nothing more, so `injectAuth()`, the auth
-directives, and the route guards still need their own registration in the test: a
-`ConvexAuthProvider` behind `CONVEX_AUTH`, plus `provideConvexAuth()`.
+directives, and the route guards still need their own registration in the test. `MockConvexAuthProvider`
+plus `provideConvexAuthTesting()` cover the common case in one call:
 
 ```typescript
 TestBed.configureTestingModule({
-  providers: [provideConvexTesting(convex), { provide: CONVEX_AUTH, useValue: fakeAuthProvider }, provideConvexAuth()],
+  providers: [provideConvexTesting(convex), provideConvexAuthTesting(provider)],
 });
 ```
 
-That pairing is what makes the mock's auth surface interesting: your fake provider plays the identity
-system, and `convex.lastAuthRegistration()` plays Convex answering back. See
+`provideConvexAuthTesting(provider)` registers your `MockConvexAuthProvider` instance under
+`CONVEX_AUTH` and calls `provideConvexAuth()` — the same pairing a production `ConvexAuthProvider`
+needs, just pre-wired. That pairing is what makes the mock's auth surface interesting: the double
+plays the identity system — Clerk, Auth0, Better Auth, your own session service — and
+`convex.lastAuthRegistration()` plays Convex answering back. See
 [Authentication](/testing/driving-state/#authentication).
+
+A custom `ConvexAuthProvider` object literal is still fine for unusual shapes — a provider missing
+optional members, or one a test needs to fail in ways the double's typed API cannot express — behind
+`{ provide: CONVEX_AUTH, useValue: ... }` plus `provideConvexAuth()`.
 
 ## A complete component test
 

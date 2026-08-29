@@ -4,6 +4,58 @@ import { ConnectionState, ConvexClient } from 'convex/browser';
 import { getFunctionName } from 'convex/server';
 
 /**
+ * The `ConvexClient` surface the library and its own specs actually call on
+ * the client under the `CONVEX` token. This is what {@link MockConvexClient}
+ * must keep satisfying; a drifted mock member becomes a compile error here
+ * instead of a runtime surprise for a consumer.
+ *
+ * Several members are narrower than the real `ConvexClient`, deliberately:
+ *
+ * - `onUpdate`/`onPaginatedUpdate_experimental`: every call site treats the
+ *   return value as a plain unsubscribe function, never using the extra
+ *   `.unsubscribe()`/`.getCurrentValue()` properties the real client's
+ *   `Unsubscribe<T>` return type carries.
+ * - `mutation`/`action`/`query`: the real client's generic
+ *   `<Fn extends FunctionReference<...>>(...): Promise<Awaited<FunctionReturnType<Fn>>>`
+ *   forms do not assignment-check against the mock's `Promise<unknown>`
+ *   returns (the generic result type isn't structurally `unknown`-compatible),
+ *   so these narrow to the mock's actual, looser return type.
+ *
+ * @internal
+ */
+type UsedConvexClientSurface = Pick<
+  ConvexClient,
+  'disabled' | 'close' | 'getAuth' | 'connectionState' | 'subscribeToConnectionState'
+> & {
+  mutation: (mutation: unknown, args: Record<string, unknown>, options?: Record<string, unknown>) => Promise<unknown>;
+  action: (action: unknown, args: Record<string, unknown>) => Promise<unknown>;
+  query: (query: unknown, args: Record<string, unknown>) => Promise<unknown>;
+  onUpdate: (
+    query: unknown,
+    args: Record<string, unknown>,
+    onUpdate: (result: unknown) => unknown,
+    onError?: (err: Error) => unknown,
+  ) => () => void;
+  onPaginatedUpdate_experimental: (
+    query: unknown,
+    args: Record<string, unknown>,
+    options: { initialNumItems: number },
+    onUpdate: (result: unknown) => unknown,
+    onError?: (err: Error) => unknown,
+  ) => () => void;
+  client: {
+    setAuth: (
+      fetchToken: (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>,
+      onChange?: (isAuthenticated: boolean) => void,
+      onRefreshChange?: (isRefreshing: boolean) => void,
+    ) => void;
+    clearAuth: () => void;
+    hasAuth: () => boolean;
+    localQueryResult: (queryName: string, args?: Record<string, unknown>) => unknown;
+  };
+};
+
+/**
  * A query subscription captured by {@link MockConvexClient}.
  * Drive the helper under test by calling `emit` / `emitError`.
  *
@@ -248,7 +300,7 @@ export class MockConvexClient {
   private readonly options: MockConvexClientOptions;
   private connectionStateValue = DEFAULT_CONNECTION_STATE;
   private readonly connectionStateListeners = new Set<(state: ConnectionState) => void>();
-  private readonly warmCache = new Map<string, unknown>();
+  private readonly warmCache = new Map<string, { ok: unknown } | { err: Error }>();
   private authSnapshot: { token: string; decoded: Record<string, unknown> } | undefined;
   private clearAuthCallCount = 0;
   private hasAuthCallCount = 0;
@@ -258,7 +310,16 @@ export class MockConvexClient {
   private readonly lowLevelClient = {
     localQueryResult: (queryName: string, args?: Record<string, unknown>) => {
       this.localQueryResultCalls.push({ queryName, args });
-      return this.warmCache.get(`${queryName}:${stableStringify(args)}`);
+      const entry = this.warmCache.get(`${queryName}:${stableStringify(args)}`);
+      if (entry === undefined) {
+        return undefined;
+      }
+      if ('err' in entry) {
+        // Mirrors the real client: a warm cache entry for a failed query
+        // throws from localQueryResult rather than returning a value.
+        throw entry.err;
+      }
+      return entry.ok;
     },
     setAuth: (
       fetchToken: (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>,
@@ -368,7 +429,19 @@ export class MockConvexClient {
    * before their subscription delivers.
    */
   seedQueryResult(queryName: string, args: Record<string, unknown>, result: unknown): void {
-    this.warmCache.set(`${queryName}:${stableStringify(args)}`, result);
+    this.warmCache.set(`${queryName}:${stableStringify(args)}`, { ok: result });
+  }
+
+  /**
+   * Pre-seed the warm local cache with a failed result, as when the
+   * deployment already rejected this exact query + args before the helper
+   * subscribed. Mirrors the real client: `client.localQueryResult` throws
+   * this error instead of returning a value, and `query()` rejects with it.
+   *
+   * @public
+   */
+  seedQueryError(queryName: string, args: Record<string, unknown>, error: Error): void {
+    this.warmCache.set(`${queryName}:${stableStringify(args)}`, { err: error });
   }
 
   /** Push a new connection state to injectConvexConnectionState consumers. */
@@ -488,7 +561,14 @@ export class MockConvexClient {
     }
 
     const queryName = getFunctionName(fn as Parameters<typeof getFunctionName>[0]);
-    const cached = this.lowLevelClient.localQueryResult(queryName, args);
+    let cached: unknown;
+    try {
+      cached = this.lowLevelClient.localQueryResult(queryName, args);
+    } catch (err) {
+      // The real ConvexClient.query is async, so a synchronous throw from the
+      // underlying localQueryResult surfaces as a rejection here.
+      return Promise.reject(err);
+    }
     if (cached !== undefined) {
       return Promise.resolve(cached);
     }
@@ -575,5 +655,9 @@ export class MockConvexClient {
  * @public
  */
 export function provideConvexTesting(client: MockConvexClient = new MockConvexClient()): Provider[] {
-  return [{ provide: CONVEX, useValue: client as unknown as ConvexClient }];
+  // Fully compiler-checked: a drifted mock member fails this assignment, not
+  // just overlap (a plain `as UsedConvexClientSurface` assertion only needs
+  // the two types to overlap, which is weaker than an assignability check).
+  const surface: UsedConvexClientSurface = client;
+  return [{ provide: CONVEX, useValue: surface as ConvexClient }];
 }

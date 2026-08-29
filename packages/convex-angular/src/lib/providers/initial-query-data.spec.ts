@@ -85,4 +85,31 @@ describe('readInitialQueryData', () => {
 
     expect(initial).toBeUndefined();
   });
+
+  it('returns an error kind instead of throwing when the warm cache holds a failed result', () => {
+    const queryError = new Error('Query failed on the server');
+    convex.seedQueryError(queryName, args, queryError);
+
+    const initial = readInitialQueryData(convexClient(), hydrationState(), queryName, args, argsKey);
+
+    expect(initial).toEqual({ kind: 'error', error: queryError });
+    expect(mockConsume).not.toHaveBeenCalled();
+  });
+
+  it('wraps a non-Error thrown by the client cache in an Error', () => {
+    const throwingConvex = {
+      disabled: false,
+      client: {
+        localQueryResult: () => {
+          throw 'boom';
+        },
+      },
+    } as unknown as ConvexClient;
+
+    const initial = readInitialQueryData(throwingConvex, hydrationState(), queryName, args, argsKey);
+
+    expect(initial?.kind).toBe('error');
+    expect((initial as { kind: 'error'; error: Error }).error).toBeInstanceOf(Error);
+    expect((initial as { kind: 'error'; error: Error }).error.message).toBe('boom');
+  });
 });
