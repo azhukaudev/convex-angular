@@ -422,8 +422,8 @@ A fresh mock starts connected and idle; the exact defaults are listed in the
 
 `new MockConvexClient({ disabled: true })` mirrors a disabled `ConvexClient`, which is the state the
 client is in during a server render: subscribing becomes a no-op, the `client` getter throws
-`'ConvexClient is disabled'`, `connectionState()` throws, `getAuth()` reports `undefined`, and a
-one-shot `query()` rejects.
+`'ConvexClient is disabled'`, `connectionState()` throws, `getAuth()` reports `undefined`, and
+`mutation()`, `action()`, and a one-shot `query()` all reject with `'ConvexClient is disabled'`.
 
 Nothing about a skipped subscription is an error, though. The subscribe call succeeds and hands back
 a callable no-op unsubscribe, exactly as the real disabled client does; the subscription is simply

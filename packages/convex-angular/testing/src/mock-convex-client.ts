@@ -164,8 +164,9 @@ export interface MockLocalQueryResultCall {
 export interface MockConvexClientOptions {
   /**
    * Mirror a disabled ConvexClient (the server-side rendering state):
-   * subscriptions become no-ops and the `client` getter throws, exactly like
-   * the real client. Defaults to false.
+   * subscriptions become no-ops, the `client` getter throws, and
+   * `mutation()`/`action()`/`query()` reject with `'ConvexClient is
+   * disabled'`, exactly like the real client. Defaults to false.
    */
   disabled?: boolean;
 }
@@ -459,11 +460,17 @@ export class MockConvexClient {
   }
 
   mutation(fn: unknown, args: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown> {
+    if (this.disabled) {
+      return Promise.reject(new Error('ConvexClient is disabled'));
+    }
     return this.capture(this.mutationCalls, fn, args, options);
   }
 
   // Mirrors ConvexClient.action, which takes no options object.
   action(fn: unknown, args: Record<string, unknown>): Promise<unknown> {
+    if (this.disabled) {
+      return Promise.reject(new Error('ConvexClient is disabled'));
+    }
     return this.capture(this.actionCalls, fn, args, undefined);
   }
 

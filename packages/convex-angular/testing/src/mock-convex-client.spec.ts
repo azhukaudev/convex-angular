@@ -646,6 +646,18 @@ describe('MockConvexClient contract', () => {
 
       expect(enabled.refusedSubscriptions).toHaveLength(0);
     });
+
+    it('rejects a mutation instead of capturing it', async () => {
+      await expect(disabled.mutation(mockMutation, { title: 'Todo' })).rejects.toThrow(/^ConvexClient is disabled$/);
+
+      expect(disabled.mutationCalls).toHaveLength(0);
+    });
+
+    it('rejects an action instead of capturing it', async () => {
+      await expect(disabled.action(mockMutation, { title: 'Todo' })).rejects.toThrow(/^ConvexClient is disabled$/);
+
+      expect(disabled.actionCalls).toHaveLength(0);
+    });
   });
 
   describe('retired-callback fault injection', () => {
@@ -816,7 +828,9 @@ describe('MockConvexClient contract', () => {
     });
 
     it('rejects when the client is disabled', async () => {
-      await expect(new MockConvexClient({ disabled: true }).query(mockQuery, {})).rejects.toThrow(/disabled/);
+      await expect(new MockConvexClient({ disabled: true }).query(mockQuery, {})).rejects.toThrow(
+        /^ConvexClient is disabled$/,
+      );
     });
   });
 

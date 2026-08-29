@@ -68,9 +68,9 @@ interface MockConvexClientOptions {
 }
 ```
 
-| Option     | Type      | Default | Meaning                                                                                                                                               |
-| ---------- | --------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `disabled` | `boolean` | `false` | Mirror a disabled `ConvexClient` (the server-render state): subscriptions become no-ops and the `client` getter throws, exactly like the real client. |
+| Option     | Type      | Default | Meaning                                                                                                                                                                                                                            |
+| ---------- | --------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `disabled` | `boolean` | `false` | Mirror a disabled `ConvexClient` (the server-render state): subscriptions become no-ops, the `client` getter throws, and `mutation()`/`action()`/`query()` reject with `'ConvexClient is disabled'`, exactly like the real client. |
 
 ### Capture properties
 
@@ -168,7 +168,8 @@ Behavior worth knowing:
   `injectMutation()` always passes `{ optimisticUpdate }` there (the property is `undefined` when no
   optimistic update was configured) and it is recorded on `MockCallableCall.options`. An action's
   `options` is therefore always `undefined`. The mock records the object but never runs an optimistic
-  update — there is no local store for one to write into.
+  update — there is no local store for one to write into. When `disabled` is true, both reject with
+  `Error('ConvexClient is disabled')` instead of capturing the call, matching the real client.
 - `query()` is the one-shot read used by code that injects the client directly, and it follows the
   real client down both paths. Every call records the lookup on `localQueryResultCalls`. On a warm-cache
   **hit** (seeded by `seedQueryResult()`) it resolves immediately and opens no subscription. On a
@@ -372,14 +373,6 @@ says so rather than pretending.
   `setAuthenticated` for you. A registration is inert until the test drives it. You still supply the identity side — a
   `ConvexAuthProvider` behind `CONVEX_AUTH` plus `provideConvexAuth()` — because `provideConvexTesting()` registers none
   of it. See [Authentication](/testing/driving-state/#authentication).
-</Aside>
-
-<Aside type="caution">
-  **`mutation()` and `action()` are not disabled-aware.** The real `ConvexClient` throws for mutations and actions
-  while disabled — that is how the library's server-render contract is enforced. The mock captures them normally even
-  when constructed with `{ disabled: true }`, so a test cannot use the mock to prove that a mutation is rejected during
-  SSR. Everything else honors the flag: the subscription methods, the `client` getter, `connectionState()`, `getAuth()`,
-  and `query()`.
 </Aside>
 
 <Aside type="caution">

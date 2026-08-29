@@ -32,6 +32,7 @@
 - `Auth0AuthProvider.getAccessTokenSilently` return type is now `Promise<string | null>`; the documented implementation requests `detailedResponse: true` and returns the OIDC `id_token` (the token Convex validates) instead of the access token.
 - `convex-angular/testing`: `MockConvexClient` subscriptions no longer deliver `emit`/`emitError` after unsubscribe, matching the real client. This is a test-fidelity fix, but tests that emitted to a torn-down subscription will now observe no delivery. A test that deliberately targets a staleness guard can use the new `emitAfterUnsubscribe()`/`emitErrorAfterUnsubscribe()`.
 - `convex-angular/testing`: `MockConvexClient.subscribeToConnectionState()` no longer registers the listener when the client is `disabled`, matching the real client, which returns a no-op without subscribing. Tests that pushed connection state into a disabled mock will now observe no delivery.
+- `convex-angular/testing`: a disabled `MockConvexClient` (`{ disabled: true }`) now rejects `mutation()`/`action()` with `ConvexClient is disabled`, matching the real SSR client instead of silently capturing the call. This is a test-fidelity fix; tests that invoked mutations/actions against a disabled mock must now assert the rejection.
 - `convex-angular/better-auth`: on a 401/403 session response, `refreshSession()` no longer falls back to the cross-domain plugin's cached `getSessionData()` (which could resurrect a session the server just rejected) — it signs out instead.
 
 ### 🐛 Bug Fixes
