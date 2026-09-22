@@ -1,7 +1,7 @@
 import { isPlatformServer } from '@angular/common';
 import { DestroyRef, PLATFORM_ID, inject } from '@angular/core';
 import { ActivatedRouteSnapshot, ResolveFn, RouterStateSnapshot } from '@angular/router';
-import { FunctionReturnType } from 'convex/server';
+import { FunctionArgs, FunctionReturnType } from 'convex/server';
 
 import { QueryReference } from '../providers/inject-query';
 import { SkipToken, skipToken } from '../skip-token';
@@ -71,14 +71,14 @@ export interface ConvexQueryResolverOptions {
  */
 export function convexQueryResolver<Query extends QueryReference>(
   query: Query,
-  argsFn?: (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => Query['_args'] | SkipToken,
+  argsFn?: (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => FunctionArgs<Query> | SkipToken,
   options?: ConvexQueryResolverOptions,
 ): ResolveFn<FunctionReturnType<Query> | undefined> {
   return (route, state) => {
     const convex = inject(CONVEX);
     const destroyRef = inject(DestroyRef);
 
-    const args = argsFn ? argsFn(route, state) : ({} as Query['_args']);
+    const args = argsFn ? argsFn(route, state) : ({} as FunctionArgs<Query>);
     if (args === skipToken) {
       return undefined;
     }

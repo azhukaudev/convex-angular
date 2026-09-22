@@ -1,5 +1,5 @@
 import { DestroyRef, EnvironmentInjector, Signal, inject } from '@angular/core';
-import { FunctionReference, FunctionReturnType } from 'convex/server';
+import { FunctionArgs, FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { ActionStatus } from '../types';
 import { createCallableState } from './callable-state';
@@ -43,7 +43,7 @@ export interface ActionResult<Action extends ActionReference> {
    * @param args - The arguments to pass to the action
    * @returns A promise that resolves with the action's return value or rejects with the action error
    */
-  run: (args: Action['_args']) => Promise<FunctionReturnType<Action>>;
+  run: (args: FunctionArgs<Action>) => Promise<FunctionReturnType<Action>>;
 
   /**
    * The data returned by the last successful action call.
@@ -130,7 +130,7 @@ export function injectAction<Action extends ActionReference>(
     destroyRef: inject(DestroyRef),
   }));
 
-  const state = createCallableState<Action['_args'], FunctionReturnType<Action>>(
+  const state = createCallableState<FunctionArgs<Action>, FunctionReturnType<Action>>(
     destroyRef,
     (args) => convex.action(action, args),
     options,

@@ -1,5 +1,5 @@
 import { DestroyRef, EnvironmentInjector, inject } from '@angular/core';
-import { FunctionReference } from 'convex/server';
+import { FunctionArgs, FunctionReference } from 'convex/server';
 
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
@@ -30,7 +30,7 @@ export interface PrewarmQueryOptions<Query extends PrewarmQueryReference> {
   /**
    * Callback invoked when the background subscription fails.
    */
-  onError?: (err: Error, args: Query['_args']) => void;
+  onError?: (err: Error, args: FunctionArgs<Query>) => void;
 }
 
 /**
@@ -47,7 +47,7 @@ export interface PrewarmQueryResult<Query extends PrewarmQueryReference> {
    * result arrives, and during server-side rendering where prewarming is a
    * no-op. The return value can be ignored for fire-and-forget prewarming.
    */
-  prewarm: (args: Query['_args']) => Promise<boolean>;
+  prewarm: (args: FunctionArgs<Query>) => Promise<boolean>;
 }
 
 interface ActivePrewarm {
@@ -87,7 +87,7 @@ export function injectPrewarmQuery<Query extends PrewarmQueryReference>(
 
     destroyRef.onDestroy(() => cleanupAll());
 
-    const prewarm = (args: Query['_args']): Promise<boolean> => {
+    const prewarm = (args: FunctionArgs<Query>): Promise<boolean> => {
       // On a disabled client (server-side rendering) subscriptions are
       // no-ops and the cleanup timer would only delay SSR stability.
       if (convex.disabled) {

@@ -10,7 +10,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { FunctionReference, FunctionReturnType, getFunctionName } from 'convex/server';
+import { FunctionArgs, FunctionReference, FunctionReturnType, getFunctionName } from 'convex/server';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
@@ -33,7 +33,7 @@ export type QueryReference = FunctionReference<'query'>;
  */
 export type QueryPlaceholderData<Query extends QueryReference> =
   | FunctionReturnType<Query>
-  | ((args: Query['_args']) => FunctionReturnType<Query> | undefined);
+  | ((args: FunctionArgs<Query>) => FunctionReturnType<Query> | undefined);
 
 /**
  * Options for injectQuery.
@@ -206,7 +206,7 @@ export interface QueryResult<Query extends QueryReference> {
  */
 export function injectQuery<Query extends QueryReference>(
   query: Query,
-  argsFn: () => Query['_args'] | SkipToken,
+  argsFn: () => FunctionArgs<Query> | SkipToken,
   options?: QueryOptions<Query>,
 ): QueryResult<Query> {
   return runInResolvedInjectionContext(injectQuery, options?.injectRef, () => {
@@ -395,10 +395,10 @@ export function injectQuery<Query extends QueryReference>(
 // unambiguously a factory.
 function resolvePlaceholderData<Query extends QueryReference>(
   placeholderData: QueryPlaceholderData<Query> | undefined,
-  args: Query['_args'],
+  args: FunctionArgs<Query>,
 ): FunctionReturnType<Query> | undefined {
   if (typeof placeholderData === 'function') {
-    return (placeholderData as (args: Query['_args']) => FunctionReturnType<Query> | undefined)(args);
+    return (placeholderData as (args: FunctionArgs<Query>) => FunctionReturnType<Query> | undefined)(args);
   }
   return placeholderData;
 }

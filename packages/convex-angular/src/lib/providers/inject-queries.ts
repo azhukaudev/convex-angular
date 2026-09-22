@@ -10,7 +10,7 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { FunctionReturnType, getFunctionName } from 'convex/server';
+import { FunctionArgs, FunctionReturnType, getFunctionName } from 'convex/server';
 
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
@@ -26,7 +26,7 @@ import { runInResolvedInjectionContext } from './injection-context';
  */
 export interface QueryRequest<Query extends QueryReference = QueryReference> {
   query: Query;
-  args: Query['_args'];
+  args: FunctionArgs<Query>;
 }
 
 /**
