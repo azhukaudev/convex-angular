@@ -109,10 +109,10 @@ export function convexQueryResolver<Query extends QueryReference>(
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
       const dispose = () => {
-        if (disposed) {
-          return;
-        }
         disposed = true;
+        // The route injector outlives the navigation; drop the hook so it
+        // doesn't pin this closure (and the resolved value) for the whole session.
+        removeDestroyHook();
         clearTimeout(timeoutId);
         // A scope destroyed before the first result must not hang the
         // navigation; resolving undefined matches the error path's contract.
@@ -140,7 +140,7 @@ export function convexQueryResolver<Query extends QueryReference>(
         () => settle(undefined),
       );
 
-      destroyRef.onDestroy(dispose);
+      const removeDestroyHook = destroyRef.onDestroy(dispose);
     });
   };
 }

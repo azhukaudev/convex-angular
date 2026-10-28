@@ -1,4 +1,4 @@
-import { PLATFORM_ID } from '@angular/core';
+import { DestroyRef, PLATFORM_ID } from '@angular/core';
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
@@ -30,6 +30,27 @@ function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscr
     throw new Error('Expected a captured query subscription');
   }
   return subscription;
+}
+
+// The resolver runs in the route environment injector, which outlives every
+// navigation; count the destroy hooks that stay registered on it.
+function trackLiveDestroyHooks(): { live: () => number } {
+  const destroyRef = TestBed.inject(DestroyRef);
+  const original = destroyRef.onDestroy.bind(destroyRef);
+  let live = 0;
+  jest.spyOn(destroyRef, 'onDestroy').mockImplementation((callback: () => void) => {
+    live += 1;
+    const unregister = original(callback);
+    let removed = false;
+    return () => {
+      if (!removed) {
+        removed = true;
+        live -= 1;
+      }
+      unregister();
+    };
+  });
+  return { live: () => live };
 }
 
 describe('convexQueryResolver', () => {
@@ -146,7 +167,8 @@ describe('convexQueryResolver', () => {
     tick(5000);
     expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
 
-    // Now simulate the environment being torn down (the second trigger).
+    // Tearing the environment down afterwards must not unsubscribe again: whichever
+    // trigger fires first removes the destroy hook or clears the timer for the other.
     TestBed.resetTestingModule();
 
     expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
@@ -193,6 +215,37 @@ describe('convexQueryResolver', () => {
 
     expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
     expect(flush()).toBe(0);
+  }));
+
+  it('leaves no destroy hook behind after repeated resolves past the keep-warm window', fakeAsync(() => {
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+    const hooks = trackLiveDestroyHooks();
+
+    for (let i = 0; i < 10; i++) {
+      void Promise.resolve(runResolver(resolver));
+      tick();
+      requireLastQuerySubscription(convex).emit({ name: 'Ada' });
+      tick();
+      tick(5000);
+    }
+
+    expect(hooks.live()).toBe(0);
+  }));
+
+  it('holds its destroy hook while the subscription is warm and releases it with the timer', fakeAsync(() => {
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+    const hooks = trackLiveDestroyHooks();
+
+    void Promise.resolve(runResolver(resolver));
+    tick();
+    requireLastQuerySubscription(convex).emit({ name: 'Ada' });
+    tick(1000);
+
+    expect(hooks.live()).toBe(1);
+
+    tick(4000);
+
+    expect(hooks.live()).toBe(0);
   }));
 
   it('resolves undefined on a disabled client instead of hanging', fakeAsync(() => {

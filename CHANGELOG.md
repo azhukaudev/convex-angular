@@ -26,6 +26,7 @@
 - `convex-angular/better-auth`: a superseded token exchange no longer writes shared error state — a stale failure could surface through `injectAuth().error()` even though the current request had already succeeded, and a stale success could clear an error the current request had just recorded. 1.10.0 scoped the token cache this way; the error state now matches.
 - `injectMutation().mutate()`/`injectAction().run()` called from inside an Angular `effect()` no longer registers the internal version counter as a dependency of that effect and re-triggers it; the version reads are now `untracked()`.
 - `injectPaginatedQuery()`'s `loadMore()` called after the owning scope is destroyed now returns `false`, matching the documented contract, instead of throwing from the retained client closure.
+- Auth guards (`convexAuthGuard`, `convexUnauthGuard`, `createConvexAuthGuard()`) and `convexQueryResolver()` no longer leave a registration on the route's environment injector after every navigation. The guards leaked one live effect per check — re-run on every later auth-status change — and the resolver one destroy hook that kept the resolved value reachable, so memory and per-auth-transition work grew with navigation count in long-lived apps.
 
 ### 🏡 Chore
 

@@ -1,4 +1,4 @@
-import { Component, EnvironmentProviders, Provider } from '@angular/core';
+import { Component, DestroyRef, EnvironmentProviders, Provider } from '@angular/core';
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { Router, Routes, provideRouter } from '@angular/router';
 import {
@@ -399,6 +399,99 @@ describe('Auth Guards', () => {
       flush();
 
       expect(router.url).toBe('/auth/signin?returnUrl=%2Fadmin');
+    }));
+  });
+
+  describe('registration hygiene', () => {
+    const NAVIGATIONS = 10;
+
+    // Guards run in the route environment injector, which outlives every
+    // navigation; count the destroy hooks that stay registered on it.
+    function trackLiveDestroyHooks(): { live: () => number } {
+      const destroyRef = TestBed.inject(DestroyRef);
+      const original = destroyRef.onDestroy.bind(destroyRef);
+      let live = 0;
+      jest.spyOn(destroyRef, 'onDestroy').mockImplementation((callback: () => void) => {
+        live += 1;
+        const unregister = original(callback);
+        let removed = false;
+        return () => {
+          if (!removed) {
+            removed = true;
+            live -= 1;
+          }
+          unregister();
+        };
+      });
+      return { live: () => live };
+    }
+
+    function bounceBetween(router: Router, guarded: string): void {
+      for (let i = 0; i < NAVIGATIONS; i++) {
+        router.navigateByUrl(guarded);
+        tick();
+        flush();
+        router.navigateByUrl('/');
+        tick();
+        flush();
+      }
+    }
+
+    it('leaves no registration behind after convexAuthGuard checks', fakeAsync(() => {
+      provider.signIn();
+      const router = setupGuardTestBed([
+        { path: '', component: BlankComponent },
+        { path: 'dashboard', component: BlankComponent, canActivate: [convexAuthGuard] },
+        { path: 'login', component: BlankComponent },
+      ]);
+      authenticateAndNavigate(router, '/dashboard');
+      expect(router.url).toBe('/dashboard');
+      router.navigateByUrl('/');
+      tick();
+      flush();
+      const hooks = trackLiveDestroyHooks();
+
+      bounceBetween(router, '/dashboard');
+
+      expect(router.url).toBe('/');
+      expect(hooks.live()).toBe(0);
+    }));
+
+    it('leaves no registration behind after convexUnauthGuard checks', fakeAsync(() => {
+      const router = setupGuardTestBed([
+        { path: '', component: BlankComponent },
+        { path: 'login', component: BlankComponent, canActivate: [convexUnauthGuard] },
+      ]);
+      router.navigateByUrl('/');
+      tick();
+      flush();
+      const hooks = trackLiveDestroyHooks();
+
+      bounceBetween(router, '/login');
+
+      expect(router.url).toBe('/');
+      expect(hooks.live()).toBe(0);
+    }));
+
+    it('leaves no registration behind after createConvexAuthGuard checks with allow', fakeAsync(() => {
+      convex.seedAuth({ token: 'jwt-token', decoded: { role: 'admin' } });
+      provider.signIn();
+      const router = setupGuardTestBed([
+        { path: '', component: BlankComponent },
+        { path: 'admin', component: BlankComponent, canActivate: [createConvexAuthGuard({ allow: () => true })] },
+        { path: 'login', component: BlankComponent },
+      ]);
+      authenticateAndNavigate(router, '/admin');
+      expect(router.url).toBe('/admin');
+      router.navigateByUrl('/');
+      tick();
+      flush();
+      const hooks = trackLiveDestroyHooks();
+
+      bounceBetween(router, '/admin');
+
+      expect(router.url).toBe('/');
+      expect(hooks.live()).toBe(0);
     }));
   });
 

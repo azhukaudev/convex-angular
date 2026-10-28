@@ -1,5 +1,4 @@
-import { InjectionToken, inject } from '@angular/core';
-import { toObservable } from '@angular/core/rxjs-interop';
+import { InjectionToken, Injector, effect, inject, untracked } from '@angular/core';
 import { CanActivateFn, CanMatchFn, Router, UrlTree } from '@angular/router';
 import { Observable } from 'rxjs';
 import { filter, map, take } from 'rxjs/operators';
@@ -101,8 +100,25 @@ function navigationTargetUrl(router: Router): string {
 // Every guard decision starts the same way: wait for auth to settle, then
 // decide once. Claims-gated guards also wait out a token refresh so `allow`
 // never reads claims from a token the server already rejected.
-function settledAuthStatus$(auth: ConvexAuthState, waitForRefresh: boolean): Observable<ConvexAuthStatus> {
-  return toObservable(auth.status).pipe(
+function settledAuthStatus$(
+  auth: ConvexAuthState,
+  waitForRefresh: boolean,
+  injector: Injector,
+): Observable<ConvexAuthStatus> {
+  // Not toObservable(): its effect is released only when the injector is
+  // destroyed, and guards run in the long-lived route environment injector,
+  // so each guard check would leak one live effect.
+  const status$ = new Observable<ConvexAuthStatus>((subscriber) => {
+    const watcher = effect(
+      () => {
+        const status = auth.status();
+        untracked(() => subscriber.next(status));
+      },
+      { injector },
+    );
+    return () => watcher.destroy();
+  });
+  return status$.pipe(
     filter((status) => status !== 'loading' && !(waitForRefresh && status === 'refreshing')),
     take(1),
   );
@@ -142,12 +158,13 @@ export function createConvexAuthGuard(options?: ConvexAuthGuardOptions): CanActi
     const auth = injectAuth();
     const router = inject(Router);
     const config = inject(CONVEX_AUTH_GUARD_CONFIG, { optional: true });
+    const injector = inject(Injector);
 
     const loginRoute = options?.loginRoute ?? config?.loginRoute ?? '/login';
     const returnUrl = navigationTargetUrl(router);
     const allow = options?.allow;
 
-    return settledAuthStatus$(auth, allow !== undefined).pipe(
+    return settledAuthStatus$(auth, allow !== undefined, injector).pipe(
       map((status) => {
         // 'refreshing' counts as authenticated — it only ever occurs while
         // the user is still authenticated (the backend rejected a previously
@@ -242,8 +259,9 @@ export const convexUnauthGuard: CanActivateFn & CanMatchFn = (): Observable<bool
   const auth = injectAuth();
   const router = inject(Router);
   const config = inject(CONVEX_AUTH_GUARD_CONFIG, { optional: true });
+  const injector = inject(Injector);
 
-  return settledAuthStatus$(auth, false).pipe(
+  return settledAuthStatus$(auth, false, injector).pipe(
     map((status) => (status === 'unauthenticated' ? true : router.parseUrl(config?.authenticatedRoute ?? '/'))),
   );
 };
