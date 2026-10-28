@@ -2,6 +2,7 @@ import { isPlatformServer } from '@angular/common';
 import {
   DestroyRef,
   EnvironmentInjector,
+  ErrorHandler,
   PLATFORM_ID,
   Signal,
   computed,
@@ -26,6 +27,7 @@ import { ConvexHydrationState, serializeQueryArgs } from '../ssr/state-transfer'
 import { PaginatedQueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
+import { runUserCallback } from './user-callback';
 
 /**
  * A FunctionReference that is usable with injectPaginatedQuery.
@@ -229,6 +231,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   return runInResolvedInjectionContext(injectPaginatedQuery, options.injectRef, () => {
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
+    const errorHandler = inject(ErrorHandler);
     const isServer = isPlatformServer(inject(PLATFORM_ID));
     // Both services are registered by provideConvex(...); optional injection
     // keeps setups that only provide the CONVEX token working.
@@ -372,7 +375,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
           // Call success callback (not during LoadingFirstPage as we don't have complete results yet)
           if (result.status !== 'LoadingFirstPage') {
-            options.onSuccess?.(result.results);
+            runUserCallback(errorHandler, () => options.onSuccess?.(result.results));
           }
         },
         (err: Error) => {
@@ -386,7 +389,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
           isLoadingMore.set(false);
           canLoadMore.set(currentLoadMore !== undefined);
           isExhausted.set(false);
-          options.onError?.(err);
+          runUserCallback(errorHandler, () => options.onError?.(err));
         },
       );
     };
@@ -451,7 +454,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
               }
 
               applyFirstPage(firstPage);
-              options.onSuccess?.(firstPage.page);
+              runUserCallback(errorHandler, () => options.onSuccess?.(firstPage.page));
             },
             (err: Error) => {
               if (generation !== activeGeneration) {
@@ -460,7 +463,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
               error.set(err);
               isLoadingFirstPage.set(false);
-              options.onError?.(err);
+              runUserCallback(errorHandler, () => options.onError?.(err));
             },
           );
         }

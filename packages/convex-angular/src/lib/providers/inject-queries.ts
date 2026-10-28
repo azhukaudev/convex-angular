@@ -2,6 +2,7 @@ import { isPlatformServer } from '@angular/common';
 import {
   DestroyRef,
   EnvironmentInjector,
+  ErrorHandler,
   PLATFORM_ID,
   Signal,
   computed,
@@ -20,6 +21,7 @@ import { readInitialQueryData } from './initial-query-data';
 import { injectConvex } from './inject-convex';
 import { QueryReference } from './inject-query';
 import { runInResolvedInjectionContext } from './injection-context';
+import { runUserCallback } from './user-callback';
 
 /**
  * A keyed query request used by injectQueries.
@@ -168,6 +170,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
   return runInResolvedInjectionContext(injectQueries, options?.injectRef, () => {
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
+    const errorHandler = inject(ErrorHandler);
     const isServer = isPlatformServer(inject(PLATFORM_ID));
     // Both services are registered by provideConvex(...); optional injection
     // keeps setups that only provide the CONVEX token working.
@@ -270,7 +273,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
           results.update((current) => setKey(current, key, result));
           errors.update((current) => setKey(current, key, undefined));
           statuses.update((current) => setKey(current, key, 'success'));
-          options?.onSuccess?.(key, result);
+          runUserCallback(errorHandler, () => options?.onSuccess?.(key, result));
         };
         const fail = (error: Error) => {
           if (activeSubscriptions.get(key) !== subscription) {
@@ -279,7 +282,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
 
           errors.update((current) => setKey(current, key, error));
           statuses.update((current) => setKey(current, key, 'error'));
-          options?.onError?.(key, error);
+          runUserCallback(errorHandler, () => options?.onError?.(key, error));
         };
 
         // Server-side rendering: the WebSocket client is disabled, so each

@@ -27,6 +27,7 @@
 - `injectMutation().mutate()`/`injectAction().run()` called from inside an Angular `effect()` no longer registers the internal version counter as a dependency of that effect and re-triggers it; the version reads are now `untracked()`.
 - `injectPaginatedQuery()`'s `loadMore()` called after the owning scope is destroyed now returns `false`, matching the documented contract, instead of throwing from the retained client closure.
 - Auth guards (`convexAuthGuard`, `convexUnauthGuard`, `createConvexAuthGuard()`) and `convexQueryResolver()` no longer leave a registration on the route's environment injector after every navigation. The guards leaked one live effect per check — re-run on every later auth-status change — and the resolver one destroy hook that kept the resolved value reachable, so memory and per-auth-transition work grew with navigation count in long-lived apps.
+- A throwing `onSuccess`/`onError` callback no longer corrupts the operation it observes. On `injectMutation()`/`injectAction()`, an `onSuccess` throw used to mark a committed mutation as failed — `error()` set, `onError` fired, `mutate()`/`run()` rejected — and an `onError` throw replaced the rejection value; on `injectQuery()`/`injectQueries()`/`injectPaginatedQuery()` it aborted the Convex client's dispatch for every later subscriber of that update. Callback errors are now reported to Angular's `ErrorHandler` instead. Code that relied on `mutate()` rejecting when `onSuccess` throws must handle that error in the callback.
 
 ### 🏡 Chore
 

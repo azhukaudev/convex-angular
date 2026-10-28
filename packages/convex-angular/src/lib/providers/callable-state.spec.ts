@@ -1,4 +1,4 @@
-import { DestroyRef } from '@angular/core';
+import { DestroyRef, ErrorHandler } from '@angular/core';
 
 import { CallableState, createCallableState } from './callable-state';
 
@@ -24,9 +24,11 @@ describe('createCallableState', () => {
   let invoke: jest.Mock;
   let onSuccess: jest.Mock;
   let onError: jest.Mock;
+  let handleError: jest.Mock;
+  let errorHandler: ErrorHandler;
 
   function create(): CallableState<{ title: string }, string> {
-    return createCallableState<{ title: string }, string>(destroyRef, invoke, { onSuccess, onError });
+    return createCallableState<{ title: string }, string>(destroyRef, errorHandler, invoke, { onSuccess, onError });
   }
 
   function destroyScope() {
@@ -46,6 +48,8 @@ describe('createCallableState', () => {
     invoke = jest.fn();
     onSuccess = jest.fn();
     onError = jest.fn();
+    handleError = jest.fn();
+    errorHandler = { handleError } as unknown as ErrorHandler;
   });
 
   describe('initial state', () => {
@@ -112,6 +116,43 @@ describe('createCallableState', () => {
       await expect(state.execute({ title: 'Todo' })).rejects.toBeInstanceOf(Error);
 
       expect(state.error()?.message).toBe('plain string failure');
+    });
+  });
+
+  describe('throwing callbacks', () => {
+    it('resolves with the result and reports to the ErrorHandler when onSuccess throws', async () => {
+      const callbackError = new Error('onSuccess blew up');
+      invoke.mockResolvedValue('id-1');
+      onSuccess.mockImplementation(() => {
+        throw callbackError;
+      });
+      const state = create();
+
+      await expect(state.execute({ title: 'Todo' })).resolves.toBe('id-1');
+
+      expect(state.status()).toBe('success');
+      expect(state.data()).toBe('id-1');
+      expect(state.error()).toBeUndefined();
+      expect(onError).not.toHaveBeenCalled();
+      expect(handleError).toHaveBeenCalledTimes(1);
+      expect(handleError).toHaveBeenCalledWith(callbackError);
+    });
+
+    it('rejects with the server error, not the callback error, when onError throws', async () => {
+      const serverError = new Error('mutation failed');
+      const callbackError = new Error('onError blew up');
+      invoke.mockRejectedValue(serverError);
+      onError.mockImplementation(() => {
+        throw callbackError;
+      });
+      const state = create();
+
+      await expect(state.execute({ title: 'Todo' })).rejects.toBe(serverError);
+
+      expect(state.error()).toBe(serverError);
+      expect(state.status()).toBe('error');
+      expect(handleError).toHaveBeenCalledTimes(1);
+      expect(handleError).toHaveBeenCalledWith(callbackError);
     });
   });
 

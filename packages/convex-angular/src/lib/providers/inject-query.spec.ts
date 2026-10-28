@@ -1,4 +1,4 @@
-import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
+import { Component, EnvironmentInjector, ErrorHandler, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
@@ -1501,6 +1501,66 @@ describe('injectQuery', () => {
       requireLastQuerySubscription(convex).emitError(error);
 
       expect(onError).toHaveBeenCalledWith(error);
+    }));
+
+    it('should keep the update and report to the ErrorHandler when onSuccess throws', fakeAsync(() => {
+      const callbackError = new Error('onSuccess blew up');
+      const handleError = jest.fn();
+      TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          onSuccess: () => {
+            throw callbackError;
+          },
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const mockData = [{ _id: '1', title: 'Todo' }];
+      expect(() => requireLastQuerySubscription(convex).emit(mockData)).not.toThrow();
+
+      expect(fixture.componentInstance.todos.data()).toEqual(mockData);
+      expect(fixture.componentInstance.todos.status()).toBe('success');
+      expect(handleError).toHaveBeenCalledTimes(1);
+      expect(handleError).toHaveBeenCalledWith(callbackError);
+    }));
+
+    it('should keep the error state and report to the ErrorHandler when onError throws', fakeAsync(() => {
+      const callbackError = new Error('onError blew up');
+      const handleError = jest.fn();
+      TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectQuery(mockQuery, () => ({ count: 10 }), {
+          onError: () => {
+            throw callbackError;
+          },
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const queryError = new Error('Query failed');
+      expect(() => requireLastQuerySubscription(convex).emitError(queryError)).not.toThrow();
+
+      expect(fixture.componentInstance.todos.error()).toBe(queryError);
+      expect(fixture.componentInstance.todos.status()).toBe('error');
+      expect(handleError).toHaveBeenCalledTimes(1);
+      expect(handleError).toHaveBeenCalledWith(callbackError);
     }));
 
     it('should work without options parameter', fakeAsync(() => {

@@ -1,4 +1,4 @@
-import { Component, EnvironmentInjector, createEnvironmentInjector, effect, signal } from '@angular/core';
+import { Component, EnvironmentInjector, ErrorHandler, createEnvironmentInjector, effect, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockCallableCall, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
@@ -383,6 +383,37 @@ describe('injectMutation', () => {
       tick();
 
       expect(onError).not.toHaveBeenCalled();
+    }));
+
+    it('should resolve and report to the ErrorHandler when onSuccess throws', fakeAsync(() => {
+      const callbackError = new Error('onSuccess blew up');
+      const handleError = jest.fn();
+      TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly addTodo = injectMutation(mockMutation, {
+          onSuccess: () => {
+            throw callbackError;
+          },
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      const resolved = jest.fn();
+      const rejected = jest.fn();
+      fixture.componentInstance.addTodo.mutate({ title: 'test' }).then(resolved, rejected);
+      requireCall(convex.mutationCalls).resolve({ id: '123' });
+      tick();
+
+      expect(resolved).toHaveBeenCalledWith({ id: '123' });
+      expect(rejected).not.toHaveBeenCalled();
+      expect(handleError).toHaveBeenCalledWith(callbackError);
     }));
   });
 

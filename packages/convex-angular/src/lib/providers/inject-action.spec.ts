@@ -1,4 +1,4 @@
-import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
+import { Component, EnvironmentInjector, ErrorHandler, createEnvironmentInjector } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockCallableCall, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
@@ -384,6 +384,37 @@ describe('injectAction', () => {
       tick();
 
       expect(onError).not.toHaveBeenCalled();
+    }));
+
+    it('should resolve and report to the ErrorHandler when onSuccess throws', fakeAsync(() => {
+      const callbackError = new Error('onSuccess blew up');
+      const handleError = jest.fn();
+      TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly sendEmail = injectAction(mockAction, {
+          onSuccess: () => {
+            throw callbackError;
+          },
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+
+      const resolved = jest.fn();
+      const rejected = jest.fn();
+      fixture.componentInstance.sendEmail.run({ message: 'test' }).then(resolved, rejected);
+      requireCall(convex.actionCalls).resolve({ success: true });
+      tick();
+
+      expect(resolved).toHaveBeenCalledWith({ success: true });
+      expect(rejected).not.toHaveBeenCalled();
+      expect(handleError).toHaveBeenCalledWith(callbackError);
     }));
   });
 

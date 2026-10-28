@@ -1,4 +1,4 @@
-import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
+import { Component, EnvironmentInjector, ErrorHandler, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockConvexClient, MockPaginatedSubscription, provideConvexTesting } from 'convex-angular/testing';
 import { ConvexClient } from 'convex/browser';
@@ -1537,6 +1537,42 @@ describe('injectPaginatedQuery', () => {
       fixture.detectChanges();
 
       expect(onSuccess).toHaveBeenCalledWith(mockResults);
+    }));
+
+    it('should keep the update and report to the ErrorHandler when onSuccess throws', fakeAsync(() => {
+      const callbackError = new Error('onSuccess blew up');
+      const handleError = jest.fn();
+      TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+          onSuccess: () => {
+            throw callbackError;
+          },
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const mockResults = [{ _id: '1', name: 'Todo 1' }];
+      expect(() =>
+        requireLastPaginatedSubscription(convex).emit({
+          results: mockResults,
+          status: 'CanLoadMore',
+          loadMore: () => false,
+        }),
+      ).not.toThrow();
+
+      expect(fixture.componentInstance.todos.results()).toEqual(mockResults);
+      expect(handleError).toHaveBeenCalledTimes(1);
+      expect(handleError).toHaveBeenCalledWith(callbackError);
     }));
 
     it('should not call onSuccess during LoadingFirstPage status', fakeAsync(() => {

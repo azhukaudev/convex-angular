@@ -123,6 +123,13 @@ export const complete = mutation({
 is _not_ a `ConvexError` is a transport failure, an argument-validation failure, or an uncaught
 exception in your function, and should generally be reported rather than shown verbatim to the user.
 
+## Errors thrown by your callbacks
+
+An exception thrown from `onSuccess` or `onError`, on any query, mutation or action helper, is
+passed to Angular's `ErrorHandler`. It does not change `data()`, `error()` or `status()`, it does
+not make `mutate()` or `run()` reject, and it does not stop other subscribers from receiving the
+update. Handle failures inside the callback if you need to react to them.
+
 ## Related
 
 - [Status and state](/concepts/status-and-state/) — how `'error'` is derived and what it hides.

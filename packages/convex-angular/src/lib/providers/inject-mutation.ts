@@ -1,4 +1,4 @@
-import { DestroyRef, EnvironmentInjector, Signal, inject } from '@angular/core';
+import { DestroyRef, EnvironmentInjector, ErrorHandler, Signal, inject } from '@angular/core';
 import { OptimisticUpdate } from 'convex/browser';
 import { FunctionArgs, FunctionReference, FunctionReturnType } from 'convex/server';
 
@@ -139,13 +139,19 @@ export function injectMutation<Mutation extends MutationReference>(
   mutation: Mutation,
   options?: MutationOptions<Mutation>,
 ): MutationResult<Mutation> {
-  const { convex, destroyRef } = runInResolvedInjectionContext(injectMutation, options?.injectRef, () => ({
-    convex: injectConvex(),
-    destroyRef: inject(DestroyRef),
-  }));
+  const { convex, destroyRef, errorHandler } = runInResolvedInjectionContext(
+    injectMutation,
+    options?.injectRef,
+    () => ({
+      convex: injectConvex(),
+      destroyRef: inject(DestroyRef),
+      errorHandler: inject(ErrorHandler),
+    }),
+  );
 
   const state = createCallableState<FunctionArgs<Mutation>, FunctionReturnType<Mutation>>(
     destroyRef,
+    errorHandler,
     (args) => convex.mutation(mutation, args, { optimisticUpdate: options?.optimisticUpdate }),
     options,
   );

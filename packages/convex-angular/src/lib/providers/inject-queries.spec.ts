@@ -1,6 +1,7 @@
 import {
   Component,
   EnvironmentInjector,
+  ErrorHandler,
   PLATFORM_ID,
   TransferState,
   createEnvironmentInjector,
@@ -667,6 +668,41 @@ describe('injectQueries', () => {
       requireQuerySubscription(convex, { userId: 'user-1' }).emitError(queryError);
 
       expect(onError).toHaveBeenCalledWith('user', queryError);
+    }));
+
+    it('keeps the update and reports to the ErrorHandler when onSuccess throws', fakeAsync(() => {
+      const callbackError = new Error('onSuccess blew up');
+      const handleError = jest.fn();
+      TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly queries = injectQueries(
+          () => ({
+            user: { query: mockUserQuery, args: { userId: 'user-1' } },
+            todos: { query: mockTodosQuery, args: { count: 10 } },
+          }),
+          {
+            onSuccess: () => {
+              throw callbackError;
+            },
+          },
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      expect(() => requireQuerySubscription(convex, { userId: 'user-1' }).emit({ name: 'Ada' })).not.toThrow();
+
+      expect(fixture.componentInstance.queries.results().user).toEqual({ name: 'Ada' });
+      expect(fixture.componentInstance.queries.statuses().user).toBe('success');
+      expect(handleError).toHaveBeenCalledTimes(1);
+      expect(handleError).toHaveBeenCalledWith(callbackError);
     }));
   });
 
