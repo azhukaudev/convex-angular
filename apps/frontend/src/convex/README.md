@@ -1,90 +1,38 @@
-# Welcome to your Convex functions directory!
+# Demo Convex backend
 
-Write your Convex functions here.
-See https://docs.convex.dev/functions for more.
+This directory holds the Convex functions for the `convex-angular` demo app, including the Better Auth wiring in
+`auth.ts`.
 
-A query function that takes two arguments looks like:
+## Required deployment environment variables
 
-```ts
-// convex/myFunctions.ts
-import { v } from 'convex/values';
+These variables are set on the Convex deployment, not in `.env.local`. `auth.ts` reads them at module load and throws
+if one is missing or empty, so a push fails with `Missing required environment variable <NAME>` until they are set.
 
-import { query } from './_generated/server';
+- `CONVEX_SITE_URL`: provided by Convex automatically. Do not set it yourself.
+- `SITE_URL`: the origin the Angular demo is served from. It is used as the trusted origin and the cross-domain target.
+- `BETTER_AUTH_SECRET`: a long random secret used to sign sessions. Generate one with `openssl rand -base64 32`.
 
-export const myQueryFunction = query({
-  // Validators for arguments.
-  args: {
-    first: v.number(),
-    second: v.string(),
-  },
+Set them with the Convex CLI:
 
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Read the database as many times as you need here.
-    // See https://docs.convex.dev/database/reading-data.
-    const documents = await ctx.db.query('tablename').collect();
-
-    // Arguments passed from the client are properties of the args object.
-    console.log(args.first, args.second);
-
-    // Write arbitrary JavaScript here: filter, aggregate, build derived data,
-    // remove non-public properties, or create new objects.
-    return documents;
-  },
-});
+```sh
+npx convex env set SITE_URL <origin>
+npx convex env set BETTER_AUTH_SECRET <secret>
 ```
 
-Using this query function in a React component looks like:
+Never commit a real secret or paste one into a file in this repository.
 
-```ts
-const data = useQuery(api.myFunctions.myQueryFunction, {
-  first: 10,
-  second: 'hello',
-});
-```
+## Better Auth version note
 
-A mutation function looks like:
+This demo stays on better-auth 1.6.x because `@convex-dev/better-auth` does not yet allow 1.7: its latest release peers
+`better-auth >=1.6.11 <1.7.0`.
 
-```ts
-// convex/myFunctions.ts
-import { v } from 'convex/values';
+The current critical and high better-auth advisories are fixed only in `better-auth >= 1.7.7`. They require Magic Link,
+a social or Generic OAuth provider, the OAuth Proxy plugin, or device authorization. The demo enables none of these; it
+uses only `emailAndPassword` plus the `crossDomain` and `convex` plugins.
 
-import { mutation } from './_generated/server';
+Do not add any of those features before upgrading to `better-auth >= 1.7.7`, which needs a `@convex-dev/better-auth`
+release that supports 1.7.
 
-export const myMutationFunction = mutation({
-  // Validators for arguments.
-  args: {
-    first: v.string(),
-    second: v.string(),
-  },
+## More about Convex functions
 
-  // Function implementation.
-  handler: async (ctx, args) => {
-    // Insert or modify documents in the database here.
-    // Mutations can also read from the database like queries.
-    // See https://docs.convex.dev/database/writing-data.
-    const message = { body: args.first, author: args.second };
-    const id = await ctx.db.insert('messages', message);
-
-    // Optionally, return a value from your mutation.
-    return await ctx.db.get(id);
-  },
-});
-```
-
-Using this mutation function in a React component looks like:
-
-```ts
-const mutation = useMutation(api.myFunctions.myMutationFunction);
-function handleButtonPress() {
-  // fire and forget, the most common way to use mutations
-  mutation({ first: 'Hello!', second: 'me' });
-  // OR
-  // use the result once the mutation has completed
-  mutation({ first: 'Hello!', second: 'me' }).then((result) => console.log(result));
-}
-```
-
-Use the Convex CLI to push your functions to a deployment. See everything
-the Convex CLI can do by running `npx convex -h` in your project root
-directory. To learn more, launch the docs with `npx convex docs`.
+See https://docs.convex.dev/functions for general Convex function documentation.

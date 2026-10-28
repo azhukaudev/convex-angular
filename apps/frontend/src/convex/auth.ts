@@ -6,9 +6,22 @@ import { components } from './_generated/api';
 import { query } from './_generated/server';
 import authConfig from './auth.config';
 
-const convexSiteUrl = process.env.CONVEX_SITE_URL ?? '';
-const siteUrl = process.env.SITE_URL ?? '';
-const betterAuthSecret = process.env.BETTER_AUTH_SECRET ?? '';
+// Fail the push/module load with a named error instead of running with an empty
+// value: an empty BETTER_AUTH_SECRET makes better-auth fall back to its public
+// default secret outside NODE_ENV=production.
+function requireEnv(name: keyof typeof process.env): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable ${name}. Set it with \`npx convex env set ${name} <value>\`.`,
+    );
+  }
+  return value;
+}
+
+const convexSiteUrl = requireEnv('CONVEX_SITE_URL');
+const siteUrl = requireEnv('SITE_URL');
+const betterAuthSecret = requireEnv('BETTER_AUTH_SECRET');
 
 export const authComponent = createClient(components.betterAuth);
 
