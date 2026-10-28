@@ -120,10 +120,14 @@ export function subscribeToPaginatedQuery<Query extends PaginatedQueryReference>
  * `PaginationOptions` at runtime, used as the grouping key for
  * `insertAtPosition`. Not part of the documented `PaginationOptions` type.
  *
+ * The client injects a number, and `ConvexClient` always injects `-1`
+ * (`simple_client.ts`), so every subscription made through `ConvexClient`
+ * shares one group.
+ *
  * @internal
  */
-export function paginationOptsId(value: PaginationOptions): string {
-  return (value as PaginationOptions & { id: string }).id;
+export function paginationOptsId(value: PaginationOptions): number {
+  return (value as PaginationOptions & { id: number }).id;
 }
 
 /**

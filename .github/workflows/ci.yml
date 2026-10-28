@@ -64,3 +64,30 @@ jobs:
           name: mutation-report
           path: reports/
           retention-days: 14
+
+  convex-peer-range:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        convex: ['1.42.1', 'latest']
+    # `latest` can fail to resolve on an upstream release day (pnpm 11's
+    # 1-day minimumReleaseAge default); it is an early warning, not a gate.
+    continue-on-error: ${{ matrix.convex == 'latest' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # reads the version from packageManager
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm add -w convex@${{ matrix.convex }}
+
+      - run: pnpm exec nx test convex-angular --skip-nx-cache
+
+      - run: pnpm typecheck && pnpm typecheck:spec

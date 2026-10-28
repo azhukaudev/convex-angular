@@ -1,13 +1,18 @@
 import { Provider } from '@angular/core';
-import { CONVEX } from 'convex-angular';
-import { ConnectionState, ConvexClient } from 'convex/browser';
+import { AuthTokenFetcher, CONVEX } from 'convex-angular';
+import type { BaseConvexClient, ConnectionState, ConvexClient } from 'convex/browser';
 import { getFunctionName } from 'convex/server';
+import type { Value } from 'convex/values';
 
 /**
  * The `ConvexClient` surface the library and its own specs actually call on
  * the client under the `CONVEX` token. This is what {@link MockConvexClient}
  * must keep satisfying; a drifted mock member becomes a compile error here
  * instead of a runtime surprise for a consumer.
+ *
+ * The four internal `client` members (`setAuth`, `clearAuth`, `hasAuth`,
+ * `localQueryResult`) are checked against the real `BaseConvexClient`, so a
+ * drifted upstream signature fails to compile here.
  *
  * Several members are narrower than the real `ConvexClient`, deliberately:
  *
@@ -43,16 +48,7 @@ type UsedConvexClientSurface = Pick<
     onUpdate: (result: unknown) => unknown,
     onError?: (err: Error) => unknown,
   ) => () => void;
-  client: {
-    setAuth: (
-      fetchToken: (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>,
-      onChange?: (isAuthenticated: boolean) => void,
-      onRefreshChange?: (isRefreshing: boolean) => void,
-    ) => void;
-    clearAuth: () => void;
-    hasAuth: () => boolean;
-    localQueryResult: (queryName: string, args?: Record<string, unknown>) => unknown;
-  };
+  client: Pick<BaseConvexClient, 'setAuth' | 'clearAuth' | 'hasAuth' | 'localQueryResult'>;
 };
 
 /**
@@ -176,7 +172,7 @@ export interface MockAuthRegistration {
    * for a token. The real client calls it synchronously inside setAuth and again
    * on expiry or rejection; the mock never calls it on its own.
    */
-  fetchToken: (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>;
+  fetchToken: AuthTokenFetcher;
   /**
    * Report the authentication outcome back to the helper. This is only the
    * notification; use {@link MockConvexClient.seedAuth} to give the client the
@@ -301,7 +297,7 @@ export class MockConvexClient {
   private readonly options: MockConvexClientOptions;
   private connectionStateValue = DEFAULT_CONNECTION_STATE;
   private readonly connectionStateListeners = new Set<(state: ConnectionState) => void>();
-  private readonly warmCache = new Map<string, { ok: unknown } | { err: Error }>();
+  private readonly warmCache = new Map<string, { ok: Value } | { err: Error }>();
   private authSnapshot: { token: string; decoded: Record<string, unknown> } | undefined;
   private clearAuthCallCount = 0;
   private hasAuthCallCount = 0;
@@ -323,7 +319,7 @@ export class MockConvexClient {
       return entry.ok;
     },
     setAuth: (
-      fetchToken: (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>,
+      fetchToken: AuthTokenFetcher,
       onChange?: (isAuthenticated: boolean) => void,
       onRefreshChange?: (isRefreshing: boolean) => void,
     ) => {
@@ -430,7 +426,9 @@ export class MockConvexClient {
    * before their subscription delivers.
    */
   seedQueryResult(queryName: string, args: Record<string, unknown>, result: unknown): void {
-    this.warmCache.set(`${queryName}:${stableStringify(args)}`, { ok: result });
+    // Public signature stays `unknown` (fixtures are often interface-typed);
+    // the real client's cache only ever holds Convex values.
+    this.warmCache.set(`${queryName}:${stableStringify(args)}`, { ok: result as Value });
   }
 
   /**
