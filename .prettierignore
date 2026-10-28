@@ -11,3 +11,6 @@ pnpm-lock.yaml
 # Convex codegen output — `convex dev` rewrites these in its own style, so
 # formatting them just churns the diff on every regeneration.
 apps/frontend/src/convex/_generated/
+
+# Local, git-ignored agent planning notes (not in CI checkouts).
+.superpowers/

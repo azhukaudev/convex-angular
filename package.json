@@ -21,8 +21,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "verify:quick": "pnpm run typecheck && pnpm run lint && pnpm run check:duplication && pnpm run check:deadcode",
-    "verify:ci": "pnpm run typecheck && nx run-many -t lint,test,build && pnpm run check:duplication && pnpm run check:deadcode",
-    "verify:full": "pnpm run typecheck && nx run-many -t lint,test,build && pnpm run check:duplication && pnpm run check:deadcode && pnpm run test:mutation",
+    "verify:ci": "pnpm run format:check && pnpm run typecheck && nx run-many -t lint,test,build && pnpm run check:duplication && pnpm run check:deadcode",
+    "verify:full": "pnpm run format:check && pnpm run typecheck && nx run-many -t lint,test,build && pnpm run check:duplication && pnpm run check:deadcode && pnpm run test:mutation",
     "prepare": "lefthook install",
     "update": "nx migrate latest"
   },

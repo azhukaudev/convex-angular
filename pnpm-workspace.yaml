@@ -24,61 +24,17 @@ allowBuilds:
   # sharp is never loaded and its native install script stays denied.
   sharp: false
   unrs-resolver: true
-minimumReleaseAgeExclude:
-  - jscpd@5.0.6
-  - '@angular/cdk@21.2.14'
-  - '@better-auth/core@1.6.22'
-  - '@better-auth/drizzle-adapter@1.6.22'
-  - '@better-auth/kysely-adapter@1.6.22'
-  - '@better-auth/memory-adapter@1.6.22'
-  - '@better-auth/mongo-adapter@1.6.22'
-  - '@better-auth/prisma-adapter@1.6.22'
-  - '@better-auth/telemetry@1.6.22'
-  - better-auth@1.6.22
-  - convex@1.41.0
-  - jest-preset-angular@17.0.0
-  - '@better-fetch/fetch@1.3.1'
-  - '@convex-dev/better-auth@0.12.5'
-  - '@swc/core-darwin-arm64@1.15.41'
-  - '@swc/core-darwin-x64@1.15.41'
-  - '@swc/core-linux-arm-gnueabihf@1.15.41'
-  - '@swc/core-linux-arm64-gnu@1.15.41'
-  - '@swc/core-linux-arm64-musl@1.15.41'
-  - '@swc/core-linux-ppc64-gnu@1.15.41'
-  - '@swc/core-linux-s390x-gnu@1.15.41'
-  - '@swc/core-linux-x64-gnu@1.15.41'
-  - '@swc/core-linux-x64-musl@1.15.41'
-  - '@swc/core-win32-arm64-msvc@1.15.41'
-  - '@swc/core-win32-ia32-msvc@1.15.41'
-  - '@swc/core-win32-x64-msvc@1.15.41'
-  - '@swc/core@1.15.41'
-  - better-call@1.3.7
-  - cpd-darwin-arm64@5.0.6
-  - cpd-darwin-x64@5.0.6
-  - cpd-linux-arm64-gnu@5.0.6
-  - cpd-linux-x64-gnu@5.0.6
-  - cpd-linux-x64-musl@5.0.6
-  - cpd-windows-x64-msvc@5.0.6
-  - material-symbols@0.45.7
-  - '@nx/angular@23.0.2'
-  - '@nx/devkit@23.0.2'
-  - '@nx/eslint-plugin@23.0.2'
-  - '@nx/eslint@23.0.2'
-  - '@nx/jest@23.0.2'
-  - '@nx/js@23.0.2'
-  - '@nx/module-federation@23.0.2'
-  - '@nx/nx-darwin-arm64@23.0.2'
-  - '@nx/nx-darwin-x64@23.0.2'
-  - '@nx/nx-freebsd-x64@23.0.2'
-  - '@nx/nx-linux-arm-gnueabihf@23.0.2'
-  - '@nx/nx-linux-arm64-gnu@23.0.2'
-  - '@nx/nx-linux-arm64-musl@23.0.2'
-  - '@nx/nx-linux-x64-gnu@23.0.2'
-  - '@nx/nx-linux-x64-musl@23.0.2'
-  - '@nx/nx-win32-arm64-msvc@23.0.2'
-  - '@nx/nx-win32-x64-msvc@23.0.2'
-  - '@nx/rspack@23.0.2'
-  - '@nx/web@23.0.2'
-  - '@nx/webpack@23.0.2'
-  - '@nx/workspace@23.0.2'
-  - nx@23.0.2
+# Release-age cooldown: pnpm will not install a version published less than
+# minimumReleaseAge minutes ago (1440 = 1 day) without approval. Strict mode
+# is set explicitly: without it pnpm installs a too-new version anyway and
+# silently appends it to minimumReleaseAgeExclude, which protects nothing.
+# Strict: an interactive install asks for approval (default No); CI and other
+# non-interactive installs fail with NO_MATURE_MATCHING_VERSION.
+# For a same-day security bump, approve at the prompt (pnpm then writes the
+# exact versions below) or add them by hand, e.g.
+#   minimumReleaseAgeExclude:
+#     - '@angular/router@21.2.25'
+# and remove them in a follow-up once the versions are a day old — every
+# entry disables the cooldown for that version.
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true

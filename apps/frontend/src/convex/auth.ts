@@ -12,9 +12,7 @@ const betterAuthSecret = process.env.BETTER_AUTH_SECRET ?? '';
 
 export const authComponent = createClient(components.betterAuth);
 
-export const createAuth = (
-  ctx: Parameters<typeof authComponent.adapter>[0],
-) => {
+export const createAuth = (ctx: Parameters<typeof authComponent.adapter>[0]) => {
   return betterAuth({
     baseURL: convexSiteUrl,
     secret: betterAuthSecret,
@@ -41,9 +39,7 @@ export const getCurrentUser = query({
       return null;
     }
 
-    const user = await authComponent.safeGetAuthUser(
-      ctx as Parameters<typeof authComponent.safeGetAuthUser>[0],
-    );
+    const user = await authComponent.safeGetAuthUser(ctx as Parameters<typeof authComponent.safeGetAuthUser>[0]);
     if (!user) {
       return null;
     }

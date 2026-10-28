@@ -24,7 +24,7 @@ Use pnpm. Prefer existing Nx targets and root scripts over ad hoc commands.
 - `nx test convex-angular -- -t "<test name>"` — filter tests by name.
 - `pnpm typecheck` — type-check all three library entry points.
 - `pnpm typecheck:spec` — type-check specs; Jest transpiles them without type-checking.
-- `pnpm lint` — lint all projects. The workspace is at zero errors and zero warnings; keep it there.
+- `pnpm lint` — lint all projects. The workspace is at zero errors and zero warnings; `maxWarnings: 0` in `nx.json` enforces it.
 - `pnpm format` / `pnpm format:check` — write or check Prettier formatting.
 - `pnpm check:duplication` — run jscpd over library and app sources.
 - `pnpm check:deadcode` — run knip; the expected baseline is zero findings.
@@ -42,7 +42,7 @@ Jest 30 uses `--testPathPatterns` (plural). A bare argument forwarded after `--`
 - Plain Markdown-only change: `pnpm format:check` is sufficient.
 - Any change under `apps/docs` — including `.mdx`, which is executable content, not prose: run `pnpm check:docs` (or `pnpm build:docs`). `format:check` alone is not sufficient there.
 
-CI runs `pnpm verify:ci` and `pnpm typecheck:spec` in one job, and the mutation suite (`pnpm test:mutation`) in a parallel job, for every pull request and push to `main`. `pnpm verify:full` (`verify:ci` plus the mutation suite) remains the single local everything-command. Treat CI's checks as required.
+`verify:ci` and `verify:full` start with `pnpm format:check`. CI runs `pnpm verify:ci` and `pnpm typecheck:spec` in one job, and the mutation suite (`pnpm test:mutation`) in a parallel job, for every pull request and push to `main`. `pnpm verify:full` (`verify:ci` plus the mutation suite) remains the single local everything-command. Treat CI's checks as required.
 
 Git hooks are managed by Lefthook. Pre-commit formats staged files and runs duplication/dead-code checks; pre-push runs lint, test, and build targets. Fix hook failures instead of bypassing them. `LEFTHOOK=0` is acceptable only during a rebase of already-reviewed commits.
 
