@@ -23,7 +23,7 @@ readonly addTodo = injectMutation(api.todos.create);
 
 ## Requirements
 
-- Angular `>=21.2.25 <22.0.0`
+- Angular `>=22.2.1 <23.0.0`
 - Convex `>=1.42.1 <2.0.0`
 - RxJS `>=7.8.0`
 

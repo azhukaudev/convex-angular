@@ -21,7 +21,8 @@
     "types": ["jest"],
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "ignoreDeprecations": "6.0"
   },
   "angularCompilerOptions": {
     "strictTemplates": true,

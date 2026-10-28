@@ -3,9 +3,10 @@
 # incompatible BetterFetch type identities and break the better-auth client
 # plugin types (crossDomainClient/convexClient) during the Angular build.
 # The docs site owns its own manifest so Astro's toolchain (Vite 8) resolves
-# independently of the Angular build (Vite 7.3.6, pinned exactly by
-# @angular/build). The root manifest stays the workspace root; overrides,
-# allowBuilds, and release-age settings below remain workspace-wide.
+# independently of the Angular build (Vite 8.3.0, pinned exactly by
+# @angular/build; the docs site currently resolves its own Vite 8.2.1). The
+# root manifest stays the workspace root; overrides, allowBuilds, and
+# release-age settings below remain workspace-wide.
 packages:
   - apps/docs
 overrides:

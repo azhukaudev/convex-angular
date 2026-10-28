@@ -68,6 +68,10 @@ const config: KnipConfig = {
     './profile/profile.component',
     './admin/admin.component',
     './login/login.component',
+    // tsconfig.base.json sets `types: ["*"]` (the TypeScript 6 migration pin that
+    // restores automatic @types inclusion); knip reads the wildcard as a module
+    // specifier it cannot resolve.
+    /^\*$/,
   ],
   ignoreDependencies: [
     // Fonts loaded via the project.json styles array, never imported from code
@@ -85,6 +89,12 @@ const config: KnipConfig = {
     'angular-eslint',
     'typescript-eslint',
     '@typescript-eslint/utils',
+    // Required at runtime: jest-preset-angular's preset selects
+    // `testEnvironment: 'jsdom'`, which Jest resolves to this package. The preset
+    // is spread into the jest configs, so knip never sees the reference. Knip
+    // previously counted it as used via @angular-devkit/build-angular's optional peer, which
+    // Angular 22 dropped.
+    'jest-environment-jsdom',
   ],
 };
 
