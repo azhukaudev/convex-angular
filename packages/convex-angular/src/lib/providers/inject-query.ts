@@ -50,10 +50,11 @@ export interface QueryOptions<Query extends QueryReference> {
   /**
    * Callback invoked when the query receives data.
    * Called on initial load and every subsequent update, including the
-   * one-shot fetch during server-side rendering. It is NOT called for data
-   * that only seeds the pending state — warm-cache values, data seeded from
-   * the server render during hydration, or `placeholderData` — the first
-   * live update after the WebSocket syncs fires it instead.
+   * one-shot fetch during server-side rendering. A warm-cache value fires it
+   * one macrotask after subscribe, when the client replays the cached result
+   * to the new listener. It is NOT called for data seeded from the server
+   * render during hydration or for `placeholderData` — the first live update
+   * after the WebSocket syncs fires it instead.
    * @param data - The return value of the query
    */
   onSuccess?: (data: FunctionReturnType<Query>) => void;

@@ -7,7 +7,8 @@ import { ConvexHydrationState } from '../ssr/state-transfer';
 /**
  * Data available for a query before its live subscription emits, with its
  * origin. A warm client-cache hit is a prefill (the query stays pending until
- * the subscription confirms); a transferred server-render result is settled
+ * the subscription delivers it — the client replays a warm-cache value on the
+ * next macrotask); a transferred server-render result is settled
  * (the helper reports success immediately so the hydrated UI matches the
  * server HTML); an error means the warm cache holds a failed result for this
  * exact query + args (the deployment already rejected it).

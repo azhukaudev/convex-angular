@@ -138,8 +138,8 @@ loadMore: (numItems: number) => boolean;
 ```
 
 It returns `false` when no request was started: nothing is subscribed yet, the query is
-skipped, a load is already in flight, the list is exhausted, or the live subscription has not
-synced.
+skipped, a load is already in flight, the list is exhausted, the live subscription has not
+synced, or the owning injection context has been destroyed.
 
 <Aside type="danger">
 **SSR/hydration gotcha.** After a server render, the first page is seeded from the

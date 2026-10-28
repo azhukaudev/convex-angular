@@ -27,7 +27,7 @@ function injectPrewarmQuery<Query extends PrewarmQueryReference>(
 
 ```ts
 interface PrewarmQueryResult<Query extends PrewarmQueryReference> {
-  prewarm: (args: Query['_args']) => Promise<boolean>;
+  prewarm: (args: FunctionArgs<Query>) => Promise<boolean>;
 }
 ```
 
@@ -38,11 +38,11 @@ helper covers every row in a list.
 
 ## `PrewarmQueryOptions`
 
-| Name                    | Type                                         | Default          | Description                                                                                                              |
-| ----------------------- | -------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `injectRef`             | `EnvironmentInjector`                        | ambient injector | Injector used to create the helper outside the current injection context. Its destruction disposes every active prewarm. |
-| `extendSubscriptionFor` | `number`                                     | `5000`           | Milliseconds to keep the background subscription alive after `prewarm()` is called.                                      |
-| `onError`               | `(err: Error, args: Query['_args']) => void` | —                | Invoked when a background subscription fails. Receives the args that were prewarmed.                                     |
+| Name                    | Type                                              | Default          | Description                                                                                                              |
+| ----------------------- | ------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `injectRef`             | `EnvironmentInjector`                             | ambient injector | Injector used to create the helper outside the current injection context. Its destruction disposes every active prewarm. |
+| `extendSubscriptionFor` | `number`                                          | `5000`           | Milliseconds to keep the background subscription alive after `prewarm()` is called.                                      |
+| `onError`               | `(err: Error, args: FunctionArgs<Query>) => void` | —                | Invoked when a background subscription fails. Receives the args that were prewarmed.                                     |
 
 <Aside type="tip">
   `extendSubscriptionFor` is read **per `prewarm()` call**, from the options object, at the moment the call is made.
@@ -61,7 +61,7 @@ row's prewarm failed.
 ## The `prewarm()` contract
 
 ```ts
-prewarm(args: Query['_args']): Promise<boolean>;
+prewarm(args: FunctionArgs<Query>): Promise<boolean>;
 ```
 
 | Resolves | When                                                                                                                                      |

@@ -61,7 +61,7 @@ The library exposes standalone `inject*` helpers and `provide*` environment prov
 - `src/lib/providers` — query, mutation, action, pagination, connection, and auth helpers.
 - `src/lib/providers/integrations` — auth-provider adapters.
 - `src/lib/guards` and `src/lib/directives` — router guards and structural auth directives.
-- `testing/src` — `MockConvexClient` and `provideConvexTesting()`.
+- `testing/src` — `MockConvexClient`, `provideConvexTesting()`, `MockConvexAuthProvider`, and `provideConvexAuthTesting()`.
 - `better-auth/src` — structurally typed Better Auth integration with no direct Better Auth package dependency in the published entry point.
 
 Preserve these patterns:
@@ -116,4 +116,4 @@ Code samples resist drift by being real files. Anything substantial lives in `ap
 
 Copy `.env.sample` to `.env.local` for local demo development. Environment values are injected by `apps/frontend/plugins/env-var-plugin.js`; never commit secrets.
 
-Releases use Nx release and the version in `packages/convex-angular/package.json`. Pushing a `v*` tag triggers the release workflow, which verifies, builds, checks tag/version consistency, and publishes with provenance. See RELEASING.md for the step-by-step release runbook.
+Releases are a manual version bump of `packages/convex-angular/package.json` plus a pushed `v*` tag. Do not run `nx release`; its leftover config would bump only the `dist/` manifest. Pushing the tag triggers the release workflow, which verifies, builds, checks tag/version consistency, and publishes with provenance (`npm publish`, not `nx release`). See RELEASING.md for the step-by-step release runbook.

@@ -10,6 +10,7 @@
 - Add `emitAfterUnsubscribe()`/`emitErrorAfterUnsubscribe()` to both `MockConvexClient` subscription records, for tests that target a helper's defensive staleness guard. The real client removes its listener synchronously on unsubscribe and can never deliver there, so these assert against behaviour a deployment does not produce.
 - Add `MockConvexClient.seedQueryError()` to seed the warm cache with a failed result: `client.localQueryResult()` throws it, and `query()` rejects with it, matching the real client's behavior for a warmed query that failed on the server.
 - Add `MockConvexAuthProvider` and `provideConvexAuthTesting()` to `convex-angular/testing`: a driveable `ConvexAuthProvider` double (`setLoading()`, `signIn()`/`signOut()`, `setError()`, `bumpReauth()`, `failNextFetch()`) plus one-call registration under `CONVEX_AUTH` alongside `provideConvexAuth()`, so `injectAuth()`, the auth directives, and the route guards no longer need a hand-rolled `ConvexAuthProvider` literal in every test. The double is deliberately inert — it never flips its own state, so `MockAuthRegistration` still drives Convex's side of the handshake.
+- `convex-angular/testing`: `MockCallableCall.reject()` now accepts any rejection value (`unknown`), not only an `Error`.
 
 ### ⚠️ Breaking Changes
 
@@ -30,6 +31,14 @@
 - A throwing `onSuccess`/`onError` callback no longer corrupts the operation it observes. On `injectMutation()`/`injectAction()`, an `onSuccess` throw used to mark a committed mutation as failed — `error()` set, `onError` fired, `mutate()`/`run()` rejected — and an `onError` throw replaced the rejection value; on `injectQuery()`/`injectQueries()`/`injectPaginatedQuery()` it aborted the Convex client's dispatch for every later subscriber of that update. Callback errors are now reported to Angular's `ErrorHandler` instead. Code that relied on `mutate()` rejecting when `onSuccess` throws must handle that error in the callback.
 - `provideConvex()` now forwards `skipConvexDeploymentUrlCheck` and `logger` to the `ConvexHttpClient` it creates for server-side rendering. Previously only the browser `ConvexClient` received them, so a deployment URL that needs `skipConvexDeploymentUrlCheck: true` worked in the browser but failed the server render, and a custom or disabled `logger` was ignored for server-side query logs.
 - `injectAuth()`: signals an auth provider's `fetchAccessToken()` reads before its first `await` no longer become dependencies of the internal auth sync effect. The Convex client fetches the first token synchronously inside `setAuth`, so a change to such a signal (for example Clerk's `sessionAudience`) re-ran the whole auth setup, and a provider whose fetcher wrote a signal it also read could loop.
+
+### 📖 Documentation
+
+- The full reference moved out of the package README into the new documentation site, whose sources live at https://github.com/azhukaudev/convex-angular/tree/main/apps/docs/src/content/docs. The README (also shown on npm) is now a short overview.
+- Corrected the `ssr.transferAuthenticatedResults` guidance. 1.10.0 described `false` as keeping authenticated results out of "the rendered HTML", but it only keeps them out of the TransferState payload; the markup is still rendered from the user's data, so `Cache-Control: private`/`no-store` is required whenever `authToken` applies.
+- Corrected the documented `onSuccess` timing for warm-cache hits: it fires one macrotask after subscribe, from the Convex client's local replay of the cached value, not after a server round-trip. Transferred server data and `placeholderData` are unchanged. `MockConvexClient` does not replay seeded results, so tests still drive that delivery with `emit()`.
+- Clarified that route guards and `createConvexAuthGuard({ allow })` are client-side navigation gating, not a security boundary; data access must be enforced in Convex functions with `ctx.auth.getUserIdentity()`. Also documented that `returnUrl` must be validated before navigating.
+- Replaced the deprecated `Query['_args']`/`Action['_args']` slot with `FunctionArgs<…>` in the documented signatures, and made `check:docs` fail if it reappears in the docs content.
 
 ### 🏡 Chore
 

@@ -47,15 +47,15 @@ from an injection context or pass an explicit `injectRef`.
 `ActionResult<Action>` is the mutation surface with `run()` in place of
 `mutate()`:
 
-| Name        | Type                                                             | Description                                                                       |
-| ----------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `run`       | `(args: Action['_args']) => Promise<FunctionReturnType<Action>>` | Runs the action. Resolves with its return value, rejects on failure.              |
-| `data`      | `Signal<FunctionReturnType<Action> \| undefined>`                | Return value of the last successful call.                                         |
-| `error`     | `Signal<Error \| undefined>`                                     | Error from the last failed call.                                                  |
-| `isLoading` | `Signal<boolean>`                                                | `true` while the latest call is in flight.                                        |
-| `isSuccess` | `Signal<boolean>`                                                | `true` only when a call has completed, nothing is loading, and there is no error. |
-| `status`    | `Signal<ActionStatus>`                                           | `'idle' \| 'pending' \| 'success' \| 'error'`.                                    |
-| `reset`     | `() => void`                                                     | Clears `data`, `error`, and `isLoading`, and returns `status` to `'idle'`.        |
+| Name        | Type                                                                  | Description                                                                       |
+| ----------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `run`       | `(args: FunctionArgs<Action>) => Promise<FunctionReturnType<Action>>` | Runs the action. Resolves with its return value, rejects on failure.              |
+| `data`      | `Signal<FunctionReturnType<Action> \| undefined>`                     | Return value of the last successful call.                                         |
+| `error`     | `Signal<Error \| undefined>`                                          | Error from the last failed call.                                                  |
+| `isLoading` | `Signal<boolean>`                                                     | `true` while the latest call is in flight.                                        |
+| `isSuccess` | `Signal<boolean>`                                                     | `true` only when a call has completed, nothing is loading, and there is no error. |
+| `status`    | `Signal<ActionStatus>`                                                | `'idle' \| 'pending' \| 'success' \| 'error'`.                                    |
+| `reset`     | `() => void`                                                          | Clears `data`, `error`, and `isLoading`, and returns `status` to `'idle'`.        |
 
 `ActionStatus` and `MutationStatus` are the same union of four values.
 

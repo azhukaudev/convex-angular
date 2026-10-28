@@ -8,7 +8,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "check": "astro check && ngc -p tsconfig.examples.json --noEmit && node scripts/check-examples-referenced.mjs"
+    "check": "astro check && ngc -p tsconfig.examples.json --noEmit && node scripts/check-examples-referenced.mjs && ! grep -rnE \"\\['_(args|returnType)'\\]\" src/content"
   },
   "dependencies": {
     "@astrojs/starlight": "0.41.7",

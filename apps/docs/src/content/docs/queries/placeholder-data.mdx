@@ -17,7 +17,7 @@ instantly instead of flashing a skeleton.
 ```ts
 type QueryPlaceholderData<Query extends QueryReference> =
   | FunctionReturnType<Query>
-  | ((args: Query['_args']) => FunctionReturnType<Query> | undefined);
+  | ((args: FunctionArgs<Query>) => FunctionReturnType<Query> | undefined);
 ```
 
 Pass either a plain value or a factory. Convex values are never functions, so a

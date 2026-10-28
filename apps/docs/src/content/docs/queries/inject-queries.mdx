@@ -29,7 +29,7 @@ function injectQueries<Definitions extends QueriesDefinition>(
 ```ts
 interface QueryRequest<Query extends QueryReference = QueryReference> {
   query: Query;
-  args: Query['_args'];
+  args: FunctionArgs<Query>;
 }
 
 type QueriesDefinition = Record<string, QueryRequest<any> | SkipToken>;

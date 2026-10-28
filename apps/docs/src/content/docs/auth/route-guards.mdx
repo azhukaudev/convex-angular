@@ -12,6 +12,14 @@ import guardsExample from '../../../examples/auth-route-guards.ts?raw';
 The router guards wait for [auth to settle](/auth/overview/) and then decide once. All three are
 typed `CanActivateFn & CanMatchFn`, so the same value works in either slot.
 
+<Aside type="caution" title="Guards are navigation UX, not a security boundary">
+Guards and `allow` run in the browser and only control which routes render. The claims they read are
+decoded client-side, not verified there. Every Convex query, mutation, and action is callable directly
+over the public API, so each one must check `ctx.auth.getUserIdentity()` (and any role or claim) on the
+server. See [Convex auth in functions](https://docs.convex.dev/auth/functions-auth).
+
+</Aside>
+
 ## `convexAuthGuard`
 
 ```ts
@@ -107,6 +115,13 @@ router has resolved one (which is what `canActivate` sees, matching `RouterState
 otherwise the requested URL — `canMatch` runs during recognition, before redirects resolve. Path,
 query parameters, and fragment are all preserved. Read it in your login component and navigate back
 after a successful sign-in.
+
+<Aside type="caution" title="Validate returnUrl before navigating">
+`returnUrl` comes from the URL, so an attacker can control it. Accept it only if it starts with `/` and
+does not start with `//`; otherwise fall back to a fixed route. Then navigate with
+`router.navigateByUrl(...)`.
+
+</Aside>
 
 ## Prefer `canMatch` for lazy routes
 

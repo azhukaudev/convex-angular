@@ -337,8 +337,11 @@ for `api.todos.list`, not the object itself. The args must match what the compon
 function produces, though the mock's key is order-independent, so `{ a: 1, b: 2 }` and `{ b: 2, a: 1 }`
 find the same entry.
 
-**A cache hit is a prefill, not a settlement.** The helper shows the seeded data immediately but
-stays `'pending'` until a live emission confirms it, because the subscription has not yet reported.
+**A cache hit is a prefill, not a settlement.** The helper shows the seeded data immediately and
+stays `'pending'`. In production the real client replays a cached value to a new listener one
+macrotask after subscribe, so the query reaches `'success'` and fires `onSuccess` on its own. The
+mock does not auto-replay seeded results, so drive that delivery yourself with `emit()`, as the
+sample below does.
 
 ```typescript
 expect(fixture.componentInstance.todos.data()).toEqual([{ _id: 'warm', title: 'Warm' }]);

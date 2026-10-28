@@ -18,7 +18,7 @@ function is tracked, and the query resubscribes when those arguments change.
 ```ts
 function injectQuery<Query extends QueryReference>(
   query: Query,
-  argsFn: () => Query['_args'] | SkipToken,
+  argsFn: () => FunctionArgs<Query> | SkipToken,
   options?: QueryOptions<Query>,
 ): QueryResult<Query>;
 ```
@@ -33,25 +33,31 @@ inside `runInInjectionContext`). To create it elsewhere, pass an
 
 ## `QueryOptions`
 
-| Name              | Type                                                                                              | Default          | Description                                                                                                                    |
-| ----------------- | ------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `injectRef`       | `EnvironmentInjector`                                                                             | ambient injector | Injector used to create the query outside the current injection context. Its destruction also tears down the subscription.     |
-| `onSuccess`       | `(data: FunctionReturnType<Query>) => void`                                                       | —                | Invoked for every real emission of the subscription, including the one-shot fetch during server-side rendering.                |
-| `onError`         | `(err: Error) => void`                                                                            | —                | Invoked when the subscription fails.                                                                                           |
-| `placeholderData` | `FunctionReturnType<Query> \| ((args: Query['_args']) => FunctionReturnType<Query> \| undefined)` | —                | Value shown in `data()` while the first result for the current args loads. See [Placeholder data](/queries/placeholder-data/). |
+| Name              | Type                                                                                                   | Default          | Description                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------ | ---------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `injectRef`       | `EnvironmentInjector`                                                                                  | ambient injector | Injector used to create the query outside the current injection context. Its destruction also tears down the subscription.     |
+| `onSuccess`       | `(data: FunctionReturnType<Query>) => void`                                                            | —                | Invoked for every real emission of the subscription, including the one-shot fetch during server-side rendering.                |
+| `onError`         | `(err: Error) => void`                                                                                 | —                | Invoked when the subscription fails.                                                                                           |
+| `placeholderData` | `FunctionReturnType<Query> \| ((args: FunctionArgs<Query>) => FunctionReturnType<Query> \| undefined)` | —                | Value shown in `data()` while the first result for the current args loads. See [Placeholder data](/queries/placeholder-data/). |
 
 ### When `onSuccess` fires
 
-`onSuccess` is a subscription callback, not a "data became available" callback. It runs only
-when the Convex client actually emits a value (or the SSR one-shot fetch resolves). It does
-**not** run for data that merely seeds the pending state:
+`onSuccess` is a subscription callback, not a "data became available" callback. It runs when
+the Convex client emits a value to the helper's listener (or the SSR one-shot fetch resolves).
 
-- a warm client-cache hit for the current args,
-- data transferred from a server render during hydration,
+- **A warm client-cache hit fires it one tick later.** `data()` is set immediately and
+  `status()` stays `'pending'` for one macrotask. Then the Convex client replays the cached
+  value to the new listener locally (no server round-trip, so no wait for the WebSocket). That
+  replay fires `onSuccess` and moves the query to `'success'`. Later server updates fire it
+  again, as usual.
+
+It does **not** run for data that only seeds the pending state:
+
+- data transferred from a server render during hydration (it is not in the client's local
+  cache, so the first live emission after the WebSocket syncs fires `onSuccess`),
 - `placeholderData`.
 
-In each of those cases the value lands in `data()` immediately and the first live emission
-after the WebSocket syncs is what fires `onSuccess`.
+In both of those cases the value lands in `data()` immediately.
 
 ## `QueryResult`
 

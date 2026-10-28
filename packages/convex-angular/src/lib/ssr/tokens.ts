@@ -23,8 +23,9 @@ export interface ConvexSsrOptions {
    * Optional factory producing a JWT for authenticated server-side query
    * fetches, for example read from the request cookies. Resolved once per
    * server render. Returning null or undefined fetches unauthenticated.
-   * Responses that embed authenticated results in TransferState must be
-   * served `Cache-Control: private` (or `no-store`) — see
+   * Whenever a token is applied, the rendered markup contains that user's
+   * data, so the response must be served `Cache-Control: private` (or
+   * `no-store`) whether or not results are transferred — see
    * `transferAuthenticatedResults`.
    */
   authToken?: () => string | null | undefined | Promise<string | null | undefined>;
@@ -35,8 +36,9 @@ export interface ConvexSsrOptions {
    * rendered HTML — such responses MUST be served with
    * `Cache-Control: private` (or `no-store`) so a shared cache can never
    * serve one user's data to another. Set to false to keep authenticated
-   * results out of the HTML: the server still renders with data, but the
-   * hydrated client re-fetches live (a brief loading state after hydration).
+   * results out of the TransferState payload only: the rendered markup still
+   * contains them, so the `Cache-Control` rule still applies. The hydrated
+   * client re-fetches live (a brief loading state after hydration).
    * Has no effect when `authToken` is not configured or resolves no token.
    *
    * @defaultValue true

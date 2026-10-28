@@ -256,7 +256,7 @@ export const routes: Routes = [
 ];
 ```
 
-Use `convexUnauthGuard` for signed-out-only pages and `createConvexAuthGuard()` for claim-based authorization.
+Use `convexUnauthGuard` for signed-out-only pages and `createConvexAuthGuard()` for claim-based route gating (UI only — enforce access in your Convex functions).
 
 ## Server-side rendering
 
@@ -310,6 +310,8 @@ fixture.detectChanges();
 ```
 
 `MockConvexClient` can emit query pages and errors, settle captured mutations/actions, update connection state, seed warm query results, and emulate a disabled SSR client.
+
+For code that uses `injectAuth()`, the auth directives, or the route guards, `MockConvexAuthProvider` and `provideConvexAuthTesting()` provide a driveable auth provider.
 
 ## Outside an injection context
 

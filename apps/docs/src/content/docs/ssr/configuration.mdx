@@ -31,11 +31,11 @@ seeding is driven entirely by what is present in `TransferState`.
 
 ## Options
 
-| Option                         | Type                                                                        | Default | Purpose                                                                                          |
-| ------------------------------ | --------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `fetchOnServer`                | `boolean`                                                                   | `true`  | Fetch query results over HTTP during the server render and transfer them to the browser.         |
-| `authToken`                    | `() => string \| null \| undefined \| Promise<string \| null \| undefined>` | —       | Produces a JWT for authenticated server-side fetches, for example read from the request cookies. |
-| `transferAuthenticatedResults` | `boolean`                                                                   | `true`  | Whether authenticated results may be embedded in the rendered HTML.                              |
+| Option                         | Type                                                                        | Default | Purpose                                                                                                                    |
+| ------------------------------ | --------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `fetchOnServer`                | `boolean`                                                                   | `true`  | Fetch query results over HTTP during the server render and transfer them to the browser.                                   |
+| `authToken`                    | `() => string \| null \| undefined \| Promise<string \| null \| undefined>` | —       | Produces a JWT for authenticated server-side fetches, for example read from the request cookies.                           |
+| `transferAuthenticatedResults` | `boolean`                                                                   | `true`  | Whether authenticated results are serialized into the TransferState payload. The rendered markup contains them either way. |
 
 ### `fetchOnServer`
 

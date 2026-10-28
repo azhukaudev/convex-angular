@@ -17,15 +17,16 @@ on the very first change detection — which is what makes hydration flash-free 
 
 | #   | Source                    | Sets `data()` | Resulting status                           | Why                                                                                                                    |
 | --- | ------------------------- | ------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| 1   | Warm client cache         | Yes           | `pending`, with `isRefetching()` true      | The value came from the local Convex cache; the subscription must still confirm it.                                    |
+| 1   | Warm client cache         | Yes           | `pending`, with `isRefetching()` true      | The value came from the local Convex cache; the client replays it to the new subscription on the next macrotask.       |
 | 2   | Transferred server result | Yes           | `success` immediately                      | The server already rendered this value into the HTML; reporting anything else would contradict the DOM being hydrated. |
 | 3   | Placeholder data          | Yes           | `pending`, with `isPlaceholderData()` true | Invented data, never treated as a result.                                                                              |
 | 4   | Preserved previous value  | Keeps it      | `pending`, with `isRefetching()` true      | A resubscribe (args change or `refetch()`) keeps the last real value on screen.                                        |
 
 The warm cache is checked first, and only when the client is not disabled — a disabled client's
-`client` getter throws. A cache hit deliberately leaves the query **pending**: unlike a transferred
-result, nothing has yet rendered from it, so waiting for the live subscription to confirm is the
-honest state. Read it as "showing data, refreshing" via `isRefetching()`.
+`client` getter throws. A cache hit deliberately leaves the query **pending** until the client's local replay
+delivers it to the new subscription — roughly one macrotask, not a network round-trip. Unlike a
+transferred result, nothing has yet rendered from it, so that is the honest state in between.
+Read it as "showing data, refreshing" via `isRefetching()`.
 
 Sources 3 and 4 interact: a real previous value wins over a placeholder. The placeholder is only
 resolved when there is no warm cache entry, no transferred result, and no real previous value to
@@ -35,10 +36,11 @@ A transferred `undefined` is a result, not a missing entry — the transfer form
 two, so a query whose server-side result was `undefined` still seeds and still reports `success`.
 (`injectPaginatedQuery()` is the exception: it seeds only a defined first page.)
 
-<Aside type="note" title="onSuccess fires for none of these">
-  `onSuccess` is for results, not for seeds. It does not fire for a warm-cache value, a transferred server result, or
-  placeholder data — the first live emission after the WebSocket syncs fires it instead. It _does_ fire for the
-  server-side one-shot fetch during SSR, which is a real result.
+<Aside type="note" title="onSuccess and seeded data">
+  `onSuccess` is for results, not for seeds. It fires one tick later for a warm-cache value, when the client replays the
+  cached result to the new subscription. It does not fire for a transferred server result or placeholder data — the
+  first live emission after the WebSocket syncs fires it instead. It _does_ fire for the server-side one-shot fetch
+  during SSR, which is a real result.
 </Aside>
 
 ## The hydration window

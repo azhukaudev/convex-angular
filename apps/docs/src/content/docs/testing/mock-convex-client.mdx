@@ -44,7 +44,7 @@ a component-level `providers` array, and `Injector.create`.
 It registers **only** the `CONVEX` token, pointing at the supplied mock:
 
 ```typescript
-[{ provide: CONVEX, useValue: client as unknown as ConvexClient }];
+[{ provide: CONVEX, useValue: client }]; // the mock is compile-checked against the ConvexClient surface it emulates
 ```
 
 Nothing else that `provideConvex()` registers is included — no SSR configuration, no
@@ -390,9 +390,17 @@ says so rather than pretending.
   order on the server than in the browser will not reproduce through the mock.
 </Aside>
 
+<Aside type="caution">
+  The mock does not replay `seedQueryResult()` / `seedQueryError()` entries to new listeners. The real client replays a
+  cached value (or error) to a fresh listener on the next macrotask, so a warm-cache query reaches `'success'` and fires
+  `onSuccess` without a server update. With the mock the query stays `'pending'` until the test calls `emit()` or
+  `emitError()`.
+</Aside>
+
 <Aside type="tip">
   These gaps are about fidelity to the real client, not about the mock being incomplete for ordinary component tests.
-  Query results, errors, pagination, mutation and action settlement, auth registration and token exchange, connection
-  state, and the disabled-subscription path all behave as the live client does — including the contract that nothing is
-  delivered after unsubscribe, and that `hasAuth()` tracks a held token rather than a registered fetcher.
+  Query results (apart from the warm-cache replay above), errors, pagination, mutation and action settlement, auth
+  registration and token exchange, connection state, and the disabled-subscription path all behave as the live client
+  does — including the contract that nothing is delivered after unsubscribe, and that `hasAuth()` tracks a held token
+  rather than a registered fetcher.
 </Aside>

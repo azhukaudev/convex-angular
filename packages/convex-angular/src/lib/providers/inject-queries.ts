@@ -70,10 +70,11 @@ export interface QueriesOptions {
   /**
    * Callback invoked when any keyed query receives data.
    * Called on initial load and every subsequent update, including the
-   * one-shot fetch during server-side rendering. It is NOT called for data
-   * that only seeds the pending state — warm-cache values or data seeded
-   * from the server render during hydration — the first live update after
-   * the WebSocket syncs fires it instead.
+   * one-shot fetch during server-side rendering. A warm-cache value fires it
+   * one macrotask after subscribe, when the client replays the cached result
+   * to the new listener. It is NOT called for data seeded from the server
+   * render during hydration — the first live update after the WebSocket
+   * syncs fires it instead.
    * @param key - The definition key the data belongs to
    * @param data - The return value of that query
    */

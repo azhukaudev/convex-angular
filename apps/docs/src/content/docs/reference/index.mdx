@@ -8,11 +8,11 @@ sidebar:
 The library ships three entry points. Everything listed on this page is part of
 the public API; nothing else is.
 
-| Entry point                  | Contents                                                                                                                                                                                            |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `convex-angular`             | The main surface: providers, injection tokens, the `inject*` helpers for queries, mutations and actions, authentication, structural directives, route guards, and the route resolver.               |
-| `convex-angular/testing`     | `MockConvexClient` and `provideConvexTesting()` — an in-memory stand-in for `ConvexClient` so components and services can be unit-tested without a Convex deployment. Import it in test files only. |
-| `convex-angular/better-auth` | The Better Auth integration: `provideBetterAuth()`, `injectBetterAuth()`, and the structurally-typed client contract. Kept separate so the main entry point carries no Better Auth types.           |
+| Entry point                  | Contents                                                                                                                                                                                                                                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `convex-angular`             | The main surface: providers, injection tokens, the `inject*` helpers for queries, mutations and actions, authentication, structural directives, route guards, and the route resolver.                                                                                                                  |
+| `convex-angular/testing`     | `MockConvexClient` and `provideConvexTesting()` — an in-memory stand-in for `ConvexClient` so components and services can be unit-tested without a Convex deployment — plus `MockConvexAuthProvider` and `provideConvexAuthTesting()`, a driveable auth-provider double. Import it in test files only. |
+| `convex-angular/better-auth` | The Better Auth integration: `provideBetterAuth()`, `injectBetterAuth()`, and the structurally-typed client contract. Kept separate so the main entry point carries no Better Auth types.                                                                                                              |
 
 The tables below index every export by category. `Kind` distinguishes runtime
 values (function, const, class, InjectionToken, directive) from type-only

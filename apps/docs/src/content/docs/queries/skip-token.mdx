@@ -19,7 +19,7 @@ export type SkipToken = typeof skipToken;
 ```
 
 It is a `unique symbol`, so the argument function's return type is
-`Query['_args'] | SkipToken` and TypeScript narrows correctly on either branch.
+`FunctionArgs<Query> | SkipToken` and TypeScript narrows correctly on either branch.
 
 <Code code={skipTokenExample} lang="ts" title="todo-detail.component.ts" />
 

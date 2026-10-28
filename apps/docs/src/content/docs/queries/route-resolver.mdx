@@ -19,7 +19,7 @@ the explicit-preloading counterpart to `injectQuery` — the equivalent of React
 ```ts
 function convexQueryResolver<Query extends QueryReference>(
   query: Query,
-  argsFn?: (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => Query['_args'] | SkipToken,
+  argsFn?: (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => FunctionArgs<Query> | SkipToken,
   options?: ConvexQueryResolverOptions,
 ): ResolveFn<FunctionReturnType<Query> | undefined>;
 ```
@@ -53,21 +53,22 @@ effect running. The 5 second default is generous; shorten it only if you have a 
 ## The warm-cache render is `'pending'`, not `'success'`
 
 A warm cache hit is a **prefill**, not a settled result: the value is shown, but the helper
-still waits for the live subscription to confirm it.
+stays pending until the Convex client replays the cached value to the new subscription. The
+values below hold for one macrotask after the component subscribes.
 
-| Signal           | Value right after navigation                      |
-| ---------------- | ------------------------------------------------- |
-| `data()`         | the resolved value, from the warm cache           |
-| `status()`       | `'pending'`                                       |
-| `isLoading()`    | `true`                                            |
-| `isRefetching()` | `true`                                            |
-| `isSuccess()`    | `false`                                           |
-| `onSuccess`      | not called yet — the first live emission fires it |
+| Signal           | Value right after navigation                                              |
+| ---------------- | ------------------------------------------------------------------------- |
+| `data()`         | the resolved value, from the warm cache                                   |
+| `status()`       | `'pending'`                                                               |
+| `isLoading()`    | `true`                                                                    |
+| `isRefetching()` | `true`                                                                    |
+| `isSuccess()`    | `false`                                                                   |
+| `onSuccess`      | not called yet — the client's local replay calls it on the next macrotask |
 
 <Aside type="caution">
-A template built as `@if (status() === 'success') { … } @else { <skeleton /> }` will show the
-skeleton even though the data is right there. Render from `data()` and use `isRefetching()`
-for a subtle refreshing hint instead.
+A template built as `@if (status() === 'success') { … } @else { <skeleton /> }` will flash the
+skeleton for a frame even though the data is right there. Render from `data()` and use
+`isRefetching()` for a subtle refreshing hint instead.
 </Aside>
 
 ## Failures never block navigation

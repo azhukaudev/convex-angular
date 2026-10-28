@@ -74,6 +74,6 @@ export class OptimisticTodosComponent {
   });
 
   add(title: string): void {
-    void this.addSorted.mutate({ title });
+    void this.addSorted.mutate({ title }).catch(() => undefined);
   }
 }
