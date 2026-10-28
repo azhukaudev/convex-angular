@@ -43,6 +43,7 @@
 
 ### 🏡 Chore
 
+- Move the workspace to pnpm 12.15.0 (contributors only; the published package is unaffected).
 - Swap the library test toolchain from Vitest to Jest (`jest-preset-angular`).
 - Add Stryker mutation testing over the published entry points (`pnpm test:mutation`).
 - Migrate the library's own specs onto `MockConvexClient` and `provideConvexTesting()`; they previously hand-rolled a `jest.Mocked<ConvexClient>` literal per file, so nothing exercised the double shipped to consumers.

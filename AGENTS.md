@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is an Nx 23 + pnpm 11 monorepo for `convex-angular`, an Angular library that wraps the Convex client with Signals and dependency injection.
+This is an Nx 23 + pnpm 12 monorepo for `convex-angular`, an Angular library that wraps the Convex client with Signals and dependency injection.
 
 - `packages/convex-angular` — published library with the primary `convex-angular` entry point and the `convex-angular/testing` and `convex-angular/better-auth` secondary entry points.
 - `apps/frontend` — standalone Angular demo application and manual integration harness. Its Convex backend lives in `apps/frontend/src/convex`.
