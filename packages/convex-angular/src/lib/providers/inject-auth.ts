@@ -149,11 +149,6 @@ function createConvexAuthState(): ConvexAuthState {
   let currentGeneration = 0;
 
   const clearAuthIfNeeded = () => {
-    // A disabled client never opens a socket, so there is no auth to clear —
-    // and its `client` getter throws. Mirrors the setAuth branch below.
-    if (convex.disabled) {
-      return;
-    }
     try {
       if (hasAuth(convex)) {
         clearAuth(convex);
@@ -275,17 +270,11 @@ function createConvexAuthState(): ConvexAuthState {
     try {
       const { fetchToken, onAuthChange, onRefreshChange } = createSetAuthCallbacks(generation);
 
-      if (convex.disabled) {
-        // A disabled client never opens a socket, so there is nothing to wire
-        // and no refresh can occur. This mirrors `ConvexClient.setAuth`, which
-        // is a no-op when disabled.
-      } else {
-        // Use the underlying base client directly: `ConvexClient.setAuth` drops
-        // the `onRefreshChange` callback, but `BaseConvexClient.setAuth` forwards it.
-        // untracked: the real client calls fetchToken synchronously inside setAuth,
-        // so provider signals read before its first await must not become effect deps.
-        untracked(() => setAuthWithRefresh(convex, fetchToken, onAuthChange, onRefreshChange));
-      }
+      // Use the underlying base client directly: `ConvexClient.setAuth` drops
+      // the `onRefreshChange` callback, but `BaseConvexClient.setAuth` forwards it.
+      // untracked: the real client calls fetchToken synchronously inside setAuth,
+      // so provider signals read before its first await must not become effect deps.
+      untracked(() => setAuthWithRefresh(convex, fetchToken, onAuthChange, onRefreshChange));
     } catch (syncError) {
       if (generation === currentGeneration) {
         errors.setInternalError(syncError, '[convex-angular auth] Convex auth sync failed');

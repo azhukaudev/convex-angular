@@ -3,7 +3,7 @@ import { FunctionArgs, FunctionReference, FunctionReturnType, PaginationOptions 
 import { Value, compareValues, convexToJson } from 'convex/values';
 
 import { paginationOptsId } from '../internal/convex-client-internals';
-import { PaginatedQueryArgs, PaginatedQueryItem, PaginatedQueryReference } from './inject-paginated-query';
+import { PaginatedQueryArgs, PaginatedQueryItem, PaginatedQueryReference } from '../paginated-types';
 
 type LocalQueryResult<Query extends FunctionReference<'query'>> = {
   args: FunctionArgs<Query>;

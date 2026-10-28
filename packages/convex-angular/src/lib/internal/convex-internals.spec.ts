@@ -1,7 +1,7 @@
 import { ConvexClient, PaginationStatus } from 'convex/browser';
 import { FunctionReference, PaginationOptions } from 'convex/server';
 
-import type { PaginatedQueryReference } from '../providers/inject-paginated-query';
+import type { PaginatedQueryReference } from '../paginated-types';
 import {
   DISABLED_CONNECTION_STATE,
   clearAuth,
@@ -260,5 +260,28 @@ describe('convex-client-internals (real client contract)', () => {
   it('DISABLED_CONNECTION_STATE keys are a subset of the real connectionState() keys', () => {
     const realState = client.connectionState();
     expect(Object.keys(DISABLED_CONNECTION_STATE).every((key) => key in realState)).toBe(true);
+  });
+
+  describe('on a disabled client', () => {
+    let disabled: ConvexClient;
+
+    beforeEach(() => {
+      disabled = new ConvexClient('https://test.convex.cloud', { disabled: true });
+    });
+
+    afterEach(() => {
+      void disabled.close();
+    });
+
+    it('throws from the low-level client getter, which is why the wrappers guard it', () => {
+      expect(() => disabled.client).toThrow('ConvexClient is disabled');
+    });
+
+    it('turns every low-level wrapper into a no-op', () => {
+      expect(() => setAuthWithRefresh(disabled, jest.fn(), jest.fn(), jest.fn())).not.toThrow();
+      expect(hasAuth(disabled)).toBe(false);
+      expect(() => clearAuth(disabled)).not.toThrow();
+      expect(localQueryResult(disabled, 'todos:list', {})).toBeUndefined();
+    });
   });
 });

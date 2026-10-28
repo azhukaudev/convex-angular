@@ -11,16 +11,10 @@ import {
   isSignal,
   signal,
 } from '@angular/core';
-import {
-  FunctionArgs,
-  FunctionReference,
-  FunctionReturnType,
-  PaginationOptions,
-  PaginationResult,
-  getFunctionName,
-} from 'convex/server';
+import { FunctionArgs, FunctionReturnType, PaginationResult, getFunctionName } from 'convex/server';
 
 import { subscribeToPaginatedQuery } from '../internal/convex-client-internals';
+import type { PaginatedQueryArgs, PaginatedQueryItem, PaginatedQueryReference } from '../paginated-types';
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { ConvexHydrationState, serializeQueryArgs } from '../ssr/state-transfer';
@@ -29,31 +23,7 @@ import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 import { runUserCallback } from './user-callback';
 
-/**
- * A FunctionReference that is usable with injectPaginatedQuery.
- *
- * This function reference must:
- * - Refer to a public query
- * - Have an argument named "paginationOpts" of type PaginationOptions
- * - Have a return type of PaginationResult
- */
-export type PaginatedQueryReference = FunctionReference<
-  'query',
-  'public',
-  { paginationOpts: PaginationOptions },
-  PaginationResult<any>
->;
-
-/**
- * Given a PaginatedQueryReference, get the type of the arguments
- * object for the query, excluding the paginationOpts argument.
- */
-export type PaginatedQueryArgs<Query extends PaginatedQueryReference> = Omit<FunctionArgs<Query>, 'paginationOpts'>;
-
-/**
- * Given a PaginatedQueryReference, get the type of the item being paginated over.
- */
-export type PaginatedQueryItem<Query extends PaginatedQueryReference> = FunctionReturnType<Query>['page'][number];
+export type { PaginatedQueryArgs, PaginatedQueryItem, PaginatedQueryReference } from '../paginated-types';
 
 /**
  * Options for injectPaginatedQuery.

@@ -2,11 +2,7 @@ import { AuthTokenFetcher, ConnectionState, ConvexClient, PaginationStatus } fro
 import { FunctionArgs, PaginationOptions } from 'convex/server';
 import { Value } from 'convex/values';
 
-import type {
-  PaginatedQueryArgs,
-  PaginatedQueryItem,
-  PaginatedQueryReference,
-} from '../providers/inject-paginated-query';
+import type { PaginatedQueryArgs, PaginatedQueryItem, PaginatedQueryReference } from '../paginated-types';
 
 /**
  * The result from a paginated query subscription callback. This matches the
@@ -20,6 +16,9 @@ export interface ClientPaginatedResult<T> {
   status: PaginationStatus;
   loadMore: (numItems: number) => boolean;
 }
+
+// A disabled (SSR) client has no BaseConvexClient — its `client` getter throws — and
+// nothing to authenticate or cache, so every wrapper below is a no-op there.
 
 /**
  * BaseConvexClient.setAuth — `ConvexClient.setAuth` is 2-arg and drops
@@ -35,6 +34,7 @@ export function setAuthWithRefresh(
   onChange: (isAuthenticated: boolean) => void,
   onRefreshChange: (isRefreshing: boolean) => void,
 ): void {
+  if (convex.disabled) return;
   convex.client.setAuth(fetchToken, onChange, onRefreshChange);
 }
 
@@ -44,6 +44,7 @@ export function setAuthWithRefresh(
  * @internal
  */
 export function hasAuth(convex: ConvexClient): boolean {
+  if (convex.disabled) return false;
   return convex.client.hasAuth();
 }
 
@@ -53,6 +54,7 @@ export function hasAuth(convex: ConvexClient): boolean {
  * @internal
  */
 export function clearAuth(convex: ConvexClient): void {
+  if (convex.disabled) return;
   convex.client.clearAuth();
 }
 
@@ -68,6 +70,7 @@ export function localQueryResult(
   queryName: string,
   args: Record<string, Value>,
 ): Value | undefined {
+  if (convex.disabled) return undefined;
   return convex.client.localQueryResult(queryName, args);
 }
 
@@ -89,8 +92,8 @@ function getPaginatedSubscriptionClient(convex: ConvexClient): ExperimentalPagin
 
 /**
  * ConvexClient.onPaginatedUpdate_experimental — a name-marked-experimental
- * API with a runtime feature probe, since not every client build supports
- * paginated subscriptions.
+ * API. Every client in the supported peer range has it; the runtime feature
+ * probe exists to give a clear error to hand-rolled test doubles that omit it.
  *
  * @internal
  */

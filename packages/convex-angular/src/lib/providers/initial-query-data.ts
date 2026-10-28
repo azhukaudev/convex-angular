@@ -22,8 +22,7 @@ export type InitialQueryData =
 /**
  * Resolve the initial data for a query + args pair: the warm client cache
  * first, then data transferred from the server render. Encodes that
- * precedence (and the disabled-client guard) in one place for all query
- * helpers.
+ * precedence in one place for all query helpers.
  *
  * @internal
  */
@@ -36,10 +35,10 @@ export function readInitialQueryData(
 ): InitialQueryData {
   let cached: Value | undefined;
   try {
-    cached = convex.disabled ? undefined : localQueryResult(convex, queryName, args);
+    cached = localQueryResult(convex, queryName, args);
   } catch (err) {
-    // The client throws for an error-valued cache entry (a warmed query that
-    // failed on the server); surface it as error state, matching convex-react.
+    // The client throws for an error-valued cache entry (a warmed query that failed on the
+    // server); report it so the helper subscribes and the client's replay surfaces the error.
     return { kind: 'error', error: err instanceof Error ? err : new Error(String(err)) };
   }
   if (cached !== undefined) {
