@@ -10,6 +10,7 @@ import {
   makeEnvironmentProviders,
   provideEnvironmentInitializer,
   signal,
+  untracked,
 } from '@angular/core';
 import { ConvexClient } from 'convex/browser';
 
@@ -255,7 +256,7 @@ function createConvexAuthState(): ConvexAuthState {
       errors.clearInternalError();
       backendAuthenticated.set(null);
       backendRefreshing.set(false);
-      clearAuthIfNeeded();
+      untracked(clearAuthIfNeeded);
       return;
     }
 
@@ -263,7 +264,7 @@ function createConvexAuthState(): ConvexAuthState {
       errors.clearInternalError();
       backendAuthenticated.set(false);
       backendRefreshing.set(false);
-      clearAuthIfNeeded();
+      untracked(clearAuthIfNeeded);
       return;
     }
 
@@ -281,7 +282,9 @@ function createConvexAuthState(): ConvexAuthState {
       } else {
         // Use the underlying base client directly: `ConvexClient.setAuth` drops
         // the `onRefreshChange` callback, but `BaseConvexClient.setAuth` forwards it.
-        setAuthWithRefresh(convex, fetchToken, onAuthChange, onRefreshChange);
+        // untracked: the real client calls fetchToken synchronously inside setAuth,
+        // so provider signals read before its first await must not become effect deps.
+        untracked(() => setAuthWithRefresh(convex, fetchToken, onAuthChange, onRefreshChange));
       }
     } catch (syncError) {
       if (generation === currentGeneration) {

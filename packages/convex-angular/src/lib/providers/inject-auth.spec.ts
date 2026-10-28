@@ -829,6 +829,36 @@ describe('injectAuth', () => {
     expect(convex.authRegistrations).toHaveLength(2);
   }));
 
+  it('does not track signals the provider reads while Convex fetches the first token', fakeAsync(() => {
+    const audience = signal('first');
+    const readingProvider: ConvexAuthProvider = {
+      isLoading: signal(false),
+      isAuthenticated: signal(true),
+      error: signal<Error | undefined>(undefined),
+      // Reads a signal before its first await, as Clerk's sessionAudience check does.
+      fetchAccessToken: async () => {
+        audience();
+        return 'token';
+      },
+    };
+    // The real client calls fetchToken synchronously inside setAuth
+    // (AuthenticationManager.setConfig); the mock only records the call.
+    const recordSetAuth = convex.client.setAuth;
+    jest.spyOn(convex.client, 'setAuth').mockImplementation((fetchToken, onChange, onRefreshChange) => {
+      recordSetAuth(fetchToken, onChange, onRefreshChange);
+      void fetchToken({ forceRefreshToken: false });
+    });
+    configureTestingModule(readingProvider);
+
+    createAuthFixture();
+    expect(convex.authRegistrations).toHaveLength(1);
+
+    audience.set('second');
+    tick();
+
+    expect(convex.authRegistrations).toHaveLength(1);
+  }));
+
   it('returns the same auth state object for repeated calls in the same injector', fakeAsync(() => {
     provider.signIn();
     configureTestingModule();

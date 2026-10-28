@@ -261,12 +261,12 @@ With those registered, the two halves split cleanly:
 A registration is inert until the test drives it. The mock never calls `fetchToken` itself, never
 validates a token, and never decides the outcome:
 
-| Call                                             | What it simulates                                                             |
-| ------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `registration.setAuthenticated(true)`            | Convex accepted the token. `injectAuth().status()` becomes `'authenticated'`. |
-| `registration.setAuthenticated(false)`           | Convex rejected it. The status settles on `'unauthenticated'`.                |
-| `registration.setRefreshing(true)`               | A token renewal started; the status becomes `'refreshing'`.                   |
-| `registration.fetchToken({ forceRefreshToken })` | Convex asking your provider for a token, on connect or on expiry.             |
+| Call                                             | What it simulates                                                                                                     |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `registration.setAuthenticated(true)`            | Convex accepted the token. `injectAuth().status()` becomes `'authenticated'`.                                         |
+| `registration.setAuthenticated(false)`           | Convex rejected it. The status settles on `'unauthenticated'`.                                                        |
+| `registration.setRefreshing(true)`               | A token renewal started; the status becomes `'refreshing'`.                                                           |
+| `registration.fetchToken({ forceRefreshToken })` | Convex asking your provider for a token — the real client asks immediately on `setAuth`, then on expiry or rejection. |
 
 Until `setAuthenticated` is called, `injectAuth()` stays `'loading'` — a signed-in provider is not
 enough on its own, which is exactly the state most auth bugs live in.

@@ -173,7 +173,8 @@ export interface MockCallableCall {
 export interface MockAuthRegistration {
   /**
    * The token fetcher the helper registered. Await it to simulate Convex asking
-   * for a token, exactly as the real client does on connect and on expiry.
+   * for a token. The real client calls it synchronously inside setAuth and again
+   * on expiry or rejection; the mock never calls it on its own.
    */
   fetchToken: (args: { forceRefreshToken: boolean }) => Promise<string | null | undefined>;
   /**
