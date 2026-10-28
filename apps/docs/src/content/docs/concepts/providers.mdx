@@ -46,7 +46,7 @@ export const appConfig: ApplicationConfig = {
 
 ### Inherited from `ConvexClientOptions`
 
-These are passed straight through to the `ConvexClient` constructor. The most useful ones:
+These are passed straight through to the `ConvexClient` constructor. `logger` and `skipConvexDeploymentUrlCheck` also apply to the `ConvexHttpClient` used for server-side rendering. The most useful ones:
 
 | Name                            | Type                        | Default            | Description                                                                                        |
 | ------------------------------- | --------------------------- | ------------------ | -------------------------------------------------------------------------------------------------- |

@@ -1,6 +1,7 @@
 import { EnvironmentInjector, PLATFORM_ID, createEnvironmentInjector } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ConvexHttpClient } from 'convex/browser';
+import { makeFunctionReference } from 'convex/server';
 
 import { ConvexHydrationState } from '../ssr/state-transfer';
 import { CONVEX_HTTP_CLIENT, CONVEX_SSR_CONFIG } from '../ssr/tokens';
@@ -76,6 +77,43 @@ describe('provideConvex (SSR)', () => {
     });
 
     expect(TestBed.inject(CONVEX_HTTP_CLIENT)).toBeInstanceOf(ConvexHttpClient);
+  });
+
+  it('should forward skipConvexDeploymentUrlCheck to the HTTP client', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: PLATFORM_ID, useValue: 'server' },
+        // `.convex.site` is rejected by ConvexHttpClient unless the check is
+        // explicitly skipped, so injecting without a throw proves it arrived.
+        provideConvex('https://test.convex.site', { skipConvexDeploymentUrlCheck: true }),
+      ],
+    });
+
+    expect(() => TestBed.inject(CONVEX_HTTP_CLIENT)).not.toThrow();
+  });
+
+  it('should forward the logger to the HTTP client', async () => {
+    const logger = { log: jest.fn(), warn: jest.fn(), error: jest.fn(), logVerbose: jest.fn() };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: 'success', value: null, logLines: ['[LOG] hello'] }),
+    })) as unknown as typeof globalThis.fetch;
+    try {
+      TestBed.configureTestingModule({
+        providers: [
+          { provide: PLATFORM_ID, useValue: 'server' },
+          provideConvex('https://test.convex.cloud', { logger }),
+        ],
+      });
+
+      await TestBed.inject(CONVEX_HTTP_CLIENT).query(makeFunctionReference<'query'>('users:get'), {});
+
+      expect(logger.log).toHaveBeenCalledWith(expect.stringContaining('users:get'), expect.anything(), 'hello');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 

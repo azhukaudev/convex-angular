@@ -152,7 +152,16 @@ export function provideConvex(convexUrl: string, options?: ProvideConvexOptions)
     // server-side fetches, the server query loader, and the browser-side
     // hydration state reader. All are inert until injected.
     { provide: CONVEX_SSR_CONFIG, useValue: { url: convexUrl, ssr: options?.ssr ?? {} } },
-    { provide: CONVEX_HTTP_CLIENT, useFactory: () => new ConvexHttpClient(convexUrl) },
+    {
+      provide: CONVEX_HTTP_CLIENT,
+      // Only the options ConvexHttpClient also accepts; the rest are
+      // WebSocket-client specific.
+      useFactory: () =>
+        new ConvexHttpClient(convexUrl, {
+          skipConvexDeploymentUrlCheck: options?.skipConvexDeploymentUrlCheck,
+          logger: options?.logger,
+        }),
+    },
     ConvexServerQueryLoader,
     ConvexHydrationState,
     // Eagerly run the guard during injector initialization for earlier, clearer
