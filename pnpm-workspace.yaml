@@ -26,24 +26,7 @@ allowBuilds:
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - jscpd@5.0.6
-  - '@angular-devkit/architect@0.2102.22'
-  - '@angular-devkit/build-angular@21.2.22'
-  - '@angular-devkit/build-webpack@0.2102.22'
-  - '@angular-devkit/core@21.2.22'
-  - '@angular-devkit/schematics@21.2.22'
-  - '@angular/animations@21.2.22'
-  - '@angular/build@21.2.22'
   - '@angular/cdk@21.2.14'
-  - '@angular/cli@21.2.22'
-  - '@angular/common@21.2.22'
-  - '@angular/compiler-cli@21.2.22'
-  - '@angular/compiler@21.2.22'
-  - '@angular/core@21.2.22'
-  - '@angular/forms@21.2.22'
-  - '@angular/language-service@21.2.22'
-  - '@angular/platform-browser-dynamic@21.2.22'
-  - '@angular/platform-browser@21.2.22'
-  - '@angular/router@21.2.22'
   - '@better-auth/core@1.6.22'
   - '@better-auth/drizzle-adapter@1.6.22'
   - '@better-auth/kysely-adapter@1.6.22'
@@ -51,8 +34,6 @@ minimumReleaseAgeExclude:
   - '@better-auth/mongo-adapter@1.6.22'
   - '@better-auth/prisma-adapter@1.6.22'
   - '@better-auth/telemetry@1.6.22'
-  - '@ngtools/webpack@21.2.22'
-  - '@schematics/angular@21.2.22'
   - better-auth@1.6.22
   - convex@1.41.0
   - jest-preset-angular@17.0.0

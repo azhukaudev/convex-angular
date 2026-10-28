@@ -45,7 +45,7 @@ NgModules.
 
 | Package                                               | Version             |
 | ----------------------------------------------------- | ------------------- |
-| `@angular/core`, `@angular/common`, `@angular/router` | `>=21.2.19 <22.0.0` |
+| `@angular/core`, `@angular/common`, `@angular/router` | `>=21.2.25 <22.0.0` |
 | `convex`                                              | `>=1.42.1 <2.0.0`   |
 | `rxjs`                                                | `>=7.8.0`           |
 
