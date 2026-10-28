@@ -1,0 +1,45 @@
+name: Advisories
+
+on:
+  schedule:
+    - cron: '17 6 * * 1' # weekly, Monday 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  peer-floors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      # Fails the run: an advisory on a declared peer floor means consumers can
+      # install a vulnerable version that this library says it supports.
+      - run: node .github/scripts/peer-floor-advisories.mjs
+
+  workspace-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0 — reads the version from packageManager
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+
+      # Informational only: the workspace's own production tree (demo, docs
+      # site) carries advisories that do not ship in the published package.
+      - name: pnpm audit --prod (report only)
+        run: |
+          {
+            echo '## pnpm audit --prod --audit-level high'
+            echo '```'
+            pnpm audit --prod --audit-level high || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
