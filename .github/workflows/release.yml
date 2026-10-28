@@ -12,10 +12,24 @@ permissions:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Required reviewers and the NPM_TOKEN secret live on this environment
+    # (repository settings; see RELEASING.md "Auth").
+    environment: Production
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      # Publish only commits that are on main: a tag on an unreviewed or
+      # un-CI'd commit fails here instead of being published with provenance.
+      - name: Check tagged commit is on main
+        if: github.event_name == 'push'
+        run: |
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "::error::$GITHUB_REF_NAME ($GITHUB_SHA) is not on main — refusing to publish"
+            exit 1
+          }
 
       - uses: pnpm/action-setup@v4
 
@@ -27,7 +41,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # The tagged commit already passed full CI (incl. mutation) on main; re-run the deterministic gate only.
+      # Step "Check tagged commit is on main" guarantees main contains this commit; CI runs on every push to main.
+      # Re-run the deterministic gate only.
       - run: pnpm verify:ci
 
       - run: pnpm typecheck:spec
