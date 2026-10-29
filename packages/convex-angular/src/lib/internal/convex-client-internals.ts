@@ -1,4 +1,10 @@
-import { AuthTokenFetcher, ConnectionState, ConvexClient, PaginationStatus } from 'convex/browser';
+import {
+  AuthTokenFetcher,
+  ConnectionState,
+  ConvexClient,
+  PaginationStatus,
+  type BaseConvexClient,
+} from 'convex/browser';
 import { FunctionArgs, PaginationOptions } from 'convex/server';
 import { Value } from 'convex/values';
 
@@ -19,6 +25,9 @@ export interface ClientPaginatedResult<T> {
 
 // A disabled (SSR) client has no BaseConvexClient — its `client` getter throws — and
 // nothing to authenticate or cache, so every wrapper below is a no-op there.
+function baseClient(convex: ConvexClient): BaseConvexClient | undefined {
+  return convex.disabled ? undefined : convex.client;
+}
 
 /**
  * BaseConvexClient.setAuth — `ConvexClient.setAuth` is 2-arg and drops
@@ -34,8 +43,7 @@ export function setAuthWithRefresh(
   onChange: (isAuthenticated: boolean) => void,
   onRefreshChange: (isRefreshing: boolean) => void,
 ): void {
-  if (convex.disabled) return;
-  convex.client.setAuth(fetchToken, onChange, onRefreshChange);
+  baseClient(convex)?.setAuth(fetchToken, onChange, onRefreshChange);
 }
 
 /**
@@ -44,8 +52,7 @@ export function setAuthWithRefresh(
  * @internal
  */
 export function hasAuth(convex: ConvexClient): boolean {
-  if (convex.disabled) return false;
-  return convex.client.hasAuth();
+  return baseClient(convex)?.hasAuth() ?? false;
 }
 
 /**
@@ -54,8 +61,7 @@ export function hasAuth(convex: ConvexClient): boolean {
  * @internal
  */
 export function clearAuth(convex: ConvexClient): void {
-  if (convex.disabled) return;
-  convex.client.clearAuth();
+  baseClient(convex)?.clearAuth();
 }
 
 /**
@@ -70,8 +76,7 @@ export function localQueryResult(
   queryName: string,
   args: Record<string, Value>,
 ): Value | undefined {
-  if (convex.disabled) return undefined;
-  return convex.client.localQueryResult(queryName, args);
+  return baseClient(convex)?.localQueryResult(queryName, args);
 }
 
 type ExperimentalPaginatedSubscriptionClient = {
