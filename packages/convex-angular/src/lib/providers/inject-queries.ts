@@ -301,11 +301,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
 
         // Prefer the warm cache for the current args; fall back to data
         // transferred from the server render so a hydrated app shows content
-        // immediately while the live subscription syncs. An `initial.kind` of
-        // `'error'` (a warmed query that failed on the server) falls through
-        // like a cache miss — the key is already 'pending' from above, and
-        // the real client replays the cached error to a fresh listener within
-        // a tick, so the subscription below surfaces it exactly once.
+        // immediately while the live subscription syncs.
         const initial = readInitialQueryData(convex, hydration, queryName, definition.args, argsKey);
         if (initial?.kind === 'cache') {
           results.update((current) => setKey(current, key, initial.value));

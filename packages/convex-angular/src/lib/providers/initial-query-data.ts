@@ -10,15 +10,11 @@ import { ConvexHydrationState } from '../ssr/state-transfer';
  * the subscription delivers it — the client replays a warm-cache value on the
  * next macrotask); a transferred server-render result is settled
  * (the helper reports success immediately so the hydrated UI matches the
- * server HTML); an error means the warm cache holds a failed result for this
- * exact query + args (the deployment already rejected it).
+ * server HTML).
  *
  * @internal
  */
-export type InitialQueryData =
-  | { kind: 'cache' | 'transferred'; value: Value | undefined }
-  | { kind: 'error'; error: Error }
-  | undefined;
+export type InitialQueryData = { kind: 'cache' | 'transferred'; value: Value | undefined } | undefined;
 
 /**
  * Resolve the initial data for a query + args pair: the warm client cache
@@ -37,10 +33,10 @@ export function readInitialQueryData(
   let cached: Value | undefined;
   try {
     cached = localQueryResult(convex, queryName, args);
-  } catch (err) {
-    // The client throws for an error-valued cache entry (a warmed query that failed on the
-    // server); report it so the helper subscribes and the client's replay surfaces the error.
-    return { kind: 'error', error: err instanceof Error ? err : new Error(String(err)) };
+  } catch {
+    // The client throws for an error-valued cache entry; treat it as a miss — the client replays
+    // the cached error to the new listener on the next macrotask, so the subscription surfaces it.
+    return undefined;
   }
   if (cached !== undefined) {
     return { kind: 'cache', value: cached };
