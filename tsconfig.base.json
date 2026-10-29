@@ -4,7 +4,7 @@
     "rootDir": ".",
     "sourceMap": true,
     "declaration": false,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "importHelpers": true,
@@ -13,15 +13,12 @@
     "lib": ["es2020", "dom"],
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
-    "baseUrl": ".",
     "paths": {
-      "convex-angular": ["packages/convex-angular/src/index.ts"],
-      "convex-angular/testing": ["packages/convex-angular/testing/src/index.ts"],
-      "convex-angular/better-auth": ["packages/convex-angular/better-auth/src/index.ts"]
+      "convex-angular": ["./packages/convex-angular/src/index.ts"],
+      "convex-angular/testing": ["./packages/convex-angular/testing/src/index.ts"],
+      "convex-angular/better-auth": ["./packages/convex-angular/better-auth/src/index.ts"]
     },
-    "noUncheckedSideEffectImports": false,
-    "esModuleInterop": false,
-    "ignoreDeprecations": "6.0"
+    "noUncheckedSideEffectImports": false
   },
   "exclude": ["node_modules", "tmp"]
 }

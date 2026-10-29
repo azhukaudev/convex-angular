@@ -1,8 +1,5 @@
 {
   "extends": "astro/tsconfigs/strict",
   "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist", "src/examples"],
-  "compilerOptions": {
-    "ignoreDeprecations": "6.0"
-  }
+  "exclude": ["dist", "src/examples"]
 }
