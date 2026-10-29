@@ -2,7 +2,6 @@ import { isPlatformServer } from '@angular/common';
 import {
   DestroyRef,
   EnvironmentInjector,
-  ErrorHandler,
   PLATFORM_ID,
   Signal,
   computed,
@@ -21,7 +20,7 @@ import { ConvexHydrationState, serializeQueryArgs } from '../ssr/state-transfer'
 import { PaginatedQueryStatus } from '../types';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
-import { runUserCallback } from './user-callback';
+import { injectUserCallbacks } from './user-callback';
 
 export type { PaginatedQueryArgs, PaginatedQueryItem, PaginatedQueryReference } from '../paginated-types';
 
@@ -201,7 +200,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
   return runInResolvedInjectionContext(injectPaginatedQuery, options.injectRef, () => {
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
-    const errorHandler = inject(ErrorHandler);
+    const callbacks = injectUserCallbacks(options);
     const isServer = isPlatformServer(inject(PLATFORM_ID));
     // Both services are registered by provideConvex(...); optional injection
     // keeps setups that only provide the CONVEX token working.
@@ -345,7 +344,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
           // Call success callback (not during LoadingFirstPage as we don't have complete results yet)
           if (result.status !== 'LoadingFirstPage') {
-            runUserCallback(errorHandler, () => options.onSuccess?.(result.results));
+            callbacks.onSuccess(result.results);
           }
         },
         (err: Error) => {
@@ -359,7 +358,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
           isLoadingMore.set(false);
           canLoadMore.set(currentLoadMore !== undefined);
           isExhausted.set(false);
-          runUserCallback(errorHandler, () => options.onError?.(err));
+          callbacks.onError(err);
         },
       );
     };
@@ -424,7 +423,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
               }
 
               applyFirstPage(firstPage);
-              runUserCallback(errorHandler, () => options.onSuccess?.(firstPage.page));
+              callbacks.onSuccess(firstPage.page);
             },
             (err: Error) => {
               if (generation !== activeGeneration) {
@@ -433,7 +432,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
 
               error.set(err);
               isLoadingFirstPage.set(false);
-              runUserCallback(errorHandler, () => options.onError?.(err));
+              callbacks.onError(err);
             },
           );
         }

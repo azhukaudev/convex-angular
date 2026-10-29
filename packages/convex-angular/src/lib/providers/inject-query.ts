@@ -2,7 +2,6 @@ import { isPlatformServer } from '@angular/common';
 import {
   DestroyRef,
   EnvironmentInjector,
-  ErrorHandler,
   PLATFORM_ID,
   Signal,
   computed,
@@ -20,7 +19,7 @@ import { QueryStatus } from '../types';
 import { readInitialQueryData } from './initial-query-data';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
-import { runUserCallback } from './user-callback';
+import { injectUserCallbacks } from './user-callback';
 
 /**
  * A FunctionReference that refers to a Convex query.
@@ -215,7 +214,7 @@ export function injectQuery<Query extends QueryReference>(
   return runInResolvedInjectionContext(injectQuery, options?.injectRef, () => {
     const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
-    const errorHandler = inject(ErrorHandler);
+    const callbacks = injectUserCallbacks(options);
     const isServer = isPlatformServer(inject(PLATFORM_ID));
     // Both services are registered by provideConvex(...); optional injection
     // keeps setups that only provide the CONVEX token working.
@@ -309,7 +308,7 @@ export function injectQuery<Query extends QueryReference>(
         error.set(undefined);
         isLoading.set(false);
         isPlaceholderData.set(false);
-        runUserCallback(errorHandler, () => options?.onSuccess?.(result));
+        callbacks.onSuccess(result);
       };
       const fail = (err: Error) => {
         if (generation !== activeGeneration) {
@@ -324,7 +323,7 @@ export function injectQuery<Query extends QueryReference>(
         }
         error.set(err);
         isLoading.set(false);
-        runUserCallback(errorHandler, () => options?.onError?.(err));
+        callbacks.onError(err);
       };
 
       // Server-side rendering: the WebSocket client is disabled, so the

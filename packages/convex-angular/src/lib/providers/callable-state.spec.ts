@@ -1,6 +1,8 @@
 import { DestroyRef, ErrorHandler } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 
 import { CallableState, createCallableState } from './callable-state';
+import { injectUserCallbacks } from './user-callback';
 
 interface Deferred<T> {
   promise: Promise<T>;
@@ -25,10 +27,10 @@ describe('createCallableState', () => {
   let onSuccess: jest.Mock;
   let onError: jest.Mock;
   let handleError: jest.Mock;
-  let errorHandler: ErrorHandler;
 
   function create(): CallableState<{ title: string }, string> {
-    return createCallableState<{ title: string }, string>(destroyRef, errorHandler, invoke, { onSuccess, onError });
+    const callbacks = TestBed.runInInjectionContext(() => injectUserCallbacks({ onSuccess, onError }));
+    return createCallableState<{ title: string }, string>(destroyRef, invoke, callbacks);
   }
 
   function destroyScope() {
@@ -49,7 +51,7 @@ describe('createCallableState', () => {
     onSuccess = jest.fn();
     onError = jest.fn();
     handleError = jest.fn();
-    errorHandler = { handleError } as unknown as ErrorHandler;
+    TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
   });
 
   describe('initial state', () => {

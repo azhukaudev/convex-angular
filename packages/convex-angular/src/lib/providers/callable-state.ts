@@ -1,7 +1,6 @@
-import { DestroyRef, ErrorHandler, Signal, computed, signal, untracked } from '@angular/core';
+import { DestroyRef, Signal, computed, signal, untracked } from '@angular/core';
 
 import { MutationStatus } from '../types';
-import { runUserCallback } from './user-callback';
 
 /**
  * Status of an imperative Convex call. MutationStatus and ActionStatus are
@@ -12,13 +11,14 @@ import { runUserCallback } from './user-callback';
 type CallableStatus = MutationStatus;
 
 /**
- * Callbacks shared by injectMutation and injectAction.
+ * Callbacks shared by injectMutation and injectAction. They must never throw
+ * (see `injectUserCallbacks`).
  *
  * @internal
  */
-interface CallableStateOptions<TResult> {
-  onSuccess?: (data: TResult) => void;
-  onError?: (err: Error) => void;
+interface CallableStateCallbacks<TResult> {
+  onSuccess: (data: TResult) => void;
+  onError: (err: Error) => void;
 }
 
 /**
@@ -41,17 +41,16 @@ export interface CallableState<TArgs, TResult> {
  * signals, a version counter so only the latest invocation updates state,
  * reset, and destroy handling. After the owning scope is destroyed the
  * returned promise still settles, but reactive state stops updating and
- * callbacks stop firing. An exception thrown by `onSuccess`/`onError` is
- * reported to the `ErrorHandler`; it never changes the state or the promise
- * outcome.
+ * callbacks stop firing. The callbacks are expected to be guarded (see
+ * `injectUserCallbacks`), so a throwing consumer callback never changes the
+ * state or the promise outcome.
  *
  * @internal
  */
 export function createCallableState<TArgs, TResult>(
   destroyRef: DestroyRef,
-  errorHandler: ErrorHandler,
   invoke: (args: TArgs) => Promise<TResult>,
-  options?: CallableStateOptions<TResult>,
+  callbacks: CallableStateCallbacks<TResult>,
 ): CallableState<TArgs, TResult> {
   // Internal signals for tracking state
   const data = signal<TResult | undefined>(undefined);
@@ -108,7 +107,7 @@ export function createCallableState<TArgs, TResult>(
       if (untracked(currentVersion) === callVersion) {
         data.set(result);
         hasCompleted.set(true);
-        runUserCallback(errorHandler, () => options?.onSuccess?.(result));
+        callbacks.onSuccess(result);
       }
       return result;
     } catch (err) {
@@ -117,7 +116,7 @@ export function createCallableState<TArgs, TResult>(
         error.set(errorObj);
         // Stryker disable next-line BooleanLiteral: masked by error() in the current derivation.
         hasCompleted.set(true);
-        runUserCallback(errorHandler, () => options?.onError?.(errorObj));
+        callbacks.onError(errorObj);
       }
       throw errorObj;
     } finally {

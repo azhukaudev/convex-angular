@@ -1,10 +1,11 @@
-import { DestroyRef, EnvironmentInjector, ErrorHandler, Signal, inject } from '@angular/core';
+import { DestroyRef, EnvironmentInjector, Signal, inject } from '@angular/core';
 import { FunctionArgs, FunctionReference, FunctionReturnType } from 'convex/server';
 
 import { ActionStatus } from '../types';
 import { createCallableState } from './callable-state';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
+import { injectUserCallbacks } from './user-callback';
 
 /**
  * A FunctionReference that refers to a Convex action.
@@ -125,17 +126,16 @@ export function injectAction<Action extends ActionReference>(
   action: Action,
   options?: ActionOptions<Action>,
 ): ActionResult<Action> {
-  const { convex, destroyRef, errorHandler } = runInResolvedInjectionContext(injectAction, options?.injectRef, () => ({
+  const { convex, destroyRef, callbacks } = runInResolvedInjectionContext(injectAction, options?.injectRef, () => ({
     convex: injectConvex(),
     destroyRef: inject(DestroyRef),
-    errorHandler: inject(ErrorHandler),
+    callbacks: injectUserCallbacks(options),
   }));
 
   const state = createCallableState<FunctionArgs<Action>, FunctionReturnType<Action>>(
     destroyRef,
-    errorHandler,
     (args) => convex.action(action, args),
-    options,
+    callbacks,
   );
 
   return {
