@@ -1,4 +1,4 @@
-import { Component, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
+import { Component, EnvironmentInjector, ErrorHandler, createEnvironmentInjector } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
@@ -121,6 +121,40 @@ describe('injectPrewarmQuery', () => {
 
     expect(onError).toHaveBeenCalledWith(error, { userId: 'user-1' });
   });
+
+  it('reports a throwing onError to the ErrorHandler and still resolves false and releases once', fakeAsync(() => {
+    const callbackError = new Error('onError exploded');
+    const onError = jest.fn(() => {
+      throw callbackError;
+    });
+    const handleError = jest.fn();
+    TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+    @Component({
+      template: '',
+      standalone: true,
+    })
+    class TestComponent {
+      readonly prewarmUser = injectPrewarmQuery(mockQuery, { onError });
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+
+    let warmed: boolean | undefined;
+    void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+      warmed = result;
+    });
+
+    const subscription = requireQuerySubscription(convex, 0);
+    expect(() => subscription.emitError(new Error('Prefetch failed'))).not.toThrow();
+    tick();
+
+    expect(handleError).toHaveBeenCalledTimes(1);
+    expect(handleError).toHaveBeenCalledWith(callbackError);
+    expect(warmed).toBe(false);
+    expect(subscription.unsubscribeCount).toBe(1);
+  }));
 
   it('releases a subscription only once when it fails after the window expired', fakeAsync(() => {
     const onError = jest.fn();
