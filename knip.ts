@@ -68,10 +68,6 @@ const config: KnipConfig = {
     './profile/profile.component',
     './admin/admin.component',
     './login/login.component',
-    // tsconfig.base.json sets `types: ["*"]` (the TypeScript 6 migration pin that
-    // restores automatic @types inclusion); knip reads the wildcard as a module
-    // specifier it cannot resolve.
-    /^\*$/,
   ],
   ignoreDependencies: [
     // Fonts loaded via the project.json styles array, never imported from code
