@@ -3,6 +3,8 @@ import { FunctionArgs, FunctionReference } from 'convex/server';
 
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
+import { injectUserCallbacks } from './user-callback';
+import { openWarmSubscription } from './warm-subscription';
 
 const DEFAULT_EXTEND_SUBSCRIPTION_FOR = 5_000;
 
@@ -50,10 +52,6 @@ export interface PrewarmQueryResult<Query extends PrewarmQueryReference> {
   prewarm: (args: FunctionArgs<Query>) => Promise<boolean>;
 }
 
-interface ActivePrewarm {
-  dispose: () => void;
-}
-
 /**
  * Create a helper that prewarms a Convex query for upcoming navigation or UI work.
  *
@@ -76,16 +74,8 @@ export function injectPrewarmQuery<Query extends PrewarmQueryReference>(
 ): PrewarmQueryResult<Query> {
   return runInResolvedInjectionContext(injectPrewarmQuery, options?.injectRef, () => {
     const convex = injectConvex();
+    const callbacks = injectUserCallbacks(options);
     const destroyRef = inject(DestroyRef);
-    const activePrewarms = new Set<ActivePrewarm>();
-
-    const cleanupAll = () => {
-      for (const activePrewarm of Array.from(activePrewarms)) {
-        activePrewarm.dispose();
-      }
-    };
-
-    destroyRef.onDestroy(() => cleanupAll());
 
     const prewarm = (args: FunctionArgs<Query>): Promise<boolean> => {
       // On a disabled client (server-side rendering) subscriptions are
@@ -96,48 +86,28 @@ export function injectPrewarmQuery<Query extends PrewarmQueryReference>(
 
       const extendSubscriptionFor = options?.extendSubscriptionFor ?? DEFAULT_EXTEND_SUBSCRIPTION_FOR;
 
-      let disposed = false;
       // The promise resolves at the first settleWarmed call; the later calls
-      // on the error and dispose paths are no-ops.
+      // on the error and release paths are no-ops.
       let settleWarmed: (warmed: boolean) => void;
       const warmed = new Promise<boolean>((resolve) => {
         settleWarmed = resolve;
       });
 
-      // Reassigned once onUpdate returns; captured by dispose so the error
-      // callback can release a failed subscription immediately instead of
-      // waiting for the expiry timer. onUpdate only reports errors
-      // asynchronously (off the socket), so dispose never runs before
-      // `timeoutId` below is initialized.
-      let unsubscribe = () => {};
-
-      const entry: ActivePrewarm = {
-        dispose: () => {
-          if (disposed) {
-            return;
-          }
-
-          disposed = true;
-          activePrewarms.delete(entry);
-          clearTimeout(timeoutId);
-          unsubscribe();
+      // The error callback releases a failed subscription immediately instead
+      // of waiting for the expiry timer. onUpdate only reports errors
+      // asynchronously (off the socket), so it never runs before
+      // `subscription` is assigned.
+      const subscription = openWarmSubscription(convex, query, args, destroyRef, {
+        onValue: () => settleWarmed(true),
+        onError: (err) => {
           settleWarmed(false);
+          callbacks.onError(err, args);
+          subscription.release();
         },
-      };
-
-      unsubscribe = convex.onUpdate(
-        query,
-        args,
-        () => settleWarmed(true),
-        (err: Error) => {
-          settleWarmed(false);
-          options?.onError?.(err, args);
-          entry.dispose();
-        },
-      );
-
-      activePrewarms.add(entry);
-      const timeoutId = setTimeout(() => entry.dispose(), extendSubscriptionFor);
+        onRelease: () => settleWarmed(false),
+      });
+      // Unlike the resolver, the window starts now rather than at the first result.
+      subscription.releaseAfter(extendSubscriptionFor);
 
       return warmed;
     };

@@ -4,6 +4,7 @@ import { ActivatedRouteSnapshot, ResolveFn, RouterStateSnapshot } from '@angular
 import { FunctionArgs, FunctionReturnType } from 'convex/server';
 
 import { QueryReference } from '../providers/inject-query';
+import { openWarmSubscription } from '../providers/warm-subscription';
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { serializeQueryArgs } from '../ssr/state-transfer';
@@ -104,43 +105,24 @@ export function convexQueryResolver<Query extends QueryReference>(
     const keepSubscribedFor = options?.keepSubscribedFor ?? DEFAULT_KEEP_SUBSCRIBED_FOR;
 
     return new Promise<FunctionReturnType<Query> | undefined>((resolve) => {
-      let settled = false;
-      let disposed = false;
-      let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-      const dispose = () => {
-        disposed = true;
-        // The route injector outlives the navigation; drop the hook so it
-        // doesn't pin this closure (and the resolved value) for the whole session.
-        removeDestroyHook();
-        clearTimeout(timeoutId);
-        // A scope destroyed before the first result must not hang the
-        // navigation; resolving undefined matches the error path's contract.
-        settle(undefined);
-        unsubscribe();
-      };
-
+      // Only the first outcome counts: `resolve` keeps the first value and
+      // `releaseAfter` arms its timer once, so later calls change nothing.
       const settle = (value: FunctionReturnType<Query> | undefined) => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        if (!disposed) {
-          // Keep the subscription warm so the routed component's injectQuery
-          // dedupes onto it before it is dropped.
-          timeoutId = setTimeout(dispose, keepSubscribedFor);
-        }
+        // Keep the subscription warm so the routed component's injectQuery
+        // dedupes onto it before it is dropped.
+        subscription.releaseAfter(keepSubscribedFor);
         resolve(value);
       };
 
-      const unsubscribe = convex.onUpdate(
-        query,
-        args,
-        (result: FunctionReturnType<Query>) => settle(result),
-        () => settle(undefined),
-      );
-
-      const removeDestroyHook = destroyRef.onDestroy(dispose);
+      // The client never calls back synchronously from onUpdate, so
+      // `subscription` is always assigned before the first `settle`.
+      const subscription = openWarmSubscription(convex, query, args, destroyRef, {
+        onValue: settle,
+        onError: () => settle(undefined),
+        // A scope destroyed before the first result must not hang the
+        // navigation; resolving undefined matches the error path's contract.
+        onRelease: () => settle(undefined),
+      });
     });
   };
 }
