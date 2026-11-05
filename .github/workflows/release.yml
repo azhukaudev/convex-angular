@@ -3,25 +3,31 @@ name: Release
 on:
   push:
     tags: ['v*']
-  workflow_dispatch: # dry-run rehearsal: runs everything except the publish
+  workflow_dispatch: # rehearsal: verify, build and `npm publish --dry-run`; never publishes
 
+# Read-only by default. The only job that needs `id-token: write` (publish)
+# declares it itself, so nothing that installs or builds the workspace can mint
+# an OIDC token.
 permissions:
   contents: read
-  id-token: write # npm provenance
 
 jobs:
-  publish:
+  # Everything that executes workspace code (install scripts, the full gate, the
+  # library build). No secrets, no id-token, no environment.
+  verify:
     runs-on: ubuntu-latest
-    # Required reviewers and the NPM_TOKEN secret live on this environment
-    # (repository settings; see RELEASING.md "Auth").
-    environment: Production
+    outputs:
+      node-version: ${{ steps.node.outputs.node-version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      # Publish only commits that are on main: a tag on an unreviewed or
+      # A guard against mistakes, not a security boundary (anyone who can push a
+      # tag can also edit this file at that tag): a tag on an unreviewed or
       # un-CI'd commit fails here instead of being published with provenance.
+      # The enforcing controls are the repository settings in RELEASING.md §9.
       - name: Check tagged commit is on main
         if: github.event_name == 'push'
         run: |
@@ -31,9 +37,10 @@ jobs:
             exit 1
           }
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0 — reads the version from packageManager
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        id: node
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -41,7 +48,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # Step "Check tagged commit is on main" guarantees main contains this commit; CI runs on every push to main.
+      # The "Check tagged commit is on main" step guarantees main contains this commit; CI runs on every push to main.
       # Re-run the deterministic gate only.
       - run: pnpm verify:ci
 
@@ -60,8 +67,41 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: npm publish dist/packages/convex-angular --dry-run
 
-      - name: Publish
+      # include-hidden-files: dist/ ships a `.npmignore` (`**/package.json`) that
+      # decides what npm packs; without it the publish job would publish more
+      # than the dry run above showed.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: github.event_name == 'push'
-        run: npm publish dist/packages/convex-angular --provenance --access public
+        with:
+          name: convex-angular-dist
+          path: dist/packages/convex-angular
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  # Publishes the package directory verify built. Nothing from the workspace is
+  # installed or executed here: npm publish needs only Node, npm and the directory.
+  publish:
+    needs: verify
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # Required reviewers, the deployment-tag restriction and the NPM_TOKEN secret
+    # live on this environment (repository settings; see RELEASING.md §9).
+    environment: Production
+    permissions:
+      id-token: write # npm provenance
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: ${{ needs.verify.outputs.node-version }}
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: convex-angular-dist
+          path: dist/packages/convex-angular
+
+      - name: Publish
+        run: npm publish dist/packages/convex-angular --provenance --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

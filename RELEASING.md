@@ -37,14 +37,14 @@ commit is on main" step, before anything is installed, built, or published.
 
 ## 5. Dry run
 
-Trigger the "Release" GitHub Actions workflow via `workflow_dispatch`. It runs the same steps
-as a tag push — install, `pnpm verify:ci` (which includes `pnpm typecheck:spec`), `pnpm build:library` — but
-skips the on-`main` check and the tag-vs-manifest guard (both conditional on a tag push) and the
-publish itself, which becomes `npm publish --dry-run`. Because the guards are skipped, double-check
-by eye during a dry run that the commit is on `main` and that the version you intend to tag
-matches `packages/convex-angular/package.json`. The publish job runs in the `Production`
-environment (see Auth), so once required reviewers are configured the dry run also waits for one
-approval.
+Trigger the "Release" GitHub Actions workflow via `workflow_dispatch`. It runs only the `verify`
+job: install, `pnpm verify:ci` (which includes `pnpm typecheck:spec`), `pnpm build:library`, and
+`npm publish dist/packages/convex-angular --dry-run`. It skips the on-`main` check and the
+tag-vs-manifest guard (both are tag-push-only), so double-check by eye that the commit is on
+`main` and that the version you intend to tag matches `packages/convex-angular/package.json`.
+The dry run never starts the `publish` job: no `Production` environment, no approval, no
+`NPM_TOKEN`, no OIDC token. It can be dispatched from any ref, but rehearse the commit you intend
+to tag.
 
 ## 6. Release
 
@@ -55,22 +55,28 @@ git tag vX.Y.Z <sha>
 git push origin vX.Y.Z
 ```
 
-Pushing the tag runs the on-`main` check (the tagged commit must be an ancestor of
-`origin/main`), `pnpm verify:ci` (which includes `pnpm typecheck:spec`), `pnpm build:library`, the
-tag-vs-manifest guard (`GITHUB_REF_NAME` vs. `dist/packages/convex-angular/package.json`'s
-`version`), and finally `npm publish dist/packages/convex-angular --provenance --access public`.
-The mutation suite (`pnpm test:mutation`) does not run in the release workflow. It is
+Pushing the tag runs two jobs. `verify` runs the on-`main` check (the tagged commit must be an
+ancestor of `origin/main`), install, `pnpm verify:ci` (which includes `pnpm typecheck:spec`),
+`pnpm build:library`, and the tag-vs-manifest guard (`GITHUB_REF_NAME` vs.
+`dist/packages/convex-angular/package.json`'s `version`), then uploads
+`dist/packages/convex-angular` as the `convex-angular-dist` artifact. `publish` needs `verify`,
+waits for the `Production` environment's approval once one is configured, downloads that artifact,
+and runs `npm publish dist/packages/convex-angular --provenance --access public --ignore-scripts`.
+`publish` installs nothing from the workspace. The mutation suite (`pnpm test:mutation`) does not run in the release workflow. It is
 report-only in CI (`stryker.config.mjs` sets no break threshold), so if you want that signal,
 review the latest `mutation-report` artifact on `main` before tagging.
 
 ## 7. Auth
 
-The publish job runs in the `Production` GitHub environment. Publishing authenticates with the
-`NPM_TOKEN` secret (referenced by name only — never write its value anywhere), which should live
-as a `Production` environment secret rather than a repository secret; an environment secret with
-the same name takes precedence for jobs in that environment. Migrating to npm trusted publishing,
-which would remove the need for this token entirely, is an open option worth revisiting. It can
-be bound to the `Production` environment.
+The `publish` job (not the whole workflow) runs in the `Production` GitHub environment. It is the
+only job with `id-token: write` and the only place `NPM_TOKEN` is referenced. Publishing
+authenticates with the `NPM_TOKEN` secret (referenced by name only — never write its value
+anywhere), which should live as a `Production` environment secret rather than a repository
+secret; an environment secret with the same name takes precedence for jobs in that environment.
+Migrating to npm trusted publishing, which would remove the need for this token entirely, is an
+open option worth revisiting. The `publish` job already has its job-scoped `id-token: write`, so
+adopting it means dropping `NODE_AUTH_TOKEN` from the `Publish` step; configure the trusted
+publisher for workflow `release.yml` and environment `Production`.
 
 ## 8. Aftercare
 
@@ -79,13 +85,18 @@ be bound to the `Production` environment.
 
 ## 9. Repository protections (one-time, admin)
 
-These live in GitHub repository settings, not in the workflow, and only an admin can change
-them. The workflow changes above assume they are in place:
+The checks inside `release.yml` guard against mistakes; they are **not** a security boundary,
+because anyone who can push a tag or branch can edit the workflow file in that ref. The boundary
+is these repository settings, which only an admin can change and which this repo does not have
+yet (as of 2026-11-02: no required reviewer on `Production`, no rulesets). The workflow assumes
+they are in place:
 
 - Merge the branch that added the on-`main` check and the `environment: Production` line to
   `main` first, so the environment is referenced by the workflow before the secret moves.
 - **Production environment**: add a required reviewer (Settings, Environments, `Production`).
-  Optionally restrict "Deployment branches and tags" to tags matching `v*`.
+  Also restrict "Deployment branches and tags" to tags matching `v*` (recommended). This is safe
+  because `workflow_dispatch` runs never enter `Production`, so the restriction cannot break the
+  rehearsal.
 - **`NPM_TOKEN`**: add it as a `Production` environment secret (with a new token value), then
   delete the repository-level secret and revoke the old npm token, since it was available to
   every workflow until now. Alternatively, configure npm trusted publishing for `convex-angular`
@@ -93,7 +104,12 @@ them. The workflow changes above assume they are in place:
   delete the token entirely; that also needs a workflow edit to drop `NODE_AUTH_TOKEN`.
 - **Protect `main`**: a branch ruleset on `main` that requires a pull request and the
   `CI / verify` status check (job `verify` in `ci.yml`), and blocks force-pushes and deletion.
+  The release workflow also has a job named `verify`; its check appears as `Release / verify`, so
+  require `CI / verify` by its full name.
 - **Restrict release tags**: a tag ruleset targeting `v*` that limits creation, update, and
   deletion to admins.
-- **Rehearse**: run the "Release" workflow via `workflow_dispatch` once. Expect it to wait for
-  environment approval, then pass, with the on-`main` check skipped (it only runs on tag pushes).
+- **Rehearse**: run the "Release" workflow via `workflow_dispatch` once. Expect it to pass without
+  waiting for approval (the dispatch path never starts `publish`), with the on-`main` check
+  skipped (it only runs on tag pushes). The environment approval and the OIDC/provenance path are
+  first exercised by the next real tag push, so watch that run: `publish` should wait for
+  approval, then publish with provenance.
