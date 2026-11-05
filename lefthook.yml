@@ -5,7 +5,7 @@ pre-commit:
   parallel: true
   jobs:
     - name: format
-      glob: '*.{ts,js,mjs,html,css,json,md,mdx,astro,yml,yaml}'
+      glob: '*.{ts,mts,cts,js,mjs,cjs,html,css,scss,json,md,mdx,astro,yml,yaml}'
       exclude:
         - pnpm-lock.yaml
       run: pnpm exec prettier --write {staged_files}
@@ -23,3 +23,5 @@ pre-push:
   jobs:
     - name: verify
       run: pnpm nx run-many -t lint,test,build
+    - name: typecheck-spec
+      run: pnpm typecheck:spec

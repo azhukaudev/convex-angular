@@ -45,8 +45,6 @@ jobs:
       # Re-run the deterministic gate only.
       - run: pnpm verify:ci
 
-      - run: pnpm typecheck:spec
-
       - run: pnpm build:library
 
       # The tag must match the built manifest — a mis-tagged release fails here

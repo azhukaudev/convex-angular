@@ -23,7 +23,7 @@
     "sharedGlobals": []
   },
   "targetDefaults": {
-    "@angular/build:application": {
+    "@nx/angular:application": {
       "cache": true,
       "dependsOn": ["^build"],
       "inputs": ["production", "^production"]

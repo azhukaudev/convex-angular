@@ -9,6 +9,13 @@
     "build": {
       "executor": "@nx/angular:application",
       "outputs": ["{options.outputPath}"],
+      "inputs": [
+        "production",
+        "^production",
+        { "env": "NG_APP_CONVEX_URL" },
+        { "env": "NG_APP_CONVEX_SITE_URL" },
+        { "env": "NG_APP_SITE_URL" }
+      ],
       "options": {
         "outputPath": "dist/apps/frontend",
         "browser": "apps/frontend/src/main.ts",

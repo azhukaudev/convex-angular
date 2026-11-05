@@ -29,7 +29,7 @@ Use pnpm. Prefer existing Nx targets and root scripts over ad hoc commands.
 - `pnpm check:duplication` — run jscpd over library and app sources.
 - `pnpm check:deadcode` — run knip; the expected baseline is zero findings.
 - `pnpm verify:quick` — source type-check, lint, duplication, and dead-code checks.
-- `pnpm verify:full` — source type-check plus lint, test, build, duplication, dead-code, and mutation checks.
+- `pnpm verify:full` — source and spec type-check plus lint, test, build, duplication, dead-code, and mutation checks.
 - `pnpm test:mutation` — run the Stryker mutation suite directly.
 
 Jest 30 uses `--testPathPatterns` (plural). A bare argument forwarded after `--` also works as a test-path pattern.
@@ -42,9 +42,9 @@ Jest 30 uses `--testPathPatterns` (plural). A bare argument forwarded after `--`
 - Plain Markdown-only change: `pnpm format:check` is sufficient.
 - Any change under `apps/docs` — including `.mdx`, which is executable content, not prose: run `pnpm check:docs` (or `pnpm build:docs`). `format:check` alone is not sufficient there.
 
-`verify:ci` and `verify:full` start with `pnpm format:check`. CI runs three jobs for every pull request and push to `main`: `verify` (`pnpm verify:ci` and `pnpm typecheck:spec`), `mutation` (`pnpm test:mutation`), and `convex-peer-range`, which reinstalls `convex` at the declared peer floor (`1.42.1`) and at `latest` and reruns the library tests and both type-checks (the `latest` leg is `continue-on-error`: it is an early warning, not a gate). `pnpm verify:full` (`verify:ci` plus the mutation suite) remains the single local everything-command. Treat CI's checks as required.
+`verify:ci` and `verify:full` start with `pnpm format:check` and include `pnpm typecheck:spec`. CI runs three jobs for every pull request and push to `main`: `verify` (`pnpm verify:ci`), `mutation` (`pnpm test:mutation`), and `convex-peer-range`, which reinstalls `convex` at the declared peer floor (`1.42.1`) and at the newest mature `1.x` (`^1`) and reruns the library tests and both type-checks (a red leg is an early warning, not a gate: the required check is `verify`). `pnpm verify:full` (`verify:ci` plus the mutation suite) remains the single local everything-command. Treat CI's checks as required.
 
-Git hooks are managed by Lefthook. Pre-commit formats staged files and runs duplication/dead-code checks; pre-push runs lint, test, and build targets. Fix hook failures instead of bypassing them. `LEFTHOOK=0` is acceptable only during a rebase of already-reviewed commits.
+Git hooks are managed by Lefthook. Pre-commit formats staged files and runs duplication/dead-code checks; pre-push runs lint, test, and build targets plus `pnpm typecheck:spec`. Fix hook failures instead of bypassing them. `LEFTHOOK=0` is acceptable only during a rebase of already-reviewed commits.
 
 Quality baselines are ratchets:
 

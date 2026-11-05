@@ -38,7 +38,7 @@ commit is on main" step, before anything is installed, built, or published.
 ## 5. Dry run
 
 Trigger the "Release" GitHub Actions workflow via `workflow_dispatch`. It runs the same steps
-as a tag push — install, `pnpm verify:ci`, `pnpm typecheck:spec`, `pnpm build:library` — but
+as a tag push — install, `pnpm verify:ci` (which includes `pnpm typecheck:spec`), `pnpm build:library` — but
 skips the on-`main` check and the tag-vs-manifest guard (both conditional on a tag push) and the
 publish itself, which becomes `npm publish --dry-run`. Because the guards are skipped, double-check
 by eye during a dry run that the commit is on `main` and that the version you intend to tag
@@ -56,7 +56,7 @@ git push origin vX.Y.Z
 ```
 
 Pushing the tag runs the on-`main` check (the tagged commit must be an ancestor of
-`origin/main`), `pnpm verify:ci`, `pnpm typecheck:spec`, `pnpm build:library`, the
+`origin/main`), `pnpm verify:ci` (which includes `pnpm typecheck:spec`), `pnpm build:library`, the
 tag-vs-manifest guard (`GITHUB_REF_NAME` vs. `dist/packages/convex-angular/package.json`'s
 `version`), and finally `npm publish dist/packages/convex-angular --provenance --access public`.
 The mutation suite (`pnpm test:mutation`) does not run in the release workflow. It is

@@ -38,8 +38,6 @@ jobs:
 
       - run: pnpm verify:ci
 
-      - run: pnpm typecheck:spec
-
   mutation:
     runs-on: ubuntu-latest
     steps:
@@ -70,10 +68,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        convex: ['1.42.1', 'latest']
-    # `latest` can fail to resolve on an upstream release day (the workspace's
-    # 1-day minimumReleaseAge cooldown); it is an early warning, not a gate.
-    continue-on-error: ${{ matrix.convex == 'latest' }}
+        convex: ['1.42.1', '^1']
+    # '1.42.1' is the declared peer floor; '^1' resolves to the newest 1.x that
+    # has cleared the workspace's minimumReleaseAge cooldown (pnpm picks the
+    # highest mature version in a range), i.e. the newest release inside the
+    # peer cap. A red leg is an early warning, not a merge gate: the required
+    # check is `verify`.
     steps:
       - uses: actions/checkout@v4
 
