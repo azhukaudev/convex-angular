@@ -1,4 +1,12 @@
-import { EnvironmentInjector, EnvironmentProviders, Signal, inject, makeEnvironmentProviders } from '@angular/core';
+import {
+  EnvironmentInjector,
+  EnvironmentProviders,
+  Signal,
+  assertInInjectionContext,
+  inject,
+  makeEnvironmentProviders,
+  runInInjectionContext,
+} from '@angular/core';
 import { CONVEX_AUTH, provideConvexAuth } from 'convex-angular';
 
 import { BetterAuthClientLike, BetterAuthSessionData } from './better-auth-client';
@@ -83,17 +91,35 @@ export function provideBetterAuth(clientFactory: () => BetterAuthClientLike): En
   ]);
 }
 
+// The primary entry's shared guard is internal, so mirror its wording here to
+// give injectBetterAuth() the same message as every other inject* helper.
+function assertInjectBetterAuthContext(): void {
+  try {
+    assertInInjectionContext(injectBetterAuth);
+  } catch {
+    throw new Error(
+      'injectBetterAuth() must be called from an injection context (for example, a component or service field initializer or constructor), or be given an explicit injector via the `injectRef` option to create it later from plain code.',
+    );
+  }
+}
+
 /**
  * Inject the Better Auth session state registered by {@link provideBetterAuth}.
+ *
+ * Throws a guided error when called outside an injection context without
+ * `injectRef`, and when `provideBetterAuth()` is not registered.
  *
  * @public
  */
 export function injectBetterAuth(options?: InjectBetterAuthOptions): BetterAuthState {
-  if (options?.injectRef) {
-    return options.injectRef.get(BetterAuthService);
+  const injectRef = options?.injectRef;
+  if (!injectRef) {
+    assertInjectBetterAuthContext();
   }
 
-  const service = inject(BetterAuthService, { optional: true });
+  const service = injectRef
+    ? runInInjectionContext(injectRef, () => inject(BetterAuthService, { optional: true }))
+    : inject(BetterAuthService, { optional: true });
   if (!service) {
     throw new Error(
       'Could not find BetterAuthService. Call provideBetterAuth(...) in your providers, or pass { injectRef } when calling injectBetterAuth() outside an injection context.',

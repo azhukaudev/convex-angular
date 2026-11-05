@@ -124,6 +124,26 @@ describe('provideBetterAuth', () => {
     expect(() => TestBed.runInInjectionContext(() => injectBetterAuth())).toThrow(/provideBetterAuth/);
   });
 
+  it('injectBetterAuth() throws the guided injection-context error when called from plain code', () => {
+    TestBed.configureTestingModule({
+      providers: [provideConvexTesting(new MockConvexClient()), provideBetterAuth(fakeClient)],
+    });
+
+    expect(() => injectBetterAuth()).toThrow(
+      /injectBetterAuth\(\) must be called from an injection context[\s\S]*injectRef/,
+    );
+  });
+
+  it('injectBetterAuth() throws the guided missing-provider error when injectRef has no provideBetterAuth()', () => {
+    TestBed.configureTestingModule({
+      providers: [provideConvexTesting(new MockConvexClient())],
+    });
+
+    expect(() => injectBetterAuth({ injectRef: TestBed.inject(EnvironmentInjector) })).toThrow(
+      /Could not find BetterAuthService/,
+    );
+  });
+
   describe('same-session refresh', () => {
     // getSession() answers `fallback` unless a refresh is being held open.
     function setup(fallback: SessionResult) {

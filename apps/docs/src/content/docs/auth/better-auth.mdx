@@ -111,6 +111,9 @@ Called without `provideBetterAuth(...)` registered, it throws:
 Could not find BetterAuthService. Call provideBetterAuth(...) in your providers, or pass { injectRef } when calling injectBetterAuth() outside an injection context.
 ```
 
+Called outside an injection context without `injectRef`, it throws the standard injection-context
+error.
+
 ### `BetterAuthState`
 
 ```ts

@@ -24,8 +24,8 @@ injectQuery() must be called from an injection context (for example, a component
 The message is templated with the name of the helper you called, so the leading
 identifier varies: `injectConvex()`, `injectQuery()`, `injectQueries()`,
 `injectPaginatedQuery()`, `injectPrewarmQuery()`, `injectMutation()`,
-`injectAction()`, `injectConvexConnectionState()`, and `injectAuth()` each
-produce their own version of it. The rest of the sentence is identical.
+`injectAction()`, `injectConvexConnectionState()`, `injectAuth()`, and
+`injectBetterAuth()` each produce their own version of it. The rest of the sentence is identical.
 
 **When it happens.** Every `inject*` helper needs an Angular injector to resolve
 the Convex client, register a `DestroyRef` cleanup, and create effects. Angular
@@ -181,13 +181,13 @@ directives](/auth/directives/), and [route guards](/auth/route-guards/).
 Could not find BetterAuthService. Call provideBetterAuth(...) in your providers, or pass { injectRef } when calling injectBetterAuth() outside an injection context.
 ```
 
-**When it happens.** `injectBetterAuth()` resolves `BetterAuthService`
-optionally and found nothing. Either `provideBetterAuth(...)` was never
-registered, or it was registered in an injector that is not an ancestor of the
-one the call resolved from. Unlike the other helpers, `injectBetterAuth()` does
-not go through the shared injection-context guard, so this single message covers
-both the missing-provider case and calls made from plain code with no ambient
-injector.
+**When it happens.** `injectBetterAuth()` resolved `BetterAuthService` and
+found nothing. Either `provideBetterAuth(...)` was never registered, or it was
+registered in an injector that is not an ancestor of the one the call resolved
+from, including the injector passed as `injectRef`. A call from plain code with
+no injector and no `injectRef` instead produces the standard
+`injectBetterAuth() must be called from an injection context …` error described
+above.
 
 **How to fix.** Register `provideBetterAuth(() => authClient)` in your root
 providers. When calling from outside an injection context, pass an explicit
