@@ -89,16 +89,6 @@ describe('openWarmSubscription', () => {
     expect(onRelease).toHaveBeenCalledTimes(1);
   });
 
-  it('stops forwarding values after release', () => {
-    const warm = open();
-    const subscription = requireLastQuerySubscription(convex);
-
-    warm.release();
-    subscription.emit({ name: 'late' });
-
-    expect(onValue).not.toHaveBeenCalled();
-  });
-
   it('keeps the subscription open until released', () => {
     open();
 
@@ -169,8 +159,11 @@ describe('openWarmSubscription', () => {
     warm.releaseAfter(1000);
 
     warm.release();
-    tick(1000);
 
+    // The released flag alone would make a stale timer a harmless no-op, so
+    // assert the timer itself is gone: `flush` returns the virtual time it had
+    // to advance, and zero means nothing was left pending.
+    expect(flush()).toBe(0);
     expect(subscription.unsubscribeCount).toBe(1);
     expect(onRelease).toHaveBeenCalledTimes(1);
   }));

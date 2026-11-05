@@ -704,6 +704,41 @@ describe('injectQueries', () => {
       expect(handleError).toHaveBeenCalledTimes(1);
       expect(handleError).toHaveBeenCalledWith(callbackError);
     }));
+
+    it('keeps the error state and reports to the ErrorHandler when onError throws', fakeAsync(() => {
+      const callbackError = new Error('onError blew up');
+      const handleError = jest.fn();
+      TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly queries = injectQueries(
+          () => ({
+            user: { query: mockUserQuery, args: { userId: 'user-1' } },
+          }),
+          {
+            onError: () => {
+              throw callbackError;
+            },
+          },
+        );
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const queryError = new Error('boom');
+      expect(() => requireQuerySubscription(convex, { userId: 'user-1' }).emitError(queryError)).not.toThrow();
+
+      expect(fixture.componentInstance.queries.errors().user).toBe(queryError);
+      expect(fixture.componentInstance.queries.statuses().user).toBe('error');
+      expect(handleError).toHaveBeenCalledTimes(1);
+      expect(handleError).toHaveBeenCalledWith(callbackError);
+    }));
   });
 
   describe('refetch', () => {

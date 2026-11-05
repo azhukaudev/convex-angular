@@ -1575,6 +1575,37 @@ describe('injectPaginatedQuery', () => {
       expect(handleError).toHaveBeenCalledWith(callbackError);
     }));
 
+    it('should keep the error state and report to the ErrorHandler when onError throws', fakeAsync(() => {
+      const callbackError = new Error('onError blew up');
+      const handleError = jest.fn();
+      TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+      @Component({
+        template: '',
+        standalone: true,
+      })
+      class TestComponent {
+        readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+          initialNumItems: 10,
+          onError: () => {
+            throw callbackError;
+          },
+        });
+      }
+
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      tick();
+
+      const queryError = new Error('Query failed');
+      expect(() => requireLastPaginatedSubscription(convex).emitError(queryError)).not.toThrow();
+
+      expect(fixture.componentInstance.todos.error()).toBe(queryError);
+      expect(fixture.componentInstance.todos.status()).toBe('error');
+      expect(handleError).toHaveBeenCalledTimes(1);
+      expect(handleError).toHaveBeenCalledWith(callbackError);
+    }));
+
     it('should not call onSuccess during LoadingFirstPage status', fakeAsync(() => {
       const onSuccess = jest.fn();
 

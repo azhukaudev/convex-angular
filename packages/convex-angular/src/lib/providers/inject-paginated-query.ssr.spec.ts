@@ -1,4 +1,4 @@
-import { Component, PLATFORM_ID, TransferState, signal } from '@angular/core';
+import { Component, ErrorHandler, PLATFORM_ID, TransferState, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockConvexClient, MockPaginatedSubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference, PaginationResult } from 'convex/server';
@@ -290,6 +290,66 @@ describe('injectPaginatedQuery SSR and hydration', () => {
         expect(fixture.componentInstance.todos.status()).toBe('error');
         expect(fixture.componentInstance.todos.error()).toBe(fetchError);
         expect(onError).toHaveBeenCalledWith(fetchError);
+      }));
+
+      it('keeps the fetched first page and reports to the ErrorHandler when onSuccess throws', fakeAsync(() => {
+        const callbackError = new Error('onSuccess blew up');
+        const handleError = jest.fn();
+        setupServer();
+        TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+        @Component({
+          template: '',
+          standalone: true,
+        })
+        class TestComponent {
+          readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+            initialNumItems: 10,
+            onSuccess: () => {
+              throw callbackError;
+            },
+          });
+        }
+
+        const fixture = TestBed.createComponent(TestComponent);
+        fixture.detectChanges();
+        expect(() => tick()).not.toThrow();
+
+        expect(fixture.componentInstance.todos.status()).toBe('success');
+        expect(fixture.componentInstance.todos.results()).toEqual([{ _id: '1', name: 'Server todo' }]);
+        expect(handleError).toHaveBeenCalledTimes(1);
+        expect(handleError).toHaveBeenCalledWith(callbackError);
+      }));
+
+      it('keeps the error state and reports to the ErrorHandler when onError throws', fakeAsync(() => {
+        const fetchError = new Error('server fetch failed');
+        const callbackError = new Error('onError blew up');
+        const handleError = jest.fn();
+        mockLoader.fetch.mockRejectedValue(fetchError);
+        setupServer();
+        TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
+
+        @Component({
+          template: '',
+          standalone: true,
+        })
+        class TestComponent {
+          readonly todos = injectPaginatedQuery(mockPaginatedQuery, () => ({}), {
+            initialNumItems: 10,
+            onError: () => {
+              throw callbackError;
+            },
+          });
+        }
+
+        const fixture = TestBed.createComponent(TestComponent);
+        fixture.detectChanges();
+        expect(() => tick()).not.toThrow();
+
+        expect(fixture.componentInstance.todos.status()).toBe('error');
+        expect(fixture.componentInstance.todos.error()).toBe(fetchError);
+        expect(handleError).toHaveBeenCalledTimes(1);
+        expect(handleError).toHaveBeenCalledWith(callbackError);
       }));
 
       it('does not fetch for skipped queries', fakeAsync(() => {
