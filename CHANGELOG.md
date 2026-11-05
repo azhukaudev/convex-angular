@@ -33,6 +33,7 @@
 - `provideConvex()` now forwards `skipConvexDeploymentUrlCheck` and `logger` to the `ConvexHttpClient` it creates for server-side rendering. Previously only the browser `ConvexClient` received them, so a deployment URL that needs `skipConvexDeploymentUrlCheck: true` worked in the browser but failed the server render, and a custom or disabled `logger` was ignored for server-side query logs.
 - `injectAuth()`: signals an auth provider's `fetchAccessToken()` reads before its first `await` no longer become dependencies of the internal auth sync effect. The Convex client fetches the first token synchronously inside `setAuth`, so a change to such a signal (for example Clerk's `sessionAudience`) re-ran the whole auth setup, and a provider whose fetcher wrote a signal it also read could loop.
 - `injectPrewarmQuery()`: a throwing `onError` callback is now reported to Angular's `ErrorHandler` instead of throwing inside the Convex client's update dispatch, matching the other helpers.
+- `injectPrewarmQuery()`: calling `prewarm()` after the owning component or injector was destroyed now resolves `false` immediately without opening a subscription. Previously the background subscription stayed open for the whole `extendSubscriptionFor` window. `convexQueryResolver()` shares the same guard and resolves `undefined` in that case.
 
 ### 📖 Documentation
 

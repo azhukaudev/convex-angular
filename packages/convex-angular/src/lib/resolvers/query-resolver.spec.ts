@@ -1,4 +1,4 @@
-import { DestroyRef, PLATFORM_ID } from '@angular/core';
+import { Component, DestroyRef, PLATFORM_ID, runInInjectionContext } from '@angular/core';
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
@@ -191,6 +191,28 @@ describe('convexQueryResolver', () => {
     // it must not schedule a keep-warm timer on its way out. `flush` reports
     // the virtual time it had to advance to drain the queue: zero means the
     // resolver left no pending work behind.
+    expect(flush()).toBe(0);
+  }));
+
+  it('resolves undefined without subscribing when its scope is already destroyed', fakeAsync(() => {
+    @Component({ template: '', standalone: true })
+    class HostComponent {}
+
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.detectChanges();
+    const scopeInjector = fixture.componentRef.injector;
+    fixture.destroy();
+
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+
+    let resolved: unknown = 'sentinel';
+    void Promise.resolve(runInInjectionContext(scopeInjector, () => resolver(route, state))).then(
+      (value) => (resolved = value),
+    );
+    tick();
+
+    expect(resolved).toBeUndefined();
+    expect(convex.querySubscriptions).toHaveLength(0);
     expect(flush()).toBe(0);
   }));
 

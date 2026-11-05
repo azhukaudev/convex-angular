@@ -1,5 +1,5 @@
-import { DestroyRef } from '@angular/core';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { DestroyRef, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
+import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
@@ -197,4 +197,50 @@ describe('openWarmSubscription', () => {
 
     expect(hooks.live()).toBe(0);
   }));
+
+  describe('on an already-destroyed scope', () => {
+    function destroyedScopeRef(): DestroyRef {
+      const scope = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
+      const scopeRef = scope.get(DestroyRef);
+      scope.destroy();
+      return scopeRef;
+    }
+
+    function openOn(scopeRef: DestroyRef): WarmSubscription {
+      return openWarmSubscription(TestBed.inject(CONVEX), mockQuery, { userId: 'user-1' }, scopeRef, {
+        onValue,
+        onError,
+        onRelease,
+      });
+    }
+
+    it('does not throw, opens no subscription, and releases synchronously', () => {
+      expect(() => openOn(destroyedScopeRef())).not.toThrow();
+
+      expect(convex.querySubscriptions).toHaveLength(0);
+      expect(onRelease).toHaveBeenCalledTimes(1);
+      expect(onValue).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+    });
+
+    it('returns an inert handle that never releases again or arms a timer', fakeAsync(() => {
+      const warm = openOn(destroyedScopeRef());
+
+      warm.release();
+      warm.releaseAfter(1000);
+
+      expect(onRelease).toHaveBeenCalledTimes(1);
+      // `flush` reports the virtual time it had to advance: 0 means no timer was armed.
+      expect(flush()).toBe(0);
+    }));
+
+    it('does not register a destroy hook', () => {
+      const scopeRef = destroyedScopeRef();
+      const onDestroy = jest.spyOn(scopeRef, 'onDestroy');
+
+      openOn(scopeRef);
+
+      expect(onDestroy).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import { Component, EnvironmentInjector, ErrorHandler, createEnvironmentInjector } from '@angular/core';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
@@ -235,6 +235,24 @@ describe('injectPrewarmQuery', () => {
     expect(requireQuerySubscription(convex, 1).unsubscribeCount).toBe(1);
   });
 
+  it('resolves false without throwing or subscribing when prewarm is called after the provided injector is destroyed', fakeAsync(() => {
+    const childInjector = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
+    const prewarmUser = injectPrewarmQuery(mockQuery, { injectRef: childInjector });
+    childInjector.destroy();
+
+    let warmed: boolean | undefined;
+    expect(() => {
+      void prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+        warmed = result;
+      });
+    }).not.toThrow();
+    tick();
+
+    expect(warmed).toBe(false);
+    expect(convex.querySubscriptions).toHaveLength(0);
+    expect(flush()).toBe(0);
+  }));
+
   it('lets injectRef override the ambient component scope', () => {
     const childInjector = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
 
@@ -348,6 +366,25 @@ describe('injectPrewarmQuery', () => {
       tick();
 
       expect(warmed).toBe(false);
+    }));
+    it('resolves false without throwing or subscribing when prewarm is called after the owning component is destroyed', fakeAsync(() => {
+      const fixture = TestBed.createComponent(TestComponent);
+      fixture.detectChanges();
+      const { prewarmUser } = fixture.componentInstance;
+      fixture.destroy();
+
+      let warmed: boolean | undefined;
+      expect(() => {
+        void prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+          warmed = result;
+        });
+      }).not.toThrow();
+      tick();
+
+      expect(warmed).toBe(false);
+      expect(convex.querySubscriptions).toHaveLength(0);
+      // No keep-warm timer was left behind.
+      expect(flush()).toBe(0);
     }));
   });
 

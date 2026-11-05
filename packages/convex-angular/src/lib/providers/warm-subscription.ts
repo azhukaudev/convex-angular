@@ -19,12 +19,22 @@ export interface WarmSubscription {
   releaseAfter(ms: number): void;
 }
 
+// What a caller gets when the scope was already destroyed: nothing was opened,
+// so there is nothing to release and no timer to arm.
+const INERT_WARM_SUBSCRIPTION: WarmSubscription = {
+  release: () => {},
+  releaseAfter: () => {},
+};
+
 /**
  * Subscribe to a query and keep the subscription warm until it is released.
  *
  * `handlers.onValue` and `handlers.onError` are forwarded synchronously from
  * the client's listener dispatch. `handlers.onRelease` runs once, after the
- * subscription has been dropped, whichever path released it.
+ * subscription has been dropped, whichever path released it. If `destroyRef` is
+ * already destroyed nothing is subscribed: `onRelease` runs synchronously,
+ * before this function returns (so it must not touch the returned handle), and
+ * the handle is inert.
  *
  * @internal
  */
@@ -39,6 +49,15 @@ export function openWarmSubscription<Query extends FunctionReference<'query'>>(
     onRelease: () => void;
   },
 ): WarmSubscription {
+  // A destroyed scope cannot take a destroy hook (Angular throws NG0911 for a
+  // view, NG0205 for an injector), and a subscription opened without one would
+  // never be released. Open nothing and report the release straight away; the
+  // handler therefore runs before this function returns.
+  if (destroyRef.destroyed) {
+    handlers.onRelease();
+    return INERT_WARM_SUBSCRIPTION;
+  }
+
   let released = false;
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 

@@ -121,7 +121,10 @@ export function convexQueryResolver<Query extends QueryReference>(
         onError: () => settle(undefined),
         // A scope destroyed before the first result must not hang the
         // navigation; resolving undefined matches the error path's contract.
-        onRelease: () => settle(undefined),
+        // Resolve directly: on an already-destroyed scope this runs inside
+        // openWarmSubscription, before `subscription` is initialised, and the
+        // keep-warm timer `settle` would arm is moot after a release anyway.
+        onRelease: () => resolve(undefined),
       });
     });
   };
