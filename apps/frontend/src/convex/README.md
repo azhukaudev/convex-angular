@@ -23,15 +23,10 @@ Never commit a real secret or paste one into a file in this repository.
 
 ## Better Auth version note
 
-This demo stays on better-auth 1.6.x because `@convex-dev/better-auth` does not yet allow 1.7: its latest release peers
-`better-auth >=1.6.11 <1.7.0`.
-
-The current critical and high better-auth advisories are fixed only in `better-auth >= 1.7.7`. They require Magic Link,
-a social or Generic OAuth provider, the OAuth Proxy plugin, or device authorization. The demo enables none of these; it
-uses only `emailAndPassword` plus the `crossDomain` and `convex` plugins.
-
-Do not add any of those features before upgrading to `better-auth >= 1.7.7`, which needs a `@convex-dev/better-auth`
-release that supports 1.7.
+The demo runs `better-auth` 1.7.x with `@convex-dev/better-auth` 0.13.x, which requires `better-auth >=1.7.16 <1.8.0`.
+Bump the two packages together. `@convex-dev/better-auth` also ships its own security fixes (for example the
+cross-domain one-time-token origin check in 0.12.6), and `pnpm audit` does not report those, so read its CHANGELOG
+when bumping.
 
 ## More about Convex functions
 
