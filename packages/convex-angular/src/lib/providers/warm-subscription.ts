@@ -15,9 +15,16 @@ import { FunctionArgs, FunctionReference, FunctionReturnType } from 'convex/serv
 export interface WarmSubscription {
   /** Release the subscription now. Later calls do nothing. */
   release(): void;
-  /** Release the subscription after `ms`. Arms once; a no-op after release. */
+  /**
+   * Release the subscription after `ms`. Arms once; a no-op after release.
+   * `ms` is capped at 2_147_483_647 (the largest delay a timer supports).
+   */
   releaseAfter(ms: number): void;
 }
+
+// The largest delay setTimeout supports (2^31 - 1 ms, about 24.8 days). Larger
+// delays, Infinity included, overflow and fire after ~0 ms.
+const MAX_TIMER_DELAY = 2_147_483_647;
 
 // What a caller gets when the scope was already destroyed: nothing was opened,
 // so there is nothing to release and no timer to arm.
@@ -81,7 +88,7 @@ export function openWarmSubscription<Query extends FunctionReference<'query'>>(
       if (released || timeoutId !== undefined) {
         return;
       }
-      timeoutId = setTimeout(release, ms);
+      timeoutId = setTimeout(release, Math.min(ms, MAX_TIMER_DELAY));
     },
   };
 }

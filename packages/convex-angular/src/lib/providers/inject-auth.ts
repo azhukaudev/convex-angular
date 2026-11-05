@@ -12,7 +12,6 @@ import {
   signal,
   untracked,
 } from '@angular/core';
-import { ConvexClient } from 'convex/browser';
 
 import { clearAuth, hasAuth, setAuthWithRefresh } from '../internal/convex-client-internals';
 import { CONVEX_AUTH, ConvexAuthProvider, ConvexAuthState, ConvexAuthStatus } from '../tokens/auth';
@@ -133,7 +132,7 @@ function createConvexAuthState(): ConvexAuthState {
     );
   }
 
-  const convex = inject(CONVEX, { optional: true }) as ConvexClient | null;
+  const convex = inject(CONVEX, { optional: true });
   if (!convex) {
     throw new Error(
       'Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers before calling `provideConvexAuth()`.',

@@ -25,7 +25,9 @@ export interface PrewarmQueryOptions<Query extends PrewarmQueryReference> {
 
   /**
    * How long to keep the background subscription alive after prewarming.
-   * Defaults to 5000ms.
+   * Defaults to 5000ms. Values above 2_147_483_647 (about 24.8 days), including
+   * `Infinity`, are capped to that limit; the subscription is still released
+   * when the owning injector is destroyed.
    */
   extendSubscriptionFor?: number;
 

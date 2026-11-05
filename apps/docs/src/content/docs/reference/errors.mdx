@@ -47,8 +47,8 @@ Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your roo
 ```
 
 **When it happens.** `injectConvex()` — which every query, mutation, action,
-pagination and prewarm helper calls internally — looked up the `CONVEX` token
-optionally and found nothing. The library injects optionally on purpose so it
+pagination and prewarm helper, and `convexQueryResolver()`, calls internally —
+looked up the `CONVEX` token optionally and found nothing. The library injects optionally on purpose so it
 can raise this focused setup error rather than Angular's generic
 `NullInjectorError`. The usual causes are a missing `provideConvex(...)` call, a
 helper resolved from an injector that is not a descendant of the one holding the

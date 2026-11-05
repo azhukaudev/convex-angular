@@ -3,12 +3,12 @@ import { DestroyRef, PLATFORM_ID, inject } from '@angular/core';
 import { ActivatedRouteSnapshot, ResolveFn, RouterStateSnapshot } from '@angular/router';
 import { FunctionArgs, FunctionReturnType } from 'convex/server';
 
+import { injectConvex } from '../providers/inject-convex';
 import { QueryReference } from '../providers/inject-query';
 import { openWarmSubscription } from '../providers/warm-subscription';
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { serializeQueryArgs } from '../ssr/state-transfer';
-import { CONVEX } from '../tokens/convex';
 
 const DEFAULT_KEEP_SUBSCRIBED_FOR = 5_000;
 
@@ -21,7 +21,10 @@ export interface ConvexQueryResolverOptions {
   /**
    * How long to keep the resolver's subscription alive after the route
    * resolves, so the component's own `injectQuery(...)` deduplicates onto the
-   * warm subscription and renders instantly. Defaults to 5000ms.
+   * warm subscription and renders instantly. Defaults to 5000ms. Values above
+   * 2_147_483_647 (about 24.8 days), including `Infinity`, are capped to that
+   * limit; the subscription is still released when the owning injector is
+   * destroyed.
    */
   keepSubscribedFor?: number;
 }
@@ -79,7 +82,7 @@ export function convexQueryResolver<Query extends QueryReference>(
   options?: ConvexQueryResolverOptions,
 ): ResolveFn<FunctionReturnType<Query> | undefined> {
   return (route, state) => {
-    const convex = inject(CONVEX);
+    const convex = injectConvex();
     const destroyRef = inject(DestroyRef);
 
     const args = argsFn ? argsFn(route, state) : ({} as FunctionArgs<Query>);

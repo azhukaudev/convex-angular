@@ -134,6 +134,26 @@ describe('openWarmSubscription', () => {
     expect(onRelease).toHaveBeenCalledTimes(1);
   }));
 
+  it('caps an Infinity delay at the largest timer delay instead of firing immediately', fakeAsync(() => {
+    open().releaseAfter(Infinity);
+
+    tick(2_147_483_646);
+    expect(onRelease).not.toHaveBeenCalled();
+
+    tick(1);
+    expect(onRelease).toHaveBeenCalledTimes(1);
+  }));
+
+  it('caps a finite delay above the timer limit at the limit', fakeAsync(() => {
+    open().releaseAfter(2 ** 31);
+
+    tick(2_147_483_646);
+    expect(onRelease).not.toHaveBeenCalled();
+
+    tick(1);
+    expect(onRelease).toHaveBeenCalledTimes(1);
+  }));
+
   it('does not arm a timer after release', fakeAsync(() => {
     const warm = open();
     warm.release();

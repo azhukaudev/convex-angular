@@ -117,6 +117,51 @@ describe('convexQueryResolver', () => {
     expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
   }));
 
+  it('starts the keep-warm window at the first result, not at subscribe time', fakeAsync(() => {
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+
+    let resolved: unknown;
+    void Promise.resolve(runResolver(resolver)).then((value) => (resolved = value));
+
+    // The first result arrives well after the default 5000ms window would have expired.
+    tick(6000);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(0);
+
+    requireLastQuerySubscription(convex).emit({ name: 'Ada' });
+    tick();
+
+    expect(resolved).toEqual({ name: 'Ada' });
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(0);
+
+    tick(4999);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(0);
+
+    tick(1);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
+  }));
+
+  // Pins current behavior: the first outcome of either kind arms the keep-warm
+  // timer, so a failed subscription is also released keepSubscribedFor later.
+  it('releases a failed subscription keepSubscribedFor after the error', fakeAsync(() => {
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+
+    let resolved: unknown = 'sentinel';
+    void Promise.resolve(runResolver(resolver)).then((value) => (resolved = value));
+    tick(1000);
+
+    requireLastQuerySubscription(convex).emitError(new Error('boom'));
+    tick();
+
+    expect(resolved).toBeUndefined();
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(0);
+
+    tick(4999);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(0);
+
+    tick(1);
+    expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
+  }));
+
   it('resolves undefined immediately for skipped queries', fakeAsync(() => {
     const resolver = convexQueryResolver(mockQuery, () => skipToken);
 
@@ -269,6 +314,15 @@ describe('convexQueryResolver', () => {
 
     expect(hooks.live()).toBe(0);
   }));
+
+  it('throws the guided setup error when provideConvex was never called', () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({});
+
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+
+    expect(() => runResolver(resolver)).toThrow('Could not find `CONVEX`. Make sure to call `provideConvex(...)`');
+  });
 
   it('resolves undefined on a disabled client instead of hanging', fakeAsync(() => {
     TestBed.resetTestingModule();

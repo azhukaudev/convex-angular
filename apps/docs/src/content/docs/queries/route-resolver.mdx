@@ -50,7 +50,9 @@ the _data_.
 Read route parameters in the component through a signal, as the example does with `toSignal(route.paramMap)`, not through `route.snapshot`: when only a parameter changes the router reuses the component, and a snapshot read never re-runs the args function, so the component would keep showing the previous record.
 
 `keepSubscribedFor` exists to cover the gap between the router resolving and the component's
-effect running. The 5 second default is generous; shorten it only if you have a reason.
+effect running. The 5 second default is generous; shorten it only if you have a reason. Values
+above 2,147,483,647 ms (about 24.8 days), including `Infinity`, are capped to that limit; the
+subscription is still released when the owning injector is destroyed.
 
 ## The warm-cache render is `'pending'`, not `'success'`
 
