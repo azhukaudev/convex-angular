@@ -44,6 +44,16 @@ export default [
     },
   },
   {
+    files: ['**/src/**/*.ts'],
+    languageOptions: {
+      parserOptions: {
+        project: ['tsconfig.typecheck.json', 'tsconfig.spec.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    rules: { '@typescript-eslint/no-deprecated': 'error' },
+  },
+  {
     files: ['**/*.html'],
     // Override or add rules here
     rules: {},

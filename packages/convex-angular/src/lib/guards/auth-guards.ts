@@ -1,7 +1,6 @@
 import { InjectionToken, Injector, effect, inject, untracked } from '@angular/core';
 import { CanActivateFn, CanMatchFn, Router, UrlTree } from '@angular/router';
-import { Observable } from 'rxjs';
-import { filter, map, take } from 'rxjs/operators';
+import { Observable, filter, map, take } from 'rxjs';
 
 import { injectAuth } from '../providers/inject-auth';
 import { ConvexAuthState, ConvexAuthStatus } from '../tokens/auth';
@@ -90,7 +89,7 @@ function createLoginRedirectTree(router: Router, loginRoute: string, returnUrl: 
 // during recognition, before redirects are resolved). Guards always run
 // during a navigation; the current URL is a defensive fallback.
 function navigationTargetUrl(router: Router): string {
-  const navigation = router.getCurrentNavigation();
+  const navigation = router.currentNavigation();
   if (!navigation) {
     return router.url;
   }
