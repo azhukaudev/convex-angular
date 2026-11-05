@@ -118,11 +118,11 @@ The package publishes three entry points. Import from the narrowest one that cov
 secondary entry points are separate so their dependencies never reach an application that does not
 use them.
 
-| Entry point                  | Contents                                                                                                                                                                                                                                     |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `convex-angular`             | Everything in the core API: `provideConvex()`, the `inject*` helpers, `skipToken`, auth providers and integrations for Clerk and Auth0, router guards, structural auth directives, `convexQueryResolver()`, and the `ConvexError` re-export. |
-| `convex-angular/testing`     | `MockConvexClient` and `provideConvexTesting()` for driving query emissions, mutation settlement, and connection state in tests without a backend.                                                                                           |
-| `convex-angular/better-auth` | `provideBetterAuth()`, `injectBetterAuth()`, `BetterAuthService`, and `BETTER_AUTH_CLIENT_FACTORY`. The integration is structurally typed and carries no direct Better Auth dependency.                                                      |
+| Entry point                  | Contents                                                                                                                                                                                                                                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `convex-angular`             | Everything in the core API: `provideConvex()`, the `inject*` helpers, `skipToken`, auth providers and integrations for Clerk and Auth0, router guards, structural auth directives, `convexQueryResolver()`, and the `ConvexError` re-export.                                             |
+| `convex-angular/testing`     | `MockConvexClient` and `provideConvexTesting()` for driving query emissions, mutation settlement, and connection state in tests without a backend, plus `MockConvexAuthProvider` and `provideConvexAuthTesting()` for driving `injectAuth()`, the auth directives, and the route guards. |
+| `convex-angular/better-auth` | `provideBetterAuth()`, `injectBetterAuth()`, and the structural types `BetterAuthClientLike`, `BetterAuthFetchResult`, `BetterAuthSessionData`, `BetterAuthState`, and `InjectBetterAuthOptions`. The integration is structurally typed and carries no direct Better Auth dependency.    |
 
 ```typescript
 import { injectQuery, provideConvex } from 'convex-angular';

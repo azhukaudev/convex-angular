@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, type ParamMap, type Routes } from '@angular/router';
 import { convexQueryResolver, injectQuery } from 'convex-angular';
 
@@ -32,12 +33,15 @@ function requireParam(paramMap: ParamMap, name: string): string {
   `,
 })
 export class UserProfileComponent {
-  private readonly route = inject(ActivatedRoute);
+  // `route.snapshot` is not a signal: the router reuses this component when only `:id` changes, so a snapshot read
+  // inside the args function would never re-run and the page would keep showing the first user. `paramMap` emits
+  // synchronously, so `requireSync` gives a Signal<ParamMap> without an `undefined` initial value.
+  private readonly params = toSignal(inject(ActivatedRoute).paramMap, { requireSync: true });
 
   // The resolver's value is not read here. The component simply subscribes
   // to the same query with the same args and hits the warm cache.
   readonly profile = injectQuery(api.users.getProfile, () => ({
-    userId: requireParam(this.route.snapshot.paramMap, 'id'),
+    userId: requireParam(this.params(), 'id'),
   }));
 }
 

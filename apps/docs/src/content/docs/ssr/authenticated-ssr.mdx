@@ -51,9 +51,9 @@ you want (the render is on behalf of one user), but it means the "authenticated"
 render-global: if a token was applied, `transferAuthenticatedResults: false` suppresses the transfer
 for _all_ results of that render, not only the user-specific ones.
 
-## Keeping results out of the HTML
+## Keeping results out of the TransferState payload
 
-If you would rather not embed user data in the markup at all, set:
+If you would rather not serialize user data into the `TransferState` payload, set:
 
 ```typescript
 provideConvex(convexUrl, {

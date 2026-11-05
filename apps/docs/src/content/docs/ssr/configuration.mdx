@@ -93,8 +93,7 @@ transferred.
 | truthy token                | omitted / `true` / `undefined` | Yes          |
 | truthy token                | `false`                        | No           |
 
-When the transfer is suppressed, the server still renders with real data — only the payload is kept
-out of the HTML. The hydrated browser has nothing to seed from and shows a brief loading state until
+When the transfer is suppressed, the server still renders with real data — only the `TransferState` payload is skipped; the rendered markup still contains the data. The hydrated browser has nothing to seed from and shows a brief loading state until
 the live subscription delivers.
 
 ## Degradation matrix

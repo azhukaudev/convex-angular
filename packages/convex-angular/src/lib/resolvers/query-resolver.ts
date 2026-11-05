@@ -57,9 +57,12 @@ export interface ConvexQueryResolverOptions {
  *   },
  * ];
  *
- * // user-profile.component.ts — renders instantly from the warm cache
+ * // user-profile.component.ts — renders instantly from the warm cache.
+ * // Read the params reactively (`route.snapshot` is not a signal, so the
+ * // args would go stale if the router reuses the component for a new :id).
+ * private readonly params = toSignal(inject(ActivatedRoute).paramMap, { requireSync: true });
  * readonly profile = injectQuery(api.users.getProfile, () => ({
- *   userId: this.route.snapshot.paramMap.get('id')!,
+ *   userId: this.params().get('id')!,
  * }));
  * ```
  *

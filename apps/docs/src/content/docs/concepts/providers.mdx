@@ -38,11 +38,11 @@ export const appConfig: ApplicationConfig = {
 
 `ConvexSsrOptions` has three fields:
 
-| Name                           | Type                                                                        | Default | Description                                                                                                                                                                                     |
-| ------------------------------ | --------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `fetchOnServer`                | `boolean`                                                                   | `true`  | Fetch query results over HTTP during the server render and transfer them to the browser through `TransferState`.                                                                                |
-| `authToken`                    | `() => string \| null \| undefined \| Promise<string \| null \| undefined>` | —       | Factory producing a JWT for authenticated server-side fetches, resolved once per server render. Returning `null`/`undefined` fetches unauthenticated.                                           |
-| `transferAuthenticatedResults` | `boolean`                                                                   | `true`  | Embed authenticated results in the rendered HTML. Such responses **must** be served `Cache-Control: private` (or `no-store`). Set `false` to opt out and let the hydrated client re-fetch live. |
+| Name                           | Type                                                                        | Default | Description                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------ | --------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `fetchOnServer`                | `boolean`                                                                   | `true`  | Fetch query results over HTTP during the server render and transfer them to the browser through `TransferState`.                                                                                                                                                                                                                                                         |
+| `authToken`                    | `() => string \| null \| undefined \| Promise<string \| null \| undefined>` | —       | Factory producing a JWT for authenticated server-side fetches, resolved once per server render. Returning `null`/`undefined` fetches unauthenticated.                                                                                                                                                                                                                    |
+| `transferAuthenticatedResults` | `boolean`                                                                   | `true`  | Whether authenticated results are serialized into the `TransferState` payload. The server-rendered markup contains them either way, so such responses **must** be served `Cache-Control: private` (or `no-store`). `false` only keeps them out of the payload and lets the hydrated client re-fetch live; it has no effect without an `authToken` that resolves a token. |
 
 ### Inherited from `ConvexClientOptions`
 
@@ -147,7 +147,7 @@ export const EXAMPLE_ROUTES: Route[] = [
 
 This is a deliberate alternative for an application where Convex is confined to one lazily loaded
 section: the client is not constructed — and no WebSocket is opened — until a user navigates into
-that route, and it is closed when the route injector is destroyed.
+that route. It is closed when the route injector is destroyed — which, as of Angular 22.2, the router does only if the application opts in with `withAutoCleanupInjectors()` (together with a `RouteReuseStrategy` whose `shouldDestroyInjector` returns `true` for that route). Without it the injector, the client, and its WebSocket stay alive after the user leaves the route.
 
 <Aside type="danger">
   The two placements are mutually exclusive. If the root registers `provideConvex()` and a route registers it too,
@@ -159,8 +159,7 @@ Route-scoped registration also has consequences worth accepting on purpose:
 
 - Helpers used **outside** that route subtree have no `CONVEX` token and throw the
   `Could not find CONVEX` error from `injectConvex()`.
-- Leaving the route destroys the injector, closes the client, and discards the local query cache.
-  Re-entering opens a fresh WebSocket and re-fetches.
+- Leaving the route does not close the client by default: Angular keeps route injectors alive unless the app opts into `withAutoCleanupInjectors()` and `shouldDestroyInjector` returns `true`. Only then does leaving the route destroy the injector, close the client, and discard the local query cache, so that re-entering opens a fresh WebSocket and re-fetches; otherwise re-entering reuses the same client and cache.
 - Two sibling route subtrees each registering `provideConvex()` are legal (neither is the other's
   parent) but produce two independent clients with two WebSockets and no shared cache.
 

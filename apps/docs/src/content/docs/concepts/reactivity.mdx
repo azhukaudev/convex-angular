@@ -53,19 +53,22 @@ Arguments are encoded with `convexToJson` before stringifying, so Convex value t
 ## What is tracked, and what is not
 
 <Aside type="caution">
-  Only the **arguments function** and the internal **refetch version** are reactive. The `options` object is read once,
-  when the helper is created. Passing a signal-derived `onSuccess`, `placeholderData`, or `optimisticUpdate` does not
-  make it reactive — the value captured at creation time is the one that is used forever.
+  Only the **arguments function** and the internal **refetch version** are reactive. The `options` object is not
+  tracked: assigning a signal or a new value to an option never triggers anything by itself. Its properties are,
+  however, read at the moment they are used — a callback when it fires, `optimisticUpdate` on each `mutate()`,
+  `placeholderData` each time the subscription (re)runs — so reassigning a property on an options object you kept a
+  reference to takes effect from the next use. Do not rely on that for changing behavior: keep callbacks stable.
 </Aside>
 
-| Input                              | Reactive?                                                                                                    |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Signals read inside the args fn    | Yes — tracked, and resubscribe when the serialized args change.                                              |
-| `refetch()`                        | Yes — bumps an internal version signal, changing the subscription key.                                       |
-| The function reference (`api.x.y`) | No — captured once.                                                                                          |
-| `options.onSuccess` / `onError`    | No — captured once.                                                                                          |
-| `options.placeholderData`          | No — captured once. Factories run `untracked`, so signals read inside one do not retrigger the subscription. |
-| `options.injectRef`                | No — captured once, and it also changes ownership. See [Injection context](/concepts/injection-context/).    |
+| Input                              | Reactive?                                                                                                                                                             |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Signals read inside the args fn    | Yes — tracked, and resubscribe when the serialized args change.                                                                                                       |
+| `refetch()`                        | Yes — bumps an internal version signal, changing the subscription key.                                                                                                |
+| The function reference (`api.x.y`) | No — captured once.                                                                                                                                                   |
+| `options.onSuccess` / `onError`    | No — not tracked, but read when each callback fires, so a reassigned property is honored from the next call.                                                          |
+| `options.placeholderData`          | No — not tracked, but read each time the subscription effect (re)subscribes. Factories run `untracked`, so signals read inside one do not retrigger the subscription. |
+| `options.optimisticUpdate`         | No — not tracked, but read on every `mutate()` call.                                                                                                                  |
+| `options.injectRef`                | No — captured once, and it also changes ownership. See [Injection context](/concepts/injection-context/).                                                             |
 
 If a query genuinely needs different callbacks over time, keep the callback stable and read the
 changing part from a signal inside it.

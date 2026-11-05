@@ -47,6 +47,8 @@ Reading `route.snapshot.data['profile']` would work, but it gives you a static v
 never updates and forfeits the whole point of Convex. Resolve for the _timing_, subscribe for
 the _data_.
 
+Read route parameters in the component through a signal, as the example does with `toSignal(route.paramMap)`, not through `route.snapshot`: when only a parameter changes the router reuses the component, and a snapshot read never re-runs the args function, so the component would keep showing the previous record.
+
 `keepSubscribedFor` exists to cover the gap between the router resolving and the component's
 effect running. The 5 second default is generous; shorten it only if you have a reason.
 

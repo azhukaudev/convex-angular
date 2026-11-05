@@ -42,7 +42,7 @@ Jest 30 uses `--testPathPatterns` (plural). A bare argument forwarded after `--`
 - Plain Markdown-only change: `pnpm format:check` is sufficient.
 - Any change under `apps/docs` — including `.mdx`, which is executable content, not prose: run `pnpm check:docs` (or `pnpm build:docs`). `format:check` alone is not sufficient there.
 
-`verify:ci` and `verify:full` start with `pnpm format:check`. CI runs `pnpm verify:ci` and `pnpm typecheck:spec` in one job, and the mutation suite (`pnpm test:mutation`) in a parallel job, for every pull request and push to `main`. `pnpm verify:full` (`verify:ci` plus the mutation suite) remains the single local everything-command. Treat CI's checks as required.
+`verify:ci` and `verify:full` start with `pnpm format:check`. CI runs three jobs for every pull request and push to `main`: `verify` (`pnpm verify:ci` and `pnpm typecheck:spec`), `mutation` (`pnpm test:mutation`), and `convex-peer-range`, which reinstalls `convex` at the declared peer floor (`1.42.1`) and at `latest` and reruns the library tests and both type-checks (the `latest` leg is `continue-on-error`: it is an early warning, not a gate). `pnpm verify:full` (`verify:ci` plus the mutation suite) remains the single local everything-command. Treat CI's checks as required.
 
 Git hooks are managed by Lefthook. Pre-commit formats staged files and runs duplication/dead-code checks; pre-push runs lint, test, and build targets. Fix hook failures instead of bypassing them. `LEFTHOOK=0` is acceptable only during a rebase of already-reviewed commits.
 
@@ -51,7 +51,7 @@ Quality baselines are ratchets:
 - Keep ESLint at zero warnings as well as zero errors. Fix the cause rather than silencing it: narrow the type instead of asserting with `!`, delete the unused binding, and reach for an inline `eslint-disable` only with a reason comment. Generated or build output that cannot be edited belongs in the relevant `eslint.config.mjs` `ignores`, not in a suppression comment.
 - Keep knip at zero findings. Prefer deleting unused code or exports over adding ignores; every necessary ignore needs a reason.
 - Do not raise the jscpd threshold to accommodate new duplication. Extract shared logic instead.
-- Prettier may report pre-existing repository drift; format the files you change rather than sweeping unrelated files.
+- `pnpm format:check` is a gate (the first step of `verify:ci`/`verify:full`, and CI runs it), so the tree is expected to be Prettier-clean; format the files you change.
 
 ## Architecture and Boundaries
 
@@ -61,6 +61,10 @@ The library exposes standalone `inject*` helpers and `provide*` environment prov
 - `src/lib/providers` — query, mutation, action, pagination, connection, and auth helpers.
 - `src/lib/providers/integrations` — auth-provider adapters.
 - `src/lib/guards` and `src/lib/directives` — router guards and structural auth directives.
+- `src/lib/ssr` — SSR options (`ConvexSsrOptions`), the server query loader, and TransferState serialization/hydration.
+- `src/lib/resolvers` — `convexQueryResolver()`.
+- `src/lib/internal` — the only runtime code that touches `BaseConvexClient` and the experimental client APIs (`convex-client-internals.ts`), so a `convex` release that moves that surface breaks one file and its real-client contract spec. It is a leaf module: it imports only from `convex/*` (and types from `../paginated-types`), and providers import from it, never the reverse.
+- `src/lib/paginated-types.ts` — shared paginated-query type helpers used by the providers and by `internal/`.
 - `testing/src` — `MockConvexClient`, `provideConvexTesting()`, `MockConvexAuthProvider`, and `provideConvexAuthTesting()`.
 - `better-auth/src` — structurally typed Better Auth integration with no direct Better Auth package dependency in the published entry point.
 
@@ -81,7 +85,7 @@ Tests use Jest with `jest-preset-angular`, zone-based TestBed, and colocated `*.
 
 Both Jest configs intentionally cap `maxWorkers` at 4 because higher worker counts reproduce a Node 24 `jest-worker` SIGSEGV. Keep the cap unless the Node/runtime issue is re-evaluated with evidence.
 
-Specs stand the Convex client up through `MockConvexClient` and `provideConvexTesting()` from `convex-angular/testing`, not a hand-rolled `jest.Mocked<ConvexClient>` literal. The library dogfooding its own published test double is deliberate: a capability the mock cannot express is a gap consumers hit too, so extend the mock rather than fake around it. Two deliberate exceptions remain — `tokens/convex.spec.ts` needs a real `ConvexClient`, and one `injectPaginatedQuery` test injects a client that genuinely lacks `onPaginatedUpdate_experimental`.
+Specs stand the Convex client up through `MockConvexClient` and `provideConvexTesting()` from `convex-angular/testing`, not a hand-rolled `jest.Mocked<ConvexClient>` literal. The library dogfooding its own published test double is deliberate: a capability the mock cannot express is a gap consumers hit too, so extend the mock rather than fake around it. Three deliberate exceptions remain — `tokens/convex.spec.ts` needs a real `ConvexClient`; `src/lib/internal/convex-internals.spec.ts` is the contract spec that runs every wrapper in `internal/convex-client-internals.ts` against a real `ConvexClient` (a mock cannot detect a `convex` release that moves the `BaseConvexClient` or experimental surface); and one `injectPaginatedQuery` test injects a client that genuinely lacks `onPaginatedUpdate_experimental`.
 
 The mock mirrors the installed client's semantics, so verify against `node_modules/convex` before changing it. In particular `hasAuth()` reports a held token (seed one with `seedAuth`), not a `setAuth` registration; `clearAuth()` does not stop registered callbacks; and `emitAfterUnsubscribe()` reaches a defensive staleness guard that the real client can never trigger, so it is not for ordinary tests. For error paths the mock cannot express, `jest.spyOn(convex.client, ...)` on the mock's own stable `client` object is the supported escape hatch.
 
@@ -114,6 +118,6 @@ Code samples resist drift by being real files. Anything substantial lives in `ap
 
 ## Demo and Releases
 
-Copy `.env.sample` to `.env.local` for local demo development. Environment values are injected by `apps/frontend/plugins/env-var-plugin.js`; never commit secrets.
+Copy `.env.sample` to `.env.local` for local demo development. Environment values are injected by `apps/frontend/plugins/env-var-plugin.js`; never commit secrets. `BETTER_AUTH_SECRET` and `SITE_URL` are not set in `.env.local`: they live on the Convex deployment and are set with `npx convex env set` — see `apps/frontend/src/convex/README.md`.
 
 Releases are a manual version bump of `packages/convex-angular/package.json` plus a pushed `v*` tag. Do not run `nx release`; its leftover config would bump only the `dist/` manifest. Pushing the tag triggers the release workflow, which verifies, builds, checks tag/version consistency, and publishes with provenance (`npm publish`, not `nx release`). See RELEASING.md for the step-by-step release runbook.
