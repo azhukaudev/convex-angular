@@ -1,9 +1,10 @@
 import { Component, EnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { CONVEX_AUTH, injectAuth } from 'convex-angular';
-import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 
 import { BetterAuthClientLike, BetterAuthFetchResult, BetterAuthSessionData } from './better-auth-client';
+import { BetterAuthService } from './better-auth.service';
 import { injectBetterAuth, provideBetterAuth } from './provide-better-auth';
 
 function fakeClient(): BetterAuthClientLike {
@@ -16,6 +17,19 @@ function fakeClient(): BetterAuthClientLike {
     convex: { token: async () => ({ data: { token: 'jwt-1' }, error: null }) },
   };
 }
+
+function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
+  const registration = convex.lastAuthRegistration();
+  if (!registration) {
+    throw new Error('Expected a captured auth registration');
+  }
+  return registration;
+}
+
+type SessionResult = BetterAuthFetchResult<BetterAuthSessionData>;
+
+const sessionOf = (id: string): SessionResult => ({ data: { session: { id }, user: { id: 'u1' } }, error: null });
+const unauthorized: SessionResult = { data: null, error: { status: 401 } };
 
 describe('provideBetterAuth', () => {
   afterEach(() => {
@@ -37,8 +51,13 @@ describe('provideBetterAuth', () => {
     fixture.detectChanges();
     tick();
 
-    // One instance backs both APIs.
-    expect(TestBed.inject(CONVEX_AUTH)).toBe(fixture.componentInstance.betterAuth);
+    // One service backs both APIs.
+    const convexAuth = TestBed.inject(CONVEX_AUTH);
+    expect(convexAuth.isAuthenticated()).toBe(fixture.componentInstance.betterAuth.isAuthenticated());
+    let token: string | null | undefined;
+    void convexAuth.fetchAccessToken({ forceRefreshToken: false }).then((value) => (token = value));
+    tick();
+    expect(token).toBe('jwt-1');
     expect(fixture.componentInstance.betterAuth.session()?.session.id).toBe('s1');
     expect(fixture.componentInstance.betterAuth.isAuthenticated()).toBe(true);
   }));
@@ -78,7 +97,7 @@ describe('provideBetterAuth', () => {
     const state = injectBetterAuth({ injectRef: injector });
     tick();
 
-    expect(state).toBe(TestBed.inject(CONVEX_AUTH));
+    expect(state).toBe(TestBed.inject(BetterAuthService));
     expect(state.isAuthenticated()).toBe(true);
   }));
 
@@ -103,5 +122,138 @@ describe('provideBetterAuth', () => {
     });
 
     expect(() => TestBed.runInInjectionContext(() => injectBetterAuth())).toThrow(/provideBetterAuth/);
+  });
+
+  describe('same-session refresh', () => {
+    // getSession() answers `fallback` unless a refresh is being held open.
+    function setup(fallback: SessionResult) {
+      let held: Promise<SessionResult> | null = null;
+      const client: BetterAuthClientLike = {
+        getSession: () => held ?? Promise.resolve(fallback),
+        convex: { token: async () => ({ data: { token: 'jwt-1' }, error: null }) },
+      };
+      const convex = new MockConvexClient();
+      TestBed.configureTestingModule({ providers: [provideConvexTesting(convex), provideBetterAuth(() => client)] });
+      const { auth, betterAuth } = TestBed.runInInjectionContext(() => ({
+        auth: injectAuth(),
+        betterAuth: injectBetterAuth(),
+      }));
+      return {
+        convex,
+        auth,
+        betterAuth,
+        /** Hold the next getSession() call open until the returned function is called. */
+        holdNextRefresh: () => {
+          let resolve!: (result: SessionResult) => void;
+          held = new Promise<SessionResult>((r) => (resolve = r));
+          return (result: SessionResult) => {
+            held = null;
+            resolve(result);
+          };
+        },
+      };
+    }
+
+    function settleSignedIn(stack: ReturnType<typeof setup>): void {
+      tick();
+      TestBed.tick();
+      stack.convex.seedAuth({ token: 'jwt-1', decoded: { sub: 'u1' } });
+      requireLastAuthRegistration(stack.convex).setAuthenticated(true);
+      TestBed.tick();
+      expect(stack.auth.status()).toBe('authenticated');
+      expect(stack.convex.authRegistrations).toHaveLength(1);
+      expect(stack.convex.clearAuthCount).toBe(0);
+    }
+
+    afterEach(() => {
+      TestBed.resetTestingModule();
+    });
+
+    it('keeps Convex auth steady while the same session is re-validated', fakeAsync(() => {
+      const stack = setup(sessionOf('s1'));
+      settleSignedIn(stack);
+      const statuses: string[] = [];
+      const record = () => statuses.push(stack.auth.status());
+
+      const resolveRefresh = stack.holdNextRefresh();
+      let settled = false;
+      void stack.betterAuth.refreshSession().then(() => (settled = true));
+      TestBed.tick();
+      record();
+
+      expect(stack.betterAuth.isLoading()).toBe(true);
+      expect(stack.auth.isAuthenticated()).toBe(true);
+      expect(stack.auth.status()).toBe('authenticated');
+      expect(stack.convex.clearAuthCount).toBe(0);
+
+      resolveRefresh(sessionOf('s1'));
+      tick();
+      TestBed.tick();
+      record();
+
+      expect(settled).toBe(true);
+      expect(stack.betterAuth.isLoading()).toBe(false);
+      expect(stack.convex.authRegistrations).toHaveLength(1);
+      expect(stack.convex.clearAuthCount).toBe(0);
+      expect(stack.auth.status()).toBe('authenticated');
+      expect(statuses).not.toContain('loading');
+    }));
+
+    it('re-authenticates when the refreshed session has a different id', fakeAsync(() => {
+      const stack = setup(sessionOf('s1'));
+      settleSignedIn(stack);
+
+      const resolveRefresh = stack.holdNextRefresh();
+      void stack.betterAuth.refreshSession();
+      TestBed.tick();
+      expect(stack.convex.clearAuthCount).toBe(0);
+      expect(stack.convex.authRegistrations).toHaveLength(1);
+
+      resolveRefresh(sessionOf('s2'));
+      tick();
+      TestBed.tick();
+      expect(stack.convex.authRegistrations).toHaveLength(2);
+
+      requireLastAuthRegistration(stack.convex).setAuthenticated(true);
+      TestBed.tick();
+      expect(stack.auth.status()).toBe('authenticated');
+    }));
+
+    it('still reports loading while a sign-in refresh runs from a signed-out state', fakeAsync(() => {
+      const stack = setup(unauthorized);
+      tick();
+      TestBed.tick();
+      expect(stack.auth.status()).toBe('unauthenticated');
+
+      const resolveRefresh = stack.holdNextRefresh();
+      void stack.betterAuth.refreshSession();
+      TestBed.tick();
+      expect(stack.auth.status()).toBe('loading');
+
+      resolveRefresh(sessionOf('s1'));
+      tick();
+      TestBed.tick();
+      expect(stack.convex.authRegistrations).toHaveLength(1);
+
+      requireLastAuthRegistration(stack.convex).setAuthenticated(true);
+      TestBed.tick();
+      expect(stack.auth.status()).toBe('authenticated');
+    }));
+
+    it('ends unauthenticated, with one clearAuth, when the re-validated session has expired', fakeAsync(() => {
+      const stack = setup(sessionOf('s1'));
+      settleSignedIn(stack);
+
+      const resolveRefresh = stack.holdNextRefresh();
+      void stack.betterAuth.refreshSession();
+      TestBed.tick();
+
+      resolveRefresh(unauthorized);
+      tick();
+      TestBed.tick();
+
+      expect(stack.auth.status()).toBe('unauthenticated');
+      expect(stack.convex.clearAuthCount).toBe(1);
+    }));
   });
 });

@@ -1,5 +1,5 @@
 import { EnvironmentInjector, EnvironmentProviders, Signal, inject, makeEnvironmentProviders } from '@angular/core';
-import { provideConvexAuthFromExisting } from 'convex-angular';
+import { CONVEX_AUTH, provideConvexAuth } from 'convex-angular';
 
 import { BetterAuthClientLike, BetterAuthSessionData } from './better-auth-client';
 import { BETTER_AUTH_CLIENT_FACTORY, BetterAuthService } from './better-auth.service';
@@ -78,7 +78,8 @@ export function provideBetterAuth(clientFactory: () => BetterAuthClientLike): En
   return makeEnvironmentProviders([
     { provide: BETTER_AUTH_CLIENT_FACTORY, useValue: clientFactory },
     BetterAuthService,
-    provideConvexAuthFromExisting(BetterAuthService),
+    { provide: CONVEX_AUTH, useFactory: () => inject(BetterAuthService).convexAuth },
+    provideConvexAuth(),
   ]);
 }
 

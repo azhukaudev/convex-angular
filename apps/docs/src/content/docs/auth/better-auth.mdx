@@ -90,6 +90,11 @@ library to re-read the session:
 
 <Code code={betterAuthFlows} lang="ts" title="auth-flows.service.ts" />
 
+Re-reading a session that did not change (the same `session.id`) does not touch Convex auth: there
+is no re-authentication and no resubscription, and `injectAuth().status()` stays `'authenticated'`.
+A different session id re-runs Convex auth setup. `betterAuth.isLoading()` still reports every
+(re)load.
+
 ## `injectBetterAuth()`
 
 ```ts
@@ -128,8 +133,8 @@ interface BetterAuthState {
 | `refreshSession()` | `() => Promise<void>`                   | Re-syncs the session from Better Auth. Call after a sign-in/up/out flow completes. No-op on the server.                                        |
 | `clearSession()`   | `() => void`                            | Local sign-out bookkeeping: clears the session snapshot and the Convex token cache, and notifies the client's session listeners.               |
 
-`BetterAuthState` is also what backs `injectAuth()`: the same service implements
-`ConvexAuthProvider`, so Convex-level state (`status()`, `isRefreshing()`, `getAuth()`) comes from
+`provideBetterAuth()` derives the `ConvexAuthProvider` behind `injectAuth()` from the same service,
+so Convex-level state (`status()`, `isRefreshing()`, `getAuth()`) comes from
 [`injectAuth()`](/auth/overview/) while session detail comes from `injectBetterAuth()`.
 
 ## 401 and 403 are signed-out, not errors

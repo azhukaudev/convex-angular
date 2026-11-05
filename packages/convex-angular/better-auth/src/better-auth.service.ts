@@ -36,13 +36,13 @@ function normalizeError(error: unknown, prefix: string): Error {
 }
 
 /**
- * Better Auth session and Convex token state. Implements ConvexAuthProvider
- * for provideConvexAuth() wiring and backs injectBetterAuth().
+ * Better Auth session and Convex token state. Exposes `convexAuth` for
+ * provideConvexAuth() wiring and backs injectBetterAuth().
  *
  * @internal
  */
 @Injectable()
-export class BetterAuthService implements ConvexAuthProvider {
+export class BetterAuthService {
   private readonly clientFactory = inject(BETTER_AUTH_CLIENT_FACTORY);
   private readonly isServer = isPlatformServer(inject(PLATFORM_ID));
   private client: BetterAuthClientLike | null = null;
@@ -219,6 +219,21 @@ export class BetterAuthService implements ConvexAuthProvider {
 
     this.pendingToken = request;
     return request;
+  };
+
+  /**
+   * What provideConvexAuth() observes, deliberately narrower than this
+   * service's public state: re-validating a session that is already known
+   * must not look like "auth went back to loading", because Convex auth sync
+   * answers that by clearing the client's auth and re-authenticating.
+   * A session-id change still re-auths through reauthVersion.
+   */
+  readonly convexAuth: ConvexAuthProvider = {
+    isLoading: computed(() => this.isLoading() && !this.isAuthenticated()),
+    isAuthenticated: this.isAuthenticated,
+    reauthVersion: this.reauthVersion,
+    error: this.error,
+    fetchAccessToken: this.fetchAccessToken,
   };
 
   private getClient(): BetterAuthClientLike {
