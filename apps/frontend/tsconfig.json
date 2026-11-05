@@ -6,12 +6,7 @@
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "target": "es2022",
-    "moduleResolution": "bundler",
-    "isolatedModules": true,
-    "emitDecoratorMetadata": false,
-    "module": "preserve",
-    "lib": ["dom", "es2022"]
+    "isolatedModules": true
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,

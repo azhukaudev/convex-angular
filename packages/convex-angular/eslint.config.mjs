@@ -54,6 +54,36 @@ export default [
     rules: { '@typescript-eslint/no-deprecated': 'error' },
   },
   {
+    // Only src/lib/internal/convex-client-internals.ts may reach into the BaseConvexClient that
+    // `ConvexClient.client` exposes: that one seam is pinned against a real client by
+    // internal/convex-internals.spec.ts, so a convex bump that moves this surface fails once, loudly,
+    // instead of silently at N call sites. Specs keep `jest.spyOn(convex.client, …)` as the documented
+    // escape hatch; testing/ and better-auth/ have their own (unrelated) `client` members.
+    // Patterns are `**/`-prefixed because Nx runs ESLint from the workspace root.
+    files: ['**/src/lib/**/*.ts'],
+    ignores: ['**/src/lib/internal/**', '**/*.spec.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Identifier[name='BaseConvexClient']:not(ImportSpecifier > Identifier.local)",
+          message:
+            'BaseConvexClient may only be used in src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
+        },
+        {
+          selector: "MemberExpression[computed=false][property.name='client']",
+          message:
+            'Do not read ConvexClient.client (the BaseConvexClient) outside src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
+        },
+        {
+          selector: "MemberExpression[computed=true][property.value='client']",
+          message:
+            'Do not read ConvexClient.client (the BaseConvexClient) outside src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.html'],
     // Override or add rules here
     rules: {},

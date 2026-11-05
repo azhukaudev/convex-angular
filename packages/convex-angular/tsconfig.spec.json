@@ -2,12 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "../../dist/out-tsc",
-    "module": "preserve",
     "target": "es2016",
     "types": ["jest", "node"],
-    "moduleResolution": "bundler",
-    // Angular does not need it; leaving it on makes ts-jest warn on every file.
-    "emitDecoratorMetadata": false,
     "isolatedModules": true
   },
   "files": ["src/test-setup.ts"],

@@ -5,20 +5,20 @@
     "sourceMap": true,
     "declaration": false,
     "moduleResolution": "bundler",
-    "emitDecoratorMetadata": true,
+    // Angular does not need it; leaving it on makes ts-jest warn on every file.
+    "emitDecoratorMetadata": false,
     "experimentalDecorators": true,
     "importHelpers": true,
-    "target": "es2015",
-    "module": "esnext",
-    "lib": ["es2020", "dom"],
+    "target": "es2022",
+    "module": "preserve",
+    "lib": ["dom", "es2022"],
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "paths": {
       "convex-angular": ["./packages/convex-angular/src/index.ts"],
       "convex-angular/testing": ["./packages/convex-angular/testing/src/index.ts"],
       "convex-angular/better-auth": ["./packages/convex-angular/better-auth/src/index.ts"]
-    },
-    "noUncheckedSideEffectImports": false
+    }
   },
   "exclude": ["node_modules", "tmp"]
 }
