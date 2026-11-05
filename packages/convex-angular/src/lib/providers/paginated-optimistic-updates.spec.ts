@@ -1,7 +1,6 @@
 import { OptimisticLocalStore } from 'convex/browser';
 import {
   FunctionArgs,
-  FunctionReference,
   FunctionReturnType,
   PaginationOptions,
   PaginationResult,
@@ -32,11 +31,15 @@ const mockPaginatedQuery = makeFunctionReference<
   PaginationResult<Message>
 >('messages:list') as PaginatedQueryReference;
 
+// Derived from the installed interface so the fake compiles against every supported convex version
+// (newer releases widen the accepted query reference type).
+type StoreQuery = Parameters<OptimisticLocalStore['getQuery']>[0];
+
 class LocalQueryStoreFake implements OptimisticLocalStore {
   private readonly queries: Record<string, Record<string, { args: Record<string, Value>; value: undefined | Value }>> =
     {};
 
-  setQuery(query: FunctionReference<'query'>, args: any, value: any): void {
+  setQuery(query: StoreQuery, args: any, value: any): void {
     const queriesByName = this.queries[getFunctionName(query)] ?? {};
     this.queries[getFunctionName(query)] = queriesByName;
 
@@ -45,7 +48,7 @@ class LocalQueryStoreFake implements OptimisticLocalStore {
     queriesByName[serializedArgs] = { args: rawArgs, value };
   }
 
-  getAllQueries<Query extends FunctionReference<'query'>>(
+  getAllQueries<Query extends StoreQuery>(
     query: Query,
   ): Array<{
     args: FunctionArgs<Query>;
@@ -57,7 +60,7 @@ class LocalQueryStoreFake implements OptimisticLocalStore {
     }));
   }
 
-  getQuery(query: FunctionReference<'query'>, args: any) {
+  getQuery(query: StoreQuery, args: any) {
     const serializedArgs = JSON.stringify(convexToJson(args ?? {}));
     return this.queries[getFunctionName(query)]?.[serializedArgs]?.value as Value | undefined;
   }

@@ -6,7 +6,7 @@ This is an Nx 23 + pnpm 12 monorepo for `convex-angular`, an Angular library tha
 
 - `packages/convex-angular` — published library with the primary `convex-angular` entry point and the `convex-angular/testing` and `convex-angular/better-auth` secondary entry points.
 - `apps/frontend` — standalone Angular demo application and manual integration harness. Its Convex backend lives in `apps/frontend/src/convex`.
-- `apps/docs` — Astro Starlight documentation site. It is the one pnpm workspace package (declared in `pnpm-workspace.yaml`) and owns its own `package.json`, so Astro's toolchain (Vite 8.2.1) resolves independently of the Angular build, which pins Vite 8.3.0 exactly through `@angular/build`. Both trees are on Vite 8 but resolve separate copies.
+- `apps/docs` — Astro Starlight documentation site. It is the one pnpm workspace package (declared in `pnpm-workspace.yaml`) and owns its own `package.json`, so Astro's toolchain (its own Vite) resolves independently of the Angular build, which pins Vite exactly through `@angular/build`; the two trees may or may not share one Vite copy depending on the lockfile.
 - Node is pinned by `.nvmrc`; pnpm is pinned by `packageManager` in `package.json`.
 
 Use pnpm. Prefer existing Nx targets and root scripts over ad hoc commands.

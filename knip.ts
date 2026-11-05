@@ -91,6 +91,9 @@ const config: KnipConfig = {
     // previously counted it as used via @angular-devkit/build-angular's optional peer, which
     // Angular 22 dropped.
     'jest-environment-jsdom',
+    // Nx toolchain: a dependency of @nx/angular, @nx/eslint, @nx/jest and @nx/web.
+    // Its `verdaccio` executor in project.json was the only direct reference.
+    '@nx/js',
   ],
 };
 

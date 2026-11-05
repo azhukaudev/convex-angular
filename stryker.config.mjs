@@ -47,7 +47,7 @@ export default {
 
   // Slims the sandbox. Dropping `apps` is safe because the dependency arrow only
   // points one way: the demo app imports the library, never the reverse.
-  ignorePatterns: ['apps', 'dist', 'coverage', 'tmp', 'plans', 'docs', '.angular', '.nx', '.verdaccio', '.pnpm-store'],
+  ignorePatterns: ['apps', 'dist', 'coverage', 'tmp', 'plans', 'docs', '.angular', '.nx', '.pnpm-store'],
 
   concurrency: 4,
   reporters: ['progress', 'clear-text', 'html'],
