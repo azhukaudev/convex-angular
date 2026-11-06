@@ -1,27 +1,18 @@
 import { Component, EnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { CONVEX_AUTH, injectAuth } from 'convex-angular';
-import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import { MockConvexClient, provideConvexTesting, type MockAuthRegistration } from 'convex-angular/testing';
 
-import { BetterAuthClientLike, BetterAuthFetchResult, BetterAuthSessionData } from './better-auth-client';
+import { FakeBetterAuthClient, createDeferred, fail, ok, session } from './better-auth-client.fake';
 import { BetterAuthService } from './better-auth.service';
 import { injectBetterAuth, provideBetterAuth } from './provide-better-auth';
 
-function fakeClient(): BetterAuthClientLike {
-  return {
-    getSession: async () =>
-      ({
-        data: { session: { id: 's1' }, user: { id: 'u1' } },
-        error: null,
-      }) as BetterAuthFetchResult<BetterAuthSessionData>,
-    convex: { token: async () => ({ data: { token: 'jwt-1' }, error: null }) },
-  };
-}
+const fakeClient = () => new FakeBetterAuthClient();
 
-type SessionResult = BetterAuthFetchResult<BetterAuthSessionData>;
+type SessionResult = FakeBetterAuthClient['sessionResult'];
 
-const sessionOf = (id: string): SessionResult => ({ data: { session: { id }, user: { id: 'u1' } }, error: null });
-const unauthorized: SessionResult = { data: null, error: { status: 401 } };
+const sessionOf = (id: string): SessionResult => ok(session(id));
+const unauthorized: SessionResult = fail(401);
 
 describe('provideBetterAuth', () => {
   afterEach(() => {
@@ -137,51 +128,30 @@ describe('provideBetterAuth', () => {
   });
 
   describe('same-session refresh', () => {
-    // getSession() answers `fallback` unless a refresh is being held open.
-    function setup(fallback: SessionResult) {
-      let held: Promise<SessionResult> | null = null;
-      let tokenFailing = false;
-      const client: BetterAuthClientLike = {
-        getSession: () => held ?? Promise.resolve(fallback),
-        convex: {
-          token: async () =>
-            tokenFailing
-              ? { data: null, error: { status: 500, message: 'exchange exploded' } }
-              : { data: { token: 'jwt-1' }, error: null },
-        },
-      };
+    function setup(sessionResult: SessionResult) {
+      const client = new FakeBetterAuthClient();
+      client.sessionResult = sessionResult;
       const convex = new MockConvexClient();
       TestBed.configureTestingModule({ providers: [provideConvexTesting(convex), provideBetterAuth(() => client)] });
       const { auth, betterAuth } = TestBed.runInInjectionContext(() => ({
         auth: injectAuth(),
         betterAuth: injectBetterAuth(),
       }));
-      return {
-        convex,
-        auth,
-        betterAuth,
-        /** Make every later token exchange fail (or succeed again). */
-        setTokenFailing: (failing: boolean) => {
-          tokenFailing = failing;
-        },
-        /** Hold the next getSession() call open until the returned function is called. */
-        holdNextRefresh: () => {
-          let resolve!: (result: SessionResult) => void;
-          held = new Promise<SessionResult>((r) => (resolve = r));
-          return (result: SessionResult) => {
-            held = null;
-            resolve(result);
-          };
-        },
-      };
+      return { client, convex, auth, betterAuth };
+    }
+
+    // Plays Convex's side of a successful handshake: the client now holds a token (`hasAuth()`), then reports
+    // authenticated.
+    function completeHandshake(convex: MockConvexClient, registration: MockAuthRegistration): void {
+      convex.seedAuth({ token: 'jwt-1', decoded: { sub: 'u1' } });
+      registration.setAuthenticated(true);
+      TestBed.tick();
     }
 
     function settleSignedIn(stack: ReturnType<typeof setup>): void {
       tick();
       TestBed.tick();
-      stack.convex.seedAuth({ token: 'jwt-1', decoded: { sub: 'u1' } });
-      stack.convex.requireLastAuthRegistration().setAuthenticated(true);
-      TestBed.tick();
+      completeHandshake(stack.convex, stack.convex.requireLastAuthRegistration());
       expect(stack.auth.status()).toBe('authenticated');
       expect(stack.convex.authRegistrations).toHaveLength(1);
       expect(stack.convex.clearAuthCount).toBe(0);
@@ -197,7 +167,8 @@ describe('provideBetterAuth', () => {
       const statuses: string[] = [];
       const record = () => statuses.push(stack.auth.status());
 
-      const resolveRefresh = stack.holdNextRefresh();
+      const refresh = createDeferred<SessionResult>();
+      stack.client.sessionQueue.push(refresh.promise);
       let settled = false;
       void stack.betterAuth.refreshSession().then(() => (settled = true));
       TestBed.tick();
@@ -208,7 +179,7 @@ describe('provideBetterAuth', () => {
       expect(stack.auth.status()).toBe('authenticated');
       expect(stack.convex.clearAuthCount).toBe(0);
 
-      resolveRefresh(sessionOf('s1'));
+      refresh.resolve(sessionOf('s1'));
       tick();
       TestBed.tick();
       record();
@@ -241,7 +212,7 @@ describe('provideBetterAuth', () => {
       settleSignedIn(stack);
 
       // Convex asks for a token, the exchange fails, and the client gives up on auth.
-      stack.setTokenFailing(true);
+      stack.client.tokenResult = fail(500, 'exchange exploded');
       const failedRegistration = stack.convex.requireLastAuthRegistration();
       let failedToken: string | null | undefined = 'sentinel';
       void failedRegistration.fetchToken({ forceRefreshToken: true }).then((token) => (failedToken = token));
@@ -255,7 +226,7 @@ describe('provideBetterAuth', () => {
       expect(stack.convex.authRegistrations).toHaveLength(1);
 
       // The same session is re-read once the server recovers.
-      stack.setTokenFailing(false);
+      stack.client.tokenResult = ok({ token: 'jwt-1' });
       void stack.betterAuth.refreshSession();
       tick();
       TestBed.tick();
@@ -266,9 +237,7 @@ describe('provideBetterAuth', () => {
       let retriedToken: string | null | undefined;
       void retryRegistration.fetchToken({ forceRefreshToken: false }).then((token) => (retriedToken = token));
       tick();
-      stack.convex.seedAuth({ token: 'jwt-1', decoded: { sub: 'u1' } });
-      retryRegistration.setAuthenticated(true);
-      TestBed.tick();
+      completeHandshake(stack.convex, retryRegistration);
 
       expect(retriedToken).toBe('jwt-1');
       expect(stack.auth.status()).toBe('authenticated');
@@ -279,13 +248,14 @@ describe('provideBetterAuth', () => {
       const stack = setup(sessionOf('s1'));
       settleSignedIn(stack);
 
-      const resolveRefresh = stack.holdNextRefresh();
+      const refresh = createDeferred<SessionResult>();
+      stack.client.sessionQueue.push(refresh.promise);
       void stack.betterAuth.refreshSession();
       TestBed.tick();
       expect(stack.convex.clearAuthCount).toBe(0);
       expect(stack.convex.authRegistrations).toHaveLength(1);
 
-      resolveRefresh(sessionOf('s2'));
+      refresh.resolve(sessionOf('s2'));
       tick();
       TestBed.tick();
       expect(stack.convex.authRegistrations).toHaveLength(2);
@@ -301,12 +271,13 @@ describe('provideBetterAuth', () => {
       TestBed.tick();
       expect(stack.auth.status()).toBe('unauthenticated');
 
-      const resolveRefresh = stack.holdNextRefresh();
+      const refresh = createDeferred<SessionResult>();
+      stack.client.sessionQueue.push(refresh.promise);
       void stack.betterAuth.refreshSession();
       TestBed.tick();
       expect(stack.auth.status()).toBe('loading');
 
-      resolveRefresh(sessionOf('s1'));
+      refresh.resolve(sessionOf('s1'));
       tick();
       TestBed.tick();
       expect(stack.convex.authRegistrations).toHaveLength(1);
@@ -320,11 +291,12 @@ describe('provideBetterAuth', () => {
       const stack = setup(sessionOf('s1'));
       settleSignedIn(stack);
 
-      const resolveRefresh = stack.holdNextRefresh();
+      const refresh = createDeferred<SessionResult>();
+      stack.client.sessionQueue.push(refresh.promise);
       void stack.betterAuth.refreshSession();
       TestBed.tick();
 
-      resolveRefresh(unauthorized);
+      refresh.resolve(unauthorized);
       tick();
       TestBed.tick();
 
