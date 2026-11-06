@@ -15,7 +15,8 @@ function assertHelperInjectionContext(target: (...args: never[]) => unknown): vo
 }
 
 /**
- * Not public API: shared with the library's secondary entry points only. May change without notice.
+ * Not public API. The `ɵrunInResolvedInjectionContext` re-export in `src/index.ts` shares it with the
+ * library's secondary entry points. May change without notice.
  *
  * @internal
  */

@@ -39,6 +39,9 @@ class LocalQueryStoreFake implements OptimisticLocalStore {
   private readonly queries: Record<string, Record<string, { args: Record<string, Value>; value: undefined | Value }>> =
     {};
 
+  // Deliberately looser than `OptimisticLocalStore.setQuery` (non-generic, `Value`-typed): specs seed malformed
+  // pages (a `null` value, a result without `page`) and a `paginationOpts` carrying the client's internal `id`,
+  // none of which the generic signature accepts without casts.
   setQuery(query: StoreQuery, args: Record<string, Value> | undefined, value: undefined | Value): void {
     const queriesByName = this.queries[getFunctionName(query)] ?? {};
     this.queries[getFunctionName(query)] = queriesByName;

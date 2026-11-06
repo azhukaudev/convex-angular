@@ -70,22 +70,14 @@ export default [
             'BaseConvexClient may only be used in src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
         },
         {
-          selector: "MemberExpression[computed=false][property.name='client']",
+          selector:
+            "MemberExpression[computed=false][property.name='client'], MemberExpression[computed=true][property.value='client']",
           message:
             'Do not read ConvexClient.client (the BaseConvexClient) outside src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
         },
         {
-          selector: "MemberExpression[computed=true][property.value='client']",
-          message:
-            'Do not read ConvexClient.client (the BaseConvexClient) outside src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
-        },
-        {
-          selector: 'MemberExpression[computed=false][property.name=/_experimental$/]',
-          message:
-            'Experimental Convex client APIs (members named *_experimental) may only be used in src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
-        },
-        {
-          selector: 'MemberExpression[computed=true][property.value=/_experimental$/]',
+          selector:
+            'MemberExpression[computed=false][property.name=/_experimental$/], MemberExpression[computed=true][property.value=/_experimental$/]',
           message:
             'Experimental Convex client APIs (members named *_experimental) may only be used in src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
         },

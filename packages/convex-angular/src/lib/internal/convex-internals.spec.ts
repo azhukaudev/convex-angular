@@ -95,7 +95,41 @@ function unsignedJwt(): string {
 // A string function reference is a legacy-but-legal FunctionReference: the
 // real client's `getFunctionName` returns it unchanged, so the real
 // registration path runs without needing a generated `api` object.
-const paginatedQuery = 'todos:listTodosPaginated' as unknown as PaginatedQueryReference;
+const paginatedPath = 'todos:listTodosPaginated';
+const paginatedQuery = paginatedPath as unknown as PaginatedQueryReference;
+const plain = (path: string) => path as unknown as FunctionReference<'query'>;
+const emptyPage = { page: [], isDone: false, continueCursor: 'cursor' };
+
+// Query modifications for `createDrivenWebSocket().transition()`.
+const queryUpdated = (queryId: number, value: unknown) => ({
+  type: 'QueryUpdated',
+  queryId,
+  value,
+  logLines: [],
+  journal: null,
+});
+const queryFailed = (queryId: number) => ({
+  type: 'QueryFailed',
+  queryId,
+  errorMessage: 'boom',
+  logLines: [],
+  errorData: null,
+  journal: null,
+});
+
+// ConvexClient also passes a reserved second argument; record only the value.
+const valuesOf = (listener: jest.Mock): unknown[] => listener.mock.calls.map(([value]: unknown[]) => value);
+
+// Real timers: the client replays cached results one macrotask after subscribing.
+const nextMacrotask = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+// A ConvexClient on a hand-driven WebSocket that is already open.
+function createDrivenClient() {
+  const socket = createDrivenWebSocket();
+  const driven = new ConvexClient('https://test.convex.cloud', { webSocketConstructor: socket.webSocketConstructor });
+  socket.open();
+  return { socket, driven };
+}
 
 describe('convex-client-internals (real client contract)', () => {
   let client: ConvexClient;
@@ -127,7 +161,7 @@ describe('convex-client-internals (real client contract)', () => {
     setAuthWithRefresh(client, async () => unsignedJwt(), jest.fn(), jest.fn());
     // The token is fetched and decoded asynchronously; flush a few macrotasks.
     for (let i = 0; i < 3 && !hasAuth(client); i++) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextMacrotask();
     }
     expect(hasAuth(client)).toBe(true);
 
@@ -151,7 +185,7 @@ describe('convex-client-internals (real client contract)', () => {
 
     // The real client replays the loading-first-page result one macrotask
     // after subscribing; that replay is the upstream contract pinned here.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextMacrotask();
 
     expect(onUpdate).toHaveBeenCalledTimes(1);
     const [result] = onUpdate.mock.calls[0];
@@ -164,23 +198,13 @@ describe('convex-client-internals (real client contract)', () => {
   });
 
   it('paginationOptsId reads the numeric id the real client injects into each page query', () => {
-    const socket = createDrivenWebSocket();
-    const driven = new ConvexClient('https://test.convex.cloud', { webSocketConstructor: socket.webSocketConstructor });
-    socket.open();
+    const { socket, driven } = createDrivenClient();
     const unsubscribe = subscribeToPaginatedQuery(driven, paginatedQuery, {}, 10, jest.fn(), jest.fn());
 
     // Page queries only appear in the optimistic-update store once the server
     // has answered them, so answer the first page with an empty result.
-    const [pageQueryId] = socket.queryIdsFor('todos:listTodosPaginated');
-    socket.transition([
-      {
-        type: 'QueryUpdated',
-        queryId: pageQueryId,
-        value: { page: [], isDone: false, continueCursor: 'cursor' },
-        logLines: [],
-        journal: null,
-      },
-    ]);
+    const [pageQueryId] = socket.queryIdsFor(paginatedPath);
+    socket.transition([queryUpdated(pageQueryId, emptyPage)]);
 
     // Observe the page query's real args through the public optimistic-update
     // API, the same route the library's paginated optimistic updates use.
@@ -207,71 +231,16 @@ describe('convex-client-internals (real client contract)', () => {
     void driven.close();
   });
 
-  it('replays a cached query error to a fresh listener as onError, never as a value', async () => {
-    const socket = createDrivenWebSocket();
-    const driven = new ConvexClient('https://test.convex.cloud', { webSocketConstructor: socket.webSocketConstructor });
-    socket.open();
-    const failingQuery = 'todos:failing' as unknown as FunctionReference<'query'>;
-
-    const firstListener = jest.fn();
-    const unsubscribeFirst = driven.onUpdate(failingQuery, {}, firstListener, jest.fn());
-    const [queryId] = socket.queryIdsFor('todos:failing');
-    socket.transition([
-      { type: 'QueryFailed', queryId, errorMessage: 'boom', logLines: [], errorData: null, journal: null },
-    ]);
-
-    // The server reported the query as failed: the warm cache holds an error.
-    expect(() => localQueryResult(driven, 'todos:failing', {})).toThrow('boom');
-
-    // A fresh listener subscribing now has a result "ready", so the client
-    // schedules a replay one macrotask later; the cached error must reach its
-    // `onError` exactly once and its value callback never.
-    const callback = jest.fn();
-    const onError = jest.fn();
-    const unsubscribeFresh = driven.onUpdate(failingQuery, {}, callback, onError);
-    expect(onError).not.toHaveBeenCalled();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(onError).toHaveBeenCalledTimes(1);
-    expect(onError.mock.calls[0][0]).toEqual(expect.objectContaining({ message: expect.stringContaining('boom') }));
-    expect(callback).not.toHaveBeenCalled();
-    expect(firstListener).not.toHaveBeenCalled();
-
-    unsubscribeFresh();
-    unsubscribeFirst();
-    void driven.close();
-  });
-
+  // Characterizes convex@1.49.0 (the version pinned in the root package.json). A failure here on a newer
+  // convex most likely means upstream fixed the behavior: update queries/pagination.mdx (Errors) and
+  // queries/inject-query.mdx / queries/inject-queries.mdx (refetch()) under apps/docs, then drop or invert
+  // the pin.
   describe('real-client behavior the MockConvexClient hides', () => {
-    const pagePath = 'todos:listTodosPaginated';
-    const plain = (path: string) => path as unknown as FunctionReference<'query'>;
-    const emptyPage = { page: [], isDone: false, continueCursor: 'cursor' };
-    const queryUpdated = (queryId: number, value: unknown) => ({
-      type: 'QueryUpdated',
-      queryId,
-      value,
-      logLines: [],
-      journal: null,
-    });
-    const queryFailed = (queryId: number) => ({
-      type: 'QueryFailed',
-      queryId,
-      errorMessage: 'boom',
-      logLines: [],
-      errorData: null,
-      journal: null,
-    });
-    // ConvexClient also passes a reserved second argument; record only the value.
-    const valuesOf = (listener: jest.Mock): unknown[] => listener.mock.calls.map(([value]: unknown[]) => value);
-    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
-
     let socket: ReturnType<typeof createDrivenWebSocket>;
     let driven: ConvexClient;
 
     beforeEach(() => {
-      socket = createDrivenWebSocket();
-      driven = new ConvexClient('https://test.convex.cloud', { webSocketConstructor: socket.webSocketConstructor });
-      socket.open();
+      ({ socket, driven } = createDrivenClient());
     });
 
     afterEach(() => {
@@ -292,10 +261,10 @@ describe('convex-client-internals (real client contract)', () => {
         driven.onUpdate(plain('todos:after'), {}, after, jest.fn());
         // The client replays the loading-first-page result one macrotask after
         // subscribing; run it now so it cannot fire later, after the page failed.
-        await tick();
+        await nextMacrotask();
 
         const [beforeId] = socket.queryIdsFor('todos:before');
-        const [pageId] = socket.queryIdsFor(pagePath);
+        const [pageId] = socket.queryIdsFor(paginatedPath);
         const [afterId] = socket.queryIdsFor('todos:after');
         socket.transition([queryUpdated(beforeId, 1), queryUpdated(pageId, emptyPage), queryUpdated(afterId, 1)]);
         return { before, after, onUpdate, onError, unsubscribe, beforeId, pageId, afterId };
@@ -335,7 +304,7 @@ describe('convex-client-internals (real client contract)', () => {
 
         // The throw comes after the client already asked the server for the
         // page again, and neither callback hears about it.
-        expect(socket.queryIdsFor(pagePath)).toHaveLength(2);
+        expect(socket.queryIdsFor(paginatedPath)).toHaveLength(2);
         expect(onError).not.toHaveBeenCalled();
         expect(onUpdate).not.toHaveBeenCalled();
       });
@@ -352,7 +321,7 @@ describe('convex-client-internals (real client contract)', () => {
         // The listener was registered before the throw, so it still hears the
         // server's answer to the second page query; but the caller never got its
         // unsubscribe handle and `onError` never reported the failure.
-        const [, secondPageId] = socket.queryIdsFor(pagePath);
+        const [, secondPageId] = socket.queryIdsFor(paginatedPath);
         expect(secondPageId).toBeDefined();
         expect(() => socket.transition([queryUpdated(secondPageId, emptyPage)])).not.toThrow();
         expect(onUpdate.mock.calls.map(([result]) => result.status)).toEqual(['CanLoadMore']);
@@ -381,7 +350,7 @@ describe('convex-client-internals (real client contract)', () => {
         expect(onError).not.toHaveBeenCalled();
 
         // ... but before it answers, the client replays the stale cached error.
-        await tick();
+        await nextMacrotask();
         expect(onError).toHaveBeenCalledTimes(1);
         expect(onError.mock.calls[0][0]).toEqual(expect.objectContaining({ message: expect.stringContaining('boom') }));
         expect(onValue).not.toHaveBeenCalled();
@@ -393,27 +362,35 @@ describe('convex-client-internals (real client contract)', () => {
 
       it('replays the cached error without contacting the server when another subscriber holds the query', async () => {
         const unsubscribeFirst = driven.onUpdate(failing, {}, jest.fn(), jest.fn());
+        const otherOnValue = jest.fn();
         const otherOnError = jest.fn();
-        driven.onUpdate(failing, {}, jest.fn(), otherOnError);
+        driven.onUpdate(failing, {}, otherOnValue, otherOnError);
         const [queryId] = socket.queryIdsFor('todos:failing');
         socket.transition([queryFailed(queryId)]);
         expect(otherOnError).toHaveBeenCalledTimes(1);
+        // The warm cache holds the error, and the library's localQueryResult wrapper rethrows it.
+        expect(() => localQueryResult(driven, 'todos:failing', {})).toThrow('boom');
         const modifiesBefore = modifyCount();
 
         unsubscribeFirst();
+        const onValue = jest.fn();
         const onError = jest.fn();
-        driven.onUpdate(failing, {}, jest.fn(), onError);
+        driven.onUpdate(failing, {}, onValue, onError);
+        expect(onError).not.toHaveBeenCalled();
 
         // Only a subscriber count changed: no Remove, no Add, so the server
         // never re-runs the query.
         expect(modifyCount()).toBe(modifiesBefore);
         expect(socket.queryIdsFor('todos:failing')).toHaveLength(1);
 
-        await tick();
+        await nextMacrotask();
         expect(onError).toHaveBeenCalledTimes(1);
         expect(onError.mock.calls[0][0]).toEqual(expect.objectContaining({ message: expect.stringContaining('boom') }));
+        // The cached error is never delivered as a value.
+        expect(onValue).not.toHaveBeenCalled();
         // The existing subscriber is not told again.
         expect(otherOnError).toHaveBeenCalledTimes(1);
+        expect(otherOnValue).not.toHaveBeenCalled();
       });
 
       it('replays the previous value of a healthy query before the server answers', async () => {
@@ -429,7 +406,7 @@ describe('convex-client-internals (real client contract)', () => {
         expect(secondId).toBeDefined();
 
         // No server message has arrived, yet the listener already has a value.
-        await tick();
+        await nextMacrotask();
         expect(valuesOf(onValue)).toEqual(['old']);
 
         socket.transition([queryUpdated(secondId, 'new')]);
