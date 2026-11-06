@@ -16,6 +16,10 @@ the version from the tag itself. (`packages/convex-angular/project.json`'s
 `currentVersionResolver: "git-tag"` only applies to `nx release version`, which this workflow
 never runs — don't rely on it here.)
 
+Choose the bump from the changelog: if the `## Unreleased` section contains a `### ⚠️ Breaking Changes` heading — including a
+raised peer-dependency floor or a new peer-dependency upper bound — bump the **major** version. 1.11.0 shipped with such a section and no
+major bump, which left Angular 21 projects on an unusable `^1.x` range; don't repeat that. Nothing in CI enforces this rule.
+
 ## 3. Rename the changelog section
 
 In the **same commit** as the version bump, rename `## Unreleased` to

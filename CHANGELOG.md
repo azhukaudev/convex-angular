@@ -1,5 +1,16 @@
 # convex-angular
 
+## Unreleased
+
+### 🐛 Bug Fixes
+
+- The auth setup errors thrown by `injectAuth()` and `provideConvexAuth()` ("Could not find Convex auth state" and "Could not find `CONVEX_AUTH`") now name every provider helper that fixes them, including `provideBetterAuth()` and `provideConvexAuthFromExisting()`, which the messages previously omitted.
+
+### 📖 Documentation
+
+- Correct the 1.11.0 changelog: the Angular-floor note said the release "ships as 2.0.0", but it shipped as 1.11.0 (Angular 21 projects should stay on `convex-angular@~1.10.0`).
+- `reference/errors`: stop suggesting that `provideConvexAuthFromExisting()` be registered alongside `provideConvexAuth()` (it already includes it), and document the `MockConvexClient.requireLastAuthRegistration()` error.
+
 ## [1.11.0](https://github.com/azhukaudev/convex-angular/compare/v1.10.0...v1.11.0) (2026-11-06)
 
 ### ✨ Features
@@ -15,7 +26,7 @@
 
 ### ⚠️ Breaking Changes
 
-- Requires Angular `>=22.2.1 <23.0.0` for `@angular/common`, `@angular/core`, and `@angular/router` (1.10.0 declared `>=21.2.17` with no upper bound). The package is built with the Angular 22 toolchain and its partial-Ivy output is not consumable by Angular 21 apps, so consumers must upgrade Angular; building then needs TypeScript 6.0 (`@angular/compiler-cli` peers `typescript >=6.0 <6.1`) and a Node version Angular 22 supports (`^22.22.3 || ^24.15.0 || >=26.0.0`). The floor sits at 22.2.1 because it patches high-severity advisories in earlier 22.x releases — three `@angular/router` denial-of-service advisories in server-side rendering (GHSA-62vg-58rm-qff7, GHSA-57xq-rjx2-v5xh, GHSA-ff3f-86qr-9cv3; one makes the router re-run `canMatch` guards and route resolvers per crafted URL segment, which amplifies `convexAuthGuard` and `convexQueryResolver` work on the server), an i18n XSS in `@angular/core`/`@angular/compiler` (GHSA-jj27-h5hq-8x99), and an `HttpTransferCache` cache-key ambiguity that could enable cross-request response reuse, the latter landing directly on this library's SSR/TransferState feature (GHSA-jhpw-976m-542j). The Angular upper bound is new: nothing here was compiled or tested against `@angular/core@23`. This ships as 2.0.0.
+- Requires Angular `>=22.2.1 <23.0.0` for `@angular/common`, `@angular/core`, and `@angular/router` (1.10.0 declared `>=21.2.17` with no upper bound). The package is built with the Angular 22 toolchain and its partial-Ivy output is not consumable by Angular 21 apps, so consumers must upgrade Angular; building then needs TypeScript 6.0 (`@angular/compiler-cli` peers `typescript >=6.0 <6.1`) and a Node version Angular 22 supports (`^22.22.3 || ^24.15.0 || >=26.0.0`). The floor sits at 22.2.1 because it patches high-severity advisories in earlier 22.x releases — three `@angular/router` denial-of-service advisories in server-side rendering (GHSA-62vg-58rm-qff7, GHSA-57xq-rjx2-v5xh, GHSA-ff3f-86qr-9cv3; one makes the router re-run `canMatch` guards and route resolvers per crafted URL segment, which amplifies `convexAuthGuard` and `convexQueryResolver` work on the server), an i18n XSS in `@angular/core`/`@angular/compiler` (GHSA-jj27-h5hq-8x99), and an `HttpTransferCache` cache-key ambiguity that could enable cross-request response reuse, the latter landing directly on this library's SSR/TransferState feature (GHSA-jhpw-976m-542j). The Angular upper bound is new: nothing here was compiled or tested against `@angular/core@23`. This was released as 1.11.0 rather than as a new major version: projects still on Angular 21 should pin `convex-angular@~1.10.0`.
 - Cap the previously unbounded `convex` peer dependency at `>=1.42.1 <2.0.0` (the floor is unchanged). Nothing here was ever compiled or tested against `convex@2.x`, so the old range let it satisfy the manifest untested. Consumers pinned outside the range must adjust.
 - `convex-angular/testing`: `MockConvexClient.subscribeToConnectionState()` no longer registers the listener when the client is `disabled`, matching the real client, which returns a no-op without subscribing. Tests that pushed connection state into a disabled mock will now observe no delivery.
 - `convex-angular/testing`: a disabled `MockConvexClient` (`{ disabled: true }`) now rejects `mutation()`/`action()` with `ConvexClient is disabled`, matching the real SSR client instead of silently capturing the call. This is a test-fidelity fix; tests that invoked mutations/actions against a disabled mock must now assert the rejection.
