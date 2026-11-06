@@ -118,8 +118,9 @@ export interface QueriesResult<Definitions extends QueriesDefinition> {
   isLoading: Signal<boolean>;
 
   /**
-   * Force every active query to refetch by resubscribing.
-   * Existing results are preserved while the refetch is pending.
+   * Resubscribe every active key, keeping previous results in place; as with `injectQuery().refetch()`, the Convex
+   * client replays each previous result on the next macrotask and sends no request for a key another subscriber also
+   * holds.
    */
   refetch: () => void;
 }

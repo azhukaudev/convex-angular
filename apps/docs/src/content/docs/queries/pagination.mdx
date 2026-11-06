@@ -51,7 +51,7 @@ helper supplies those.
 | `initialNumItems` | `number \| Signal<number>`                       | — (required)     | Page size for the first page. A signal is read reactively; changing it restarts pagination. |
 | `injectRef`       | `EnvironmentInjector`                            | ambient injector | Injector used to create the query outside the current injection context.                    |
 | `onSuccess`       | `(results: PaginatedQueryItem<Query>[]) => void` | —                | Invoked with the accumulated results on every emission except `LoadingFirstPage`.           |
-| `onError`         | `(err: Error) => void`                           | —                | Invoked when the subscription fails.                                                        |
+| `onError`         | `(err: Error) => void`                           | —                | Server render only today: invoked when the first-page fetch fails. See [Errors](#errors).   |
 
 `initialNumItems` is part of the subscription identity. A different page size means a
 different subscription, so changing the signal tears the current one down and reloads from
@@ -63,19 +63,19 @@ render during hydration.
 
 ## `PaginatedQueryResult`
 
-| Name                 | Type                                  | Description                                                                              |
-| -------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `results`            | `Signal<PaginatedQueryItem<Query>[]>` | Accumulated items across all loaded pages. `[]` before the first page and while skipped. |
-| `error`              | `Signal<Error \| undefined>`          | Latest error. Cleared on the next successful emission.                                   |
-| `isLoadingFirstPage` | `Signal<boolean>`                     | True while the first page is loading.                                                    |
-| `isLoadingMore`      | `Signal<boolean>`                     | True while an additional page is loading.                                                |
-| `canLoadMore`        | `Signal<boolean>`                     | True when the client reports more items are available.                                   |
-| `isExhausted`        | `Signal<boolean>`                     | True when every item has been loaded.                                                    |
-| `isSkipped`          | `Signal<boolean>`                     | True when the argument function returned `skipToken`.                                    |
-| `isSuccess`          | `Signal<boolean>`                     | `!isLoadingFirstPage() && !isSkipped() && !error()`.                                     |
-| `status`             | `Signal<PaginatedQueryStatus>`        | `'pending' \| 'success' \| 'error' \| 'skipped'`.                                        |
-| `loadMore`           | `(numItems: number) => boolean`       | Request more items. Returns whether loading was actually initiated.                      |
-| `reset`              | `() => void`                          | Discard loaded pages and reload from the first page.                                     |
+| Name                 | Type                                  | Description                                                                                                                        |
+| -------------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `results`            | `Signal<PaginatedQueryItem<Query>[]>` | Accumulated items across all loaded pages. `[]` before the first page and while skipped.                                           |
+| `error`              | `Signal<Error \| undefined>`          | Latest error; cleared on the next successful emission. Only a server-render or mock-driven failure sets it: see [Errors](#errors). |
+| `isLoadingFirstPage` | `Signal<boolean>`                     | True while the first page is loading.                                                                                              |
+| `isLoadingMore`      | `Signal<boolean>`                     | True while an additional page is loading.                                                                                          |
+| `canLoadMore`        | `Signal<boolean>`                     | True when the client reports more items are available.                                                                             |
+| `isExhausted`        | `Signal<boolean>`                     | True when every item has been loaded.                                                                                              |
+| `isSkipped`          | `Signal<boolean>`                     | True when the argument function returned `skipToken`.                                                                              |
+| `isSuccess`          | `Signal<boolean>`                     | `!isLoadingFirstPage() && !isSkipped() && !error()`.                                                                               |
+| `status`             | `Signal<PaginatedQueryStatus>`        | `'pending' \| 'success' \| 'error' \| 'skipped'`.                                                                                  |
+| `loadMore`           | `(numItems: number) => boolean`       | Request more items. Returns whether loading was actually initiated.                                                                |
+| `reset`              | `() => void`                          | Discard loaded pages and reload from the first page.                                                                               |
 
 `status()` is derived exactly as for a single query:
 
@@ -85,6 +85,8 @@ status = isSkipped() ? 'skipped' : isLoadingFirstPage() ? 'pending' : error() ? 
 
 Note that `'success'` covers "first page loaded" — the list may still have more pages to
 fetch. Use `canLoadMore()` / `isExhausted()` for that distinction, not `status()`.
+
+`reset()` bumps a version that changes the subscription identity, so it resubscribes from the first page even when the arguments are unchanged.
 
 ## Client status mapping
 
@@ -113,36 +115,35 @@ Two other states fall outside the table:
 
 ## Errors
 
-<Aside type="caution" title="A failed page query breaks the client's paginated updates">
+### In the browser: a failed page query is not reported
+
+<Aside type="caution" title="A failed page query is not reported to the helper">
   When the server fails one of a paginated query's page queries (your paginated function throws), the Convex client
-  (verified with `convex@1.49.0`) throws while it computes the paginated result, inside its own transition handling. In
-  the browser `onError` and `error()` are never reached for that failure, so the helper does not report it. Every
-  `onUpdate` listener the client registered **after** this subscription — including other `injectQuery()` calls — stops
-  receiving updates until the failed subscription is torn down or until a later server run of that page succeeds. The
-  transition that carried the failure is dropped for every listener, so other query updates batched into it are lost
-  until those queries change again. `reset()` throws synchronously from the resubscribe while the failed page is still
-  cached (reported to Angular's `ErrorHandler`). The client still asks the server again, and if that run succeeds the
-  list recovers. But `error()` never reports the failure, and the helper loses its handle on the new subscription, so it
-  is never unsubscribed. This is upstream behavior the library cannot intercept. Make paginated query functions return
-  an empty page or an explicit result for expected failures instead of throwing.
+  throws while it computes the paginated result, inside its own transition handling (verified with `convex@1.49.0`). The
+  helper never hears about it: `onError` is not called, `error()` stays `undefined`, and the list silently stops
+  updating.
 </Aside>
 
-When the helper does receive an error (today: the server render's first-page fetch; in the browser see the caution above), it keeps what you already have:
+The failure has these consequences:
 
-- `results()` is **preserved** — a failed `loadMore()` does not empty the list.
-- `error()` is set and `status()` becomes `'error'`.
-- `isLoadingFirstPage()` and `isLoadingMore()` go `false`.
-- `isExhausted()` flips back to `false`, even if the list had been exhausted.
-- `canLoadMore()` becomes `true` only if a subscription had previously handed the helper a
-  `loadMore` function; a first-page failure leaves it `false`.
+- Every `onUpdate` listener the client registered **after** this subscription, including other `injectQuery()` calls,
+  stops receiving updates until the failed subscription is torn down or a later server run of that page succeeds.
+- The transition that carried the failure is dropped for every listener, so other query updates batched into it are
+  lost until those queries change again.
+- `reset()` does not throw, but the resubscription it triggers does while the failed page is still cached, and Angular
+  reports that to its `ErrorHandler`. The client still asks the server again, and if that run succeeds the list
+  recovers. `error()` never reports the failure, and the helper loses its handle on the new subscription, so it is never
+  unsubscribed.
 
-<Aside type="caution">
-  Because `isExhausted()` is cleared on error, a template that renders "That's everything" from `isExhausted()` will
-  silently swap back to a load-more affordance when the subscription fails. Check `error()` first.
-</Aside>
+The failed transition happens inside the Convex client (observed with `convex@1.49.0`), where the library cannot
+intercept it. Make paginated query functions return an empty page or an explicit result for expected failures instead
+of throwing.
 
-`reset()` bumps the reset version, which changes the subscription identity and resubscribes
-from the first page even when the arguments are unchanged.
+### During a server render
+
+The server render fetches the first page once over HTTP. When that fetch fails, `onError` is called, `error()` holds the
+`Error`, `status()` is `'error'`, `isLoadingFirstPage()` is `false`, and `results()` is `[]`. `canLoadMore()`,
+`isLoadingMore()` and `isExhausted()` stay `false`.
 
 ## `loadMore()` returns a boolean — check it
 
@@ -171,14 +172,7 @@ button in a pending state and let the user retry, or drive the enabled state fro
 
 The helper is built on Convex's experimental paginated subscription API
 (`onPaginatedUpdate_experimental`). If the injected client does not expose it, the
-subscription effect throws:
-
-```text
-[convex-angular] `injectPaginatedQuery()` requires a Convex client with experimental paginated query support.
-```
-
-This surfaces during change detection, not at injection time. If you see it in a test, the
-mock client provided for `CONVEX` is missing `onPaginatedUpdate_experimental`.
+subscription effect throws [this error](/reference/errors/#paginated-queries-require-experimental-client-support). It surfaces during change detection, not at injection time. If you see it in a test, the mock client provided for `CONVEX` is missing `onPaginatedUpdate_experimental`.
 
 ## Related
 

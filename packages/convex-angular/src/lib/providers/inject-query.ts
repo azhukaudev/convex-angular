@@ -147,8 +147,9 @@ export interface QueryResult<Query extends QueryReference> {
   status: Signal<QueryStatus>;
 
   /**
-   * Force the query to refetch by resubscribing.
-   * Existing data is preserved during refetch for better UX.
+   * Resubscribe to the query, keeping the previous result in place; the Convex client replays that result on the next
+   * macrotask, before the server answers, and sends no request when another subscriber holds the same query and
+   * arguments.
    */
   refetch: () => void;
 }

@@ -52,7 +52,8 @@ export interface PaginatedQueryOptions<Query extends PaginatedQueryReference> {
   onSuccess?: (results: PaginatedQueryItem<Query>[]) => void;
 
   /**
-   * Callback invoked when the query fails.
+   * Callback invoked when the query fails. Today only the first-page fetch during server-side rendering reports a
+   * failure here: with the current Convex client, a failed page query in the browser is not reported to the helper.
    * @param err - The error that occurred
    */
   onError?: (err: Error) => void;
@@ -68,7 +69,8 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
   results: Signal<PaginatedQueryItem<Query>[]>;
 
   /**
-   * The current error, if any. Preserved when loadMore fails.
+   * The current error, if any. Set by a failed first-page fetch during server-side rendering; a failed page query in
+   * the browser is not reported here.
    */
   error: Signal<Error | undefined>;
 
@@ -126,7 +128,9 @@ export interface PaginatedQueryResult<Query extends PaginatedQueryReference> {
   loadMore: (numItems: number) => boolean;
 
   /**
-   * Reset the pagination and reload from the beginning.
+   * Reset the pagination and reload from the beginning. This bumps a version that resubscribes from the first page; it
+   * does not report failures, and while a failed page is still cached the resubscription throws to Angular's
+   * `ErrorHandler`.
    */
   reset: () => void;
 }

@@ -130,20 +130,18 @@ true.
 forces a teardown/resubscribe even when the arguments serialize identically. It is the escape
 hatch for the args-dedup behavior above.
 
-Existing data is preserved while the refetch is pending, so the sequence for a query that
-already has data is: `isLoading()` goes true, `status()` returns to `'pending'`,
-`isRefetching()` becomes true, `data()` stays put, and the next emission settles it.
+For a query that already has data, a refetch plays out in this order:
 
-That next emission is usually not a fresh server result. The Convex client keeps the previous result — a value or an
-error — until the server answers, and replays it to the new subscription on the next macrotask. So `isLoading()` goes
-back to `false` almost immediately, with the old value or the old error, and the server's fresh result follows when it
-arrives.
+1. Immediately: `isLoading()` goes `true`, `status()` returns to `'pending'`, `isRefetching()` becomes `true`, and
+   `data()` stays put.
+2. On the next macrotask: the Convex client replays the previous result, a value or an error, to the new subscription
+   before the server has answered, so `isLoading()` goes back to `false` with the old value or the old error.
+3. When it arrives: the server's fresh result.
 
 <Aside type="caution">
-  Convex subscriptions are already live, so `refetch()` is not a polling primitive. After an error it re-delivers the
-  cached error first and recovers only when the server answers again. If another subscriber holds the same query and
-  arguments (another component, a prewarm, or a route resolver's keep-warm window), the client sends nothing to the
-  server, and `refetch()` cannot force the query to run again.
+  Convex subscriptions are already live, so `refetch()` is not a polling primitive. If another subscriber holds the same
+  query and arguments (another component, a prewarm, or a route resolver's keep-warm window), the client sends nothing
+  to the server, and `refetch()` cannot force the query to run again.
 </Aside>
 
 ## Errors
