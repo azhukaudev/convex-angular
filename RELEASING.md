@@ -14,9 +14,20 @@ the published version. At build/publish time, the release workflow reads the ver
 from that manifest and its guard only checks that the pushed tag matches it; nothing derives
 the version from the tag itself.
 
-Choose the bump from the changelog: if the `## Unreleased` section contains a `### ⚠️ Breaking Changes` heading — including a
-raised peer-dependency floor or a new peer-dependency upper bound — bump the **major** version. 1.11.0 shipped with such a section and no
-major bump, which left Angular 21 projects on an unusable `^1.x` range; don't repeat that. Nothing in CI enforces this rule.
+Choose the bump from what the release changes for consumers, not from a changelog heading. Bump
+the **major** version when the release breaks code or tests that worked against the real Convex
+client, in any published entry point (`convex-angular`, `convex-angular/testing` or
+`convex-angular/better-auth`). That means a release that:
+
+- narrows a peer-dependency range (a raised floor or a new upper bound);
+- removes, or narrows the type of, a public export that working code could rely on; or
+- changes the observable behaviour of a public helper that working code relied on.
+
+A change that only rejects what could never have worked is a bug fix, not a major bump: for
+example, making `MockConvexClient` throw for arguments the real client also rejects, or narrowing
+a type to exclude values that could never run (the `QueriesDefinition` change). Anything else is a
+minor bump (new features) or a patch bump (fixes only). Read `## Unreleased` with these rules in
+hand, and give every qualifying change a bullet under `### ⚠️ Breaking Changes`.
 
 ## 3. Rename the changelog section
 
@@ -40,7 +51,9 @@ commit is on main" step, before anything is installed, built, or published.
 ## 5. Dry run
 
 Trigger the "Release" GitHub Actions workflow via `workflow_dispatch`. It runs only the `verify`
-job: install, `pnpm verify:ci` (which includes `pnpm typecheck:spec`), `pnpm build:library`, and
+job: install, `pnpm verify:ci` (which includes `pnpm typecheck:spec`), `pnpm build:library`, a
+check that the built package ships the `LICENSE`
+(`cmp LICENSE dist/packages/convex-angular/LICENSE`), and
 `npm publish dist/packages/convex-angular --dry-run`. It skips the on-`main` check and the
 tag-vs-manifest guard (both are tag-push-only), so double-check by eye that the commit is on
 `main` and that the version you intend to tag matches `packages/convex-angular/package.json`.
@@ -59,16 +72,18 @@ git push origin vX.Y.Z
 
 Pushing the tag runs two jobs. `verify` runs the on-`main` check (the tagged commit must be an
 ancestor of `origin/main`), install, `pnpm verify:ci` (which includes `pnpm typecheck:spec`),
-`pnpm build:library`, and the tag-vs-manifest guard (`GITHUB_REF_NAME` vs.
-`dist/packages/convex-angular/package.json`'s `version`), then uploads
+`pnpm build:library`, the same `LICENSE` check, and the tag-vs-manifest guard (`GITHUB_REF_NAME`
+vs. `dist/packages/convex-angular/package.json`'s `version`), then uploads
 `dist/packages/convex-angular` as the `convex-angular-dist` artifact. `publish` needs `verify`,
 waits for the `Production` environment's approval once one is configured, downloads that artifact,
 and runs `npm publish dist/packages/convex-angular --provenance --access public --ignore-scripts`.
-`publish` installs nothing from the workspace. The mutation suite (`pnpm test:mutation`) does not run in the release workflow. It is
-report-only in CI (`stryker.config.mjs` sets no break threshold) and runs on pull requests and on pushes to `main`
-(mutating only the files each change touched),
-so if you want that signal, review the `mutation-report` artifacts of the CI runs for the commits going into
-the release, or run `pnpm test:mutation` locally before tagging.
+`publish` installs nothing from the workspace.
+
+The mutation suite (`pnpm test:mutation`) does not run in the release workflow. It is report-only
+in CI (`stryker.config.mjs` sets no break threshold) and runs on pull requests and on pushes to
+`main`, mutating only the files each change touched. If you want that signal, review the
+`mutation-report` artifacts of the CI runs for the commits going into the release, or run
+`pnpm test:mutation` locally before tagging.
 
 ## 7. Auth
 
