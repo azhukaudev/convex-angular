@@ -54,6 +54,11 @@ jobs:
       - run: pnpm verify:ci
 
       - run: pnpm build:library
+      # ng-packagr copies only a LICENSE that sits in the package directory
+      # (packages/convex-angular/LICENSE, a copy of the root file). `cmp` fails
+      # when the built package has none, or when the copy has drifted.
+      - name: Check the built package ships the LICENSE
+        run: cmp LICENSE dist/packages/convex-angular/LICENSE
 
       # The tag must match the built manifest — a mis-tagged release fails here
       # instead of publishing the wrong version.
@@ -68,7 +73,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: npm publish dist/packages/convex-angular --dry-run
 
-      # include-hidden-files: dist/ ships a `.npmignore` (`**/package.json`) that
+      # include-hidden-files: dist/ ships a `.npmignore` (the nested entry-point package.json files) that
       # decides what npm packs; without it the publish job would publish more
       # than the dry run above showed.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
