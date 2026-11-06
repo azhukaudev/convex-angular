@@ -26,6 +26,7 @@
 - Enable `@typescript-eslint/no-explicit-any` for the library and replace its remaining uses; extend the `src/lib/internal` boundary lint rule so `*_experimental` client members, like `BaseConvexClient`, can only be used in `convex-client-internals.ts` (contributors only).
 - Delete the unused `resolveEnvironmentInjector` helper, move the `@internal` tag of `ɵrunInResolvedInjectionContext` onto its declaration so the published `.d.ts` carries it, and remove the unused `release` blocks from `nx.json` and `project.json`.
 - `convex-angular/better-auth`: track the token-exchange outcome in the single `cachedToken` field (`undefined` / `null` / the token) instead of a parallel `tokenExchangeFailed` flag, and split the 1,000-line service spec around one shared test double (contributors only; no behaviour change).
+- Simplify the CI change detection: `ci-changes.mjs` now matches the `mutate` globs of `stryker.config.mjs` with Node's `path.matchesGlob`, applied in Stryker's own order, instead of parsing a fixed set of pattern shapes; the `changes` job pins Node from `.nvmrc`; and two redundant `knip` entries and five repeated workflow comments are removed (contributors only; the published package is unaffected).
 
 ## [1.11.0](https://github.com/azhukaudev/convex-angular/compare/v1.10.0...v1.11.0) (2026-11-06)
 

@@ -9,9 +9,8 @@ const config: KnipConfig = {
   workspaces: {
     '.': {
       entry: [
-        // Demo app (bootstrap, test harness, builder-injected pieces)
+        // Demo app (bootstrap, ambient types, styles)
         'apps/frontend/src/main.ts',
-        'apps/frontend/src/test-setup.ts',
         'apps/frontend/src/types.d.ts',
         'apps/frontend/src/styles.scss',
         // Swapped in via the production fileReplacements in project.json
@@ -20,9 +19,8 @@ const config: KnipConfig = {
         'apps/frontend/plugins/env-var-plugin.js',
         // Convex backend functions are invoked by the Convex runtime
         'apps/frontend/src/convex/*.ts',
-        // Published library public API and test harness
+        // Published library public API
         'packages/convex-angular/src/index.ts',
-        'packages/convex-angular/src/test-setup.ts',
         // Secondary entry point: convex-angular/testing
         'packages/convex-angular/testing/src/index.ts',
         // Secondary entry point: convex-angular/better-auth
