@@ -6,6 +6,8 @@
 
 The Angular client for [Convex](https://www.convex.dev/). Build real-time Angular applications with Signals, dependency injection, automatic subscription cleanup, authentication, pagination, and server-side rendering.
 
+**[Documentation](https://convex-angular.vercel.app/)**
+
 ```typescript
 readonly todos = injectQuery(api.todos.list, () => ({}));
 readonly addTodo = injectMutation(api.todos.create);

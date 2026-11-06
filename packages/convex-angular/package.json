@@ -6,7 +6,10 @@
     "angular",
     "convex"
   ],
-  "homepage": "https://github.com/azhukaudev/convex-angular",
+  "homepage": "https://convex-angular.vercel.app/",
+  "bugs": {
+    "url": "https://github.com/azhukaudev/convex-angular/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
