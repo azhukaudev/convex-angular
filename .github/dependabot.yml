@@ -1,0 +1,17 @@
+# Keeps the commit-SHA pins in .github/workflows current. npm dependencies are
+# updated by hand on purpose (strict pnpm release-age cooldown, grouped bumps).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Let a new action release age before proposing it, like pnpm's own cooldown.
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci

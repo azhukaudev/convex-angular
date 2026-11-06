@@ -74,6 +74,7 @@
 - Fix the TypeScript 6 deprecations in the workspace's tsconfig files (`baseUrl`, `esModuleInterop: false`, `moduleResolution: node`) instead of silencing them with `ignoreDeprecations`. The built package is unchanged.
 - Bump the documentation site to Astro `7.4.5`, Starlight `0.42.8` and the Vercel adapter `11.0.18`, which clears the Astro critical and XSS advisories (contributors only).
 - Demo app: the Better Auth backend now refuses to start when `SITE_URL`, `BETTER_AUTH_SECRET` or `CONVEX_SITE_URL` is missing instead of running with an empty value; the Material Symbols icon font is a self-hosted 3 KB subset instead of the 4 MB font; and the `/auth` routes share one Convex client and Better Auth stack instead of creating one per route.
+- Speed up and harden CI (contributors only): the mutation suite runs on pull requests only and mutates just the library files a pull request touched (a full run when shared config or the lockfile changes; skipped when no library file changed), the `convex` peer-range job is skipped for pull requests that cannot affect the library, every job has a time limit, a new `actionlint` job checks the workflow files, and Dependabot keeps the pinned GitHub Actions up to date.
 - The primary entry point now also exports `ɵrunInResolvedInjectionContext`, so `convex-angular/better-auth` shares the library's injection-context handling instead of a copy. The `ɵ` prefix marks it as not public API: do not depend on it.
 
 ## [1.10.0](https://github.com/azhukaudev/convex-angular/compare/v1.9.0...v1.10.0) (2026-07-11)

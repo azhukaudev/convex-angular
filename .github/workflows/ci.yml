@@ -13,8 +13,43 @@ permissions:
   contents: read
 
 jobs:
+  # Decides what the slow jobs below need to do for this change. Pushes to main
+  # (no base ref) always get the full answer.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      library: ${{ steps.decide.outputs.library }}
+      mutate: ${{ steps.decide.outputs.mutate }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # the diff against the pull request's base branch
+
+      - id: decide
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: node .github/scripts/ci-changes.mjs ${BASE_REF:+"origin/$BASE_REF"}
+
+  # Lints the workflow files themselves (expressions, `if:` conditions, job
+  # wiring and, through the runner's shellcheck, the `run:` scripts).
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install actionlint 1.7.12 (checksum-verified)
+        run: |
+          curl -fsSLo actionlint.tar.gz https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz' | sha256sum -c -
+          tar xzf actionlint.tar.gz actionlint
+
+      - run: ./actionlint -color
+
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -39,7 +74,14 @@ jobs:
       - run: pnpm verify:ci
 
   mutation:
+    # Minutes-slow and report-only, so it runs on pull requests only: the PR that
+    # merged a change already carries its report, and pushes to main skip it.
+    # Within a pull request it mutates only the library files the change touched
+    # (see .github/scripts/ci-changes.mjs), and skips entirely when there are none.
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.mutate != 'none'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -54,7 +96,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm test:mutation
+      - name: Run Stryker
+        env:
+          MUTATE: ${{ needs.changes.outputs.mutate }}
+        run: |
+          if [ "$MUTATE" = full ]; then
+            pnpm test:mutation
+          else
+            echo "Mutating only the changed files: $MUTATE"
+            pnpm test:mutation --mutate "$MUTATE"
+          fi
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
@@ -64,7 +115,11 @@ jobs:
           retention-days: 14
 
   convex-peer-range:
+    # Skipped for pull requests that cannot affect the library (docs, demo-only, ...).
+    needs: changes
+    if: needs.changes.outputs.library == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

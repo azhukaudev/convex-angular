@@ -16,6 +16,7 @@ jobs:
   # library build). No secrets, no id-token, no environment.
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       node-version: ${{ steps.node.outputs.node-version }}
     steps:
@@ -85,6 +86,7 @@ jobs:
     needs: verify
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     # Required reviewers, the deployment-tag restriction and the NPM_TOKEN secret
     # live on this environment (repository settings; see RELEASING.md §9).
     environment: Production
