@@ -40,6 +40,7 @@ export default {
     'packages/convex-angular/testing/src/**/*.ts',
     'packages/convex-angular/better-auth/src/**/*.ts',
     '!**/*.spec.ts',
+    '!**/*.fake.ts', // test doubles, excluded like specs
     '!**/index.ts', // barrels: re-exports only
     '!packages/convex-angular/src/test-setup.ts',
     '!packages/convex-angular/src/lib/types.ts', // type-only, erased at runtime

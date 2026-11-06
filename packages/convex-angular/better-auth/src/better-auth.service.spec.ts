@@ -1,90 +1,9 @@
 import { PLATFORM_ID } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 
-import { BetterAuthClientLike, BetterAuthFetchResult, BetterAuthSessionData } from './better-auth-client';
+import { BetterAuthFetchResult, BetterAuthSessionData } from './better-auth-client';
+import { FakeBetterAuthClient, createDeferred, fail, ok, session } from './better-auth-client.fake';
 import { BETTER_AUTH_CLIENT_FACTORY, BetterAuthService } from './better-auth.service';
-
-const session = (id: string): BetterAuthSessionData => ({ session: { id }, user: { id: 'user-1' } });
-const ok = <T>(data: T): BetterAuthFetchResult<T> => ({ data, error: null });
-const fail = <T>(status: number, message = 'denied'): BetterAuthFetchResult<T> => ({
-  data: null,
-  error: { status, message },
-});
-
-interface Deferred<T> {
-  promise: Promise<T>;
-  resolve: (value: T) => void;
-  reject: (reason: unknown) => void;
-}
-
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-interface FetchOptions {
-  fetchOptions?: { throw?: boolean };
-}
-
-class FakeBetterAuthClient implements BetterAuthClientLike {
-  sessionResult: BetterAuthFetchResult<BetterAuthSessionData> = ok(session('s1'));
-  tokenResult: BetterAuthFetchResult<{ token?: string | null }> = ok({ token: 'jwt-1' });
-  tokenCalls = 0;
-  sessionCalls = 0;
-  updateSessionCalls = 0;
-  sessionDataFallback: unknown = null;
-  lastSessionOptions: FetchOptions | undefined;
-  lastTokenOptions: FetchOptions | undefined;
-
-  // A value the next call should reject with, as opposed to resolving with an
-  // `{ error }` envelope. `undefined` means "resolve normally".
-  sessionRejection: unknown;
-  tokenRejection: unknown;
-
-  // Queued per-call overrides so race tests can control resolution order;
-  // consumed in call order, falling back to sessionResult/tokenResult.
-  sessionQueue: Array<Promise<BetterAuthFetchResult<BetterAuthSessionData>>> = [];
-  tokenQueue: Array<Promise<BetterAuthFetchResult<{ token?: string | null }>>> = [];
-
-  async getSession(options?: FetchOptions) {
-    this.sessionCalls += 1;
-    this.lastSessionOptions = options;
-    if (this.sessionRejection !== undefined) {
-      throw this.sessionRejection;
-    }
-    return this.envelope(await (this.sessionQueue.shift() ?? this.sessionResult), options);
-  }
-
-  convex = {
-    token: async (options?: FetchOptions) => {
-      this.tokenCalls += 1;
-      this.lastTokenOptions = options;
-      if (this.tokenRejection !== undefined) {
-        throw this.tokenRejection;
-      }
-      return this.envelope(await (this.tokenQueue.shift() ?? this.tokenResult), options);
-    },
-  };
-
-  getSessionData = () => this.sessionDataFallback;
-  updateSession = () => {
-    this.updateSessionCalls += 1;
-  };
-
-  // Better Auth semantics: with `fetchOptions.throw` the client rejects with
-  // the error instead of handing back the `{ data, error }` envelope.
-  private envelope<T>(result: BetterAuthFetchResult<T>, options?: FetchOptions): BetterAuthFetchResult<T> {
-    if (options?.fetchOptions?.throw && result.error) {
-      throw result.error;
-    }
-    return result;
-  }
-}
 
 describe('BetterAuthService', () => {
   let client: FakeBetterAuthClient;
