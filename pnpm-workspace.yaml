@@ -10,6 +10,11 @@ packages:
   - apps/docs
 overrides:
   '@better-fetch/fetch': 1.3.3
+  # @nx/js declares verdaccio as an optional peer (for its removed-from-this-repo local-registry
+  # executor); autoInstallPeers installs it anyway and drags in handlebars/js-yaml/compression
+  # advisories. The workspace no longer uses Verdaccio, so remove it from @nx/js's graph.
+  # Remove when @nx/js no longer declares verdaccio as a peer (check its package.json peerDependencies).
+  '@nx/js>verdaccio': '-'
 allowBuilds:
   '@parcel/watcher': true
   '@swc/core': true
