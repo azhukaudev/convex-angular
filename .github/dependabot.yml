@@ -1,5 +1,6 @@
 # Keeps the commit-SHA pins in .github/workflows current. npm dependencies are
 # updated by hand on purpose (strict pnpm release-age cooldown, grouped bumps).
+# Keep each `uses:` trailing comment a bare `# vX.Y.Z`: Dependabot only rewrites that form.
 version: 2
 updates:
   - package-ecosystem: github-actions

@@ -30,16 +30,16 @@ jobs:
         with:
           fetch-depth: 0 # the diff against the base: a pull request's base branch or a push's previous commit
 
+      # The script needs Node >= 24.8 (`import.meta.main` from 24.2, `path.matchesGlob` stable from 24.8); the runner's
+      # preinstalled Node is not guaranteed to have either, so use the repository's pinned one.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
       - id: decide
         env:
-          BASE_REF: ${{ github.base_ref }}
-          BEFORE: ${{ github.event.before }}
-        run: |
-          if [ -n "$BASE_REF" ]; then
-            node .github/scripts/ci-changes.mjs "origin/$BASE_REF"
-          else
-            node .github/scripts/ci-changes.mjs "$BEFORE"
-          fi
+          BASE: ${{ github.base_ref && format('origin/{0}', github.base_ref) || github.event.before }}
+        run: node .github/scripts/ci-changes.mjs "$BASE"
 
   # Lints the workflow files themselves (expressions, `if:` conditions, job
   # wiring and, through the runner's shellcheck, the `run:` scripts).
@@ -63,7 +63,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Reads the pnpm version from `packageManager` in package.json.
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -82,13 +81,12 @@ jobs:
     # change touched (see .github/scripts/ci-changes.mjs) and skips entirely when there
     # are none.
     needs: changes
-    if: needs.changes.outputs.mutate != 'none' && needs.changes.outputs.mutate != ''
+    if: needs.changes.outputs.mutate != 'none'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Reads the pnpm version from `packageManager` in package.json.
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -135,7 +133,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Reads the pnpm version from `packageManager` in package.json.
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
