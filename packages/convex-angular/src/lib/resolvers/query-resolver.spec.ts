@@ -200,6 +200,27 @@ describe('convexQueryResolver', () => {
     tick(5000);
   }));
 
+  it('resolves undefined instead of rejecting when the client throws on subscribe', fakeAsync(() => {
+    jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
+      throw new Error('bad args');
+    });
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+
+    let resolved: unknown = 'sentinel';
+    let rejected: unknown;
+    void Promise.resolve(runResolver(resolver)).then(
+      (value) => (resolved = value),
+      (error: unknown) => (rejected = error),
+    );
+    tick();
+
+    expect(rejected).toBeUndefined();
+    expect(resolved).toBeUndefined();
+    expect(convex.querySubscriptions).toHaveLength(0);
+    // Nothing was subscribed, so no keep-warm timer may be left pending.
+    expect(flush()).toBe(0);
+  }));
+
   it('does not double-unsubscribe when the keep-warm timer and destroy both fire', fakeAsync(() => {
     const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
 

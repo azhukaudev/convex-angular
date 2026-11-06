@@ -226,4 +226,39 @@ describe('openWarmSubscription', () => {
     expect(convex.querySubscriptions).toHaveLength(0);
     expect(onRelease).not.toHaveBeenCalled();
   });
+
+  it('rethrows when the client throws on subscribe and leaves no destroy hook behind', () => {
+    const failure = new Error('bad args');
+    jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
+      throw failure;
+    });
+    const hooks = trackLiveDestroyHooks(destroyRef);
+
+    expect(() => open()).toThrow(failure);
+
+    expect(hooks.live()).toBe(0);
+    expect(onRelease).not.toHaveBeenCalled();
+  });
+
+  it('does not break the scope teardown after a failed subscribe, so later destroy hooks still run', () => {
+    jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
+      throw new Error('bad args');
+    });
+    const scope = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
+    const scopeRef = scope.get(DestroyRef);
+    const laterHook = jest.fn();
+
+    expect(() =>
+      openWarmSubscription(TestBed.inject(CONVEX), mockQuery, { userId: 'user-1' }, scopeRef, {
+        onValue,
+        onError,
+        onRelease,
+      }),
+    ).toThrow('bad args');
+    scopeRef.onDestroy(laterHook);
+
+    expect(() => scope.destroy()).not.toThrow();
+    expect(laterHook).toHaveBeenCalledTimes(1);
+    expect(onRelease).not.toHaveBeenCalled();
+  });
 });

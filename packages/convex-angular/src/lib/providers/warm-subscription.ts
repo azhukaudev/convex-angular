@@ -37,6 +37,9 @@ const MAX_TIMER_DELAY = 2_147_483_647;
  * first, and a destroyed scope throws (NG0911 for a view, NG0205 for an
  * injector) before anything is subscribed.
  *
+ * If the client throws while subscribing (for example on args that are not
+ * Convex values), the destroy hook is removed and the error is rethrown.
+ *
  * @internal
  */
 export function openWarmSubscription<Query extends FunctionReference<'query'>>(
@@ -66,7 +69,17 @@ export function openWarmSubscription<Query extends FunctionReference<'query'>>(
 
   // Hook first: a destroyed scope throws here, before anything is subscribed.
   const removeDestroyHook = destroyRef.onDestroy(release);
-  const unsubscribe = convex.onUpdate(query, args, handlers.onValue, handlers.onError);
+  let unsubscribe: () => void;
+  try {
+    unsubscribe = convex.onUpdate(query, args, handlers.onValue, handlers.onError);
+  } catch (error) {
+    // The client throws synchronously for args it cannot serialize. Nothing is
+    // subscribed, so drop the hook: left registered, `release` would hit the
+    // uninitialised `unsubscribe` at scope teardown and, because Angular does
+    // not guard its destroy loop, skip every later hook on the scope.
+    removeDestroyHook();
+    throw error;
+  }
 
   return {
     release,

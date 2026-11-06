@@ -4,6 +4,7 @@
 
 ### 🐛 Bug Fixes
 
+- `injectPrewarmQuery()` / `convexQueryResolver()`: query args the Convex client cannot serialize (a `Date`, a `Map`, a class instance, or an `undefined` inside an array) no longer break the helper. `prewarm()` threw synchronously instead of resolving `false`, and the resolver rejected the navigation instead of resolving `undefined`. Worse, the failed subscribe left a destroy hook behind that threw when its scope was destroyed, which skipped every destroy hook registered after it on that scope. `prewarm()` now reports the failure through `onError` and resolves `false`; the resolver resolves `undefined`.
 - The auth setup errors thrown by `injectAuth()` and `provideConvexAuth()` ("Could not find Convex auth state" and "Could not find `CONVEX_AUTH`") now name every provider helper that fixes them, including `provideBetterAuth()` and `provideConvexAuthFromExisting()`, which the messages previously omitted.
 
 ### 📖 Documentation

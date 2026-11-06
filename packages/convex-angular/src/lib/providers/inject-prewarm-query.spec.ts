@@ -324,6 +324,57 @@ describe('injectPrewarmQuery', () => {
       expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
     }));
 
+    it('resolves false and reports through onError when the client throws on subscribe', fakeAsync(() => {
+      const failure = new Error('bad args');
+      jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
+        throw failure;
+      });
+      const onError = jest.fn();
+
+      @Component({ template: '', standalone: true })
+      class ReportingComponent {
+        readonly prewarmUser = injectPrewarmQuery(mockQuery, { onError });
+      }
+
+      const fixture = TestBed.createComponent(ReportingComponent);
+      fixture.detectChanges();
+
+      let warmed: boolean | undefined;
+      expect(() => {
+        void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+          warmed = result;
+        });
+      }).not.toThrow();
+      tick();
+
+      expect(warmed).toBe(false);
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(failure, { userId: 'user-1' });
+      expect(convex.querySubscriptions).toHaveLength(0);
+      expect(flush()).toBe(0);
+    }));
+
+    it('wraps a non-Error value thrown on subscribe before handing it to onError', fakeAsync(() => {
+      jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
+        throw 'bad args';
+      });
+      const onError = jest.fn();
+
+      @Component({ template: '', standalone: true })
+      class ReportingComponent {
+        readonly prewarmUser = injectPrewarmQuery(mockQuery, { onError });
+      }
+
+      const fixture = TestBed.createComponent(ReportingComponent);
+      fixture.detectChanges();
+
+      void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
+      tick();
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(new Error('bad args'), { userId: 'user-1' });
+    }));
+
     it('resolves false when the subscription expires before a result arrives', fakeAsync(() => {
       const fixture = TestBed.createComponent(TestComponent);
       fixture.detectChanges();

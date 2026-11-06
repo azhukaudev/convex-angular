@@ -4,7 +4,7 @@ import { FunctionArgs, FunctionReference } from 'convex/server';
 import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 import { injectUserCallbacks } from './user-callback';
-import { openWarmSubscription } from './warm-subscription';
+import { WarmSubscription, openWarmSubscription } from './warm-subscription';
 
 const DEFAULT_EXTEND_SUBSCRIPTION_FOR = 5_000;
 
@@ -100,15 +100,23 @@ export function injectPrewarmQuery<Query extends PrewarmQueryReference>(
       // of waiting for the expiry timer. onUpdate only reports errors
       // asynchronously (off the socket), so it never runs before
       // `subscription` is assigned.
-      const subscription = openWarmSubscription(convex, query, args, destroyRef, {
-        onValue: () => settleWarmed(true),
-        onError: (err) => {
-          settleWarmed(false);
-          callbacks.onError(err, args);
-          subscription.release();
-        },
-        onRelease: () => settleWarmed(false),
-      });
+      let subscription: WarmSubscription;
+      try {
+        subscription = openWarmSubscription(convex, query, args, destroyRef, {
+          onValue: () => settleWarmed(true),
+          onError: (err) => {
+            settleWarmed(false);
+            callbacks.onError(err, args);
+            subscription.release();
+          },
+          onRelease: () => settleWarmed(false),
+        });
+      } catch (err) {
+        // The client throws synchronously for args it cannot serialize; honor
+        // the contract that `prewarm` never throws and resolves false.
+        callbacks.onError(err instanceof Error ? err : new Error(String(err)), args);
+        return Promise.resolve(false);
+      }
       // Unlike the resolver, the window starts now rather than at the first result.
       subscription.releaseAfter(extendSubscriptionFor);
 
