@@ -86,18 +86,7 @@ some other signal, implement a [custom provider](/auth/custom-provider/) and exp
 
 <Code code={auth0Example} lang="ts" title="auth0-auth.service.ts + app.config.ts" />
 
-In a real application the SDK binding comes from Auth0 directly:
-
-```ts
-import { toSignal } from '@angular/core/rxjs-interop';
-import { AuthService } from '@auth0/auth0-angular';
-import { firstValueFrom } from 'rxjs';
-```
-
-`AuthService` exposes Observables — `isLoading$`, `isAuthenticated$`, and the result of
-`getAccessTokenSilently()` — so bridge the first two with `toSignal(...)` and unwrap the
-token with `firstValueFrom(...)`. Awaiting the Observable directly yields the Observable
-itself, not the token, and Convex would never receive one.
+In your application, `inject(AuthService)` from `@auth0/auth0-angular` replaces `inject(AUTH0_SDK)`; bridge its Observables with `toSignal(...)` and `firstValueFrom(...)` as above, because awaiting an Observable directly yields the Observable itself, not the token.
 
 Then read the state with [`injectAuth()`](/auth/overview/), gate templates with
 [the auth directives](/auth/directives/), and protect routes with

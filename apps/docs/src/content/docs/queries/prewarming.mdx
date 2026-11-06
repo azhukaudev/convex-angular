@@ -88,18 +88,7 @@ error path the subscription is disposed immediately rather than waiting out the 
 
 ## The hover-or-intent pattern
 
-```ts
-readonly prewarmProfile = injectPrewarmQuery(api.users.getProfile);
-
-onIntent(userId: string): void {
-  void this.prewarmProfile.prewarm({ userId });
-}
-
-async openWhenWarm(userId: string): Promise<void> {
-  await this.prewarmProfile.prewarm({ userId });
-  await this.router.navigate(['/users', userId]);
-}
-```
+In the example above, `onIntent()` fires and forgets, and `openWhenWarm()` awaits the result before navigating.
 
 Wire `onIntent` to `mouseenter` and `focus` on a `routerLink` anchor so keyboard users get the
 same benefit. The link navigates on click by itself, and the cache is probably warm already.

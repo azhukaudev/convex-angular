@@ -7,11 +7,7 @@ import starlightLinksValidator from 'starlight-links-validator';
 const GITHUB_REPO = 'https://github.com/azhukaudev/convex-angular';
 
 export default defineConfig({
-  // Origin only, no `base`: built for a root deployment, matching the
-  // root-absolute internal links used throughout the content. Serving under a
-  // repository subpath needs `base` set here *and* every authored link made
-  // base-aware; Astro does not rewrite root-absolute links, and a pathname in
-  // `site` alone is silently dropped.
+  // Origin only, no `base`: the site deploys at the root, matching the root-absolute links in the content.
   site: 'https://convex-angular.vercel.app',
   // `allowBuilds` denies sharp's native install script, so keep Astro off its
   // optional sharp-backed image pipeline.

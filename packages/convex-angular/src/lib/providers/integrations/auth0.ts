@@ -13,33 +13,11 @@ import { provideConvexAuth } from '../inject-auth';
 /**
  * Interface that your Auth0 auth service must implement.
  *
- * This is a low-level integration where you provide your own service
- * that wraps the Auth0 SDK and exposes the necessary signals.
+ * This is a low-level integration: you provide a service that wraps the Auth0 SDK and
+ * exposes the signals below. See `provideAuth0Auth` for a complete example.
  *
- * @example
- * ```typescript
- * import { toSignal } from '@angular/core/rxjs-interop';
- * import { AuthService } from '@auth0/auth0-angular';
- * import { firstValueFrom } from 'rxjs';
- *
- * @Injectable({ providedIn: 'root' })
- * export class Auth0AuthService implements Auth0AuthProvider {
- *   private auth0 = inject(AuthService); // from @auth0/auth0-angular
- *
- *   readonly isLoading = toSignal(this.auth0.isLoading$, { initialValue: true });
- *   readonly isAuthenticated = toSignal(this.auth0.isAuthenticated$, { initialValue: false });
- *
- *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }): Promise<string | null> {
- *     const response = await firstValueFrom(
- *       this.auth0.getAccessTokenSilently({
- *         detailedResponse: true,
- *         cacheMode: options?.cacheMode,
- *       })
- *     );
- *     return response?.id_token ?? null;
- *   }
- * }
- * ```
+ * @see provideAuth0Auth
+ * @see https://convex-angular.vercel.app/auth/auth0/
  *
  * @public
  */
