@@ -1,0 +1,86 @@
+<!doctype html>
+<!--
+  Source of apps/docs/public/og.png (the 1200×630 link-preview card). Regenerate after editing:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --hide-scrollbars \
+      --window-size=1200,630 --screenshot=apps/docs/public/og.png apps/docs/branding/og.html
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+      }
+      body {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 88px 96px 72px;
+        background:
+          radial-gradient(circle at 88% 18%, rgba(47, 191, 127, 0.28), transparent 46%),
+          radial-gradient(circle at 8% 110%, rgba(31, 143, 95, 0.22), transparent 40%), #0b1a13;
+        color: #e8f5ee;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 36px;
+      }
+      .brand svg {
+        width: 132px;
+        height: 132px;
+        flex: none;
+      }
+      h1 {
+        margin: 0;
+        font-size: 88px;
+        font-weight: 750;
+        letter-spacing: -2.5px;
+        line-height: 1;
+      }
+      .tagline {
+        margin: 40px 0 0;
+        font-size: 44px;
+        font-weight: 500;
+        line-height: 1.2;
+        color: #cfe9db;
+      }
+      .features {
+        margin: 22px 0 0;
+        font-size: 28px;
+        color: #a8e6c4;
+      }
+      .url {
+        font-size: 26px;
+        color: #7fa894;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <div class="brand">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="7" fill="#10251c" />
+          <path
+            d="M22.51 10.54A8.5 8.5 0 1 0 22.51 21.46"
+            fill="none"
+            stroke="#2fbf7f"
+            stroke-width="4"
+            stroke-linecap="round"
+          />
+          <circle cx="24.6" cy="16" r="2.6" fill="#a8e6c4" />
+        </svg>
+        <h1>convex-angular</h1>
+      </div>
+      <p class="tagline">The Angular client for Convex</p>
+      <p class="features">Signals · Dependency injection · Auth · Pagination · SSR</p>
+    </div>
+    <div class="url">convex-angular.azhukau.com</div>
+  </body>
+</html>

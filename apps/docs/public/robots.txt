@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://convex-angular.azhukau.com/sitemap-index.xml

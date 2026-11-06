@@ -20,6 +20,7 @@
 - Fix the Auth0 example (docs page and `provideAuth0Auth()` TSDoc): it awaited `AuthService.getAccessTokenSilently()`, which returns an Observable, so the id token was never read. It now unwraps it with `firstValueFrom()`, and the type-checked docs example models the real `AuthService` shape (Observables) instead of Signals and Promises.
 - Fix the prewarming example: it awaited `prewarm()` in a click handler on the same element as `routerLink`, which navigates regardless; the awaited variant now lives on a button.
 - The documentation site is now published at https://convex-angular.azhukau.com/. The README, the package `homepage` and a new `bugs` URL link to it and to the issue tracker.
+- The documentation site now has a favicon, a link-preview image and search metadata (a `robots.txt` and structured data).
 
 ### 🏡 Chore
 
