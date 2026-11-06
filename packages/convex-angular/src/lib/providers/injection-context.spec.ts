@@ -7,7 +7,7 @@ import {
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
-import { resolveEnvironmentInjector, runInResolvedInjectionContext } from './injection-context';
+import { runInResolvedInjectionContext } from './injection-context';
 
 const TEST_TOKEN = new InjectionToken<string>('TEST_TOKEN');
 
@@ -41,24 +41,6 @@ describe('injection-context helpers', () => {
     TestBed.configureTestingModule({
       providers: [{ provide: TEST_TOKEN, useValue: 'root' }],
     });
-  });
-
-  it('returns the explicit injector outside an injection context', () => {
-    const injector = TestBed.inject(EnvironmentInjector);
-
-    expect(resolveEnvironmentInjector(testTarget, injector)).toBe(injector);
-  });
-
-  it('returns the ambient injector when called in an injection context', () => {
-    const injector = TestBed.inject(EnvironmentInjector);
-
-    const resolved = runInInjectionContext(injector, () => resolveEnvironmentInjector(testTarget));
-
-    expect(resolved).toBe(injector);
-  });
-
-  it('throws a guided error when resolving outside an injection context', () => {
-    expectGuidedContextError(captureThrown(() => resolveEnvironmentInjector(testTarget)));
   });
 
   it('runs inside the provided injector outside an injection context', () => {
