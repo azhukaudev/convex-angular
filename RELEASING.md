@@ -12,9 +12,7 @@ Steps for cutting a `convex-angular` release, in order.
 Bump the version in `packages/convex-angular/package.json` — that manifest is the source of
 the published version. At build/publish time, the release workflow reads the version straight
 from that manifest and its guard only checks that the pushed tag matches it; nothing derives
-the version from the tag itself. (`packages/convex-angular/project.json`'s
-`currentVersionResolver: "git-tag"` only applies to `nx release version`, which this workflow
-never runs — don't rely on it here.)
+the version from the tag itself.
 
 Choose the bump from the changelog: if the `## Unreleased` section contains a `### ⚠️ Breaking Changes` heading — including a
 raised peer-dependency floor or a new peer-dependency upper bound — bump the **major** version. 1.11.0 shipped with such a section and no
