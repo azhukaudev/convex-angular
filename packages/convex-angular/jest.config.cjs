@@ -7,8 +7,8 @@ const { createCjsPreset } = require('jest-preset-angular/presets');
 module.exports = {
   ...createCjsPreset(),
   displayName: 'convex-angular',
-  // Caps jest-worker children to dodge the Node 24 SIGSEGV; see CLAUDE.md for the
-  // measured rates. Costs no speed — worker startup dominates these small suites.
+  // Caps jest-worker children to dodge the Node 24 SIGSEGV; see "Tests and Tooling" in
+  // AGENTS.md. Costs no speed — worker startup dominates these small suites.
   maxWorkers: 4,
   setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
   coverageDirectory: '../../coverage/packages/convex-angular',

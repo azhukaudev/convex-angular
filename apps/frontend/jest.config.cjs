@@ -5,7 +5,7 @@ const { createCjsPreset } = require('jest-preset-angular/presets');
 module.exports = {
   ...createCjsPreset(),
   displayName: 'frontend',
-  // Caps jest-worker children to dodge the Node 24 SIGSEGV; see CLAUDE.md.
+  // Caps jest-worker children to dodge the Node 24 SIGSEGV; see "Tests and Tooling" in AGENTS.md.
   maxWorkers: 4,
   setupFilesAfterEnv: ['<rootDir>/src/test-setup.ts'],
   coverageDirectory: '../../coverage/apps/frontend',
