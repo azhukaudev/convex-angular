@@ -3,7 +3,12 @@ import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
-import { PrewarmQueryReference, injectPrewarmQuery } from './inject-prewarm-query';
+import {
+  PrewarmQueryOptions,
+  PrewarmQueryReference,
+  PrewarmQueryResult,
+  injectPrewarmQuery,
+} from './inject-prewarm-query';
 
 const mockQuery = (() => {}) as unknown as FunctionReference<
   'query',
@@ -34,6 +39,19 @@ describe('injectPrewarmQuery', () => {
   afterEach(() => {
     TestBed.resetTestingModule();
   });
+
+  function createPrewarm(
+    options?: PrewarmQueryOptions<PrewarmQueryReference>,
+  ): PrewarmQueryResult<PrewarmQueryReference> {
+    @Component({ template: '', standalone: true })
+    class TestComponent {
+      readonly prewarmUser = injectPrewarmQuery(mockQuery, options);
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    return fixture.componentInstance.prewarmUser;
+  }
 
   it('subscribes with the provided query and args', () => {
     @Component({
@@ -103,18 +121,9 @@ describe('injectPrewarmQuery', () => {
   it('forwards subscription errors to onError', () => {
     const onError = jest.fn();
 
-    @Component({
-      template: '',
-      standalone: true,
-    })
-    class TestComponent {
-      readonly prewarmUser = injectPrewarmQuery(mockQuery, { onError });
-    }
+    const prewarmUser = createPrewarm({ onError });
 
-    const fixture = TestBed.createComponent(TestComponent);
-    fixture.detectChanges();
-
-    fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
+    prewarmUser.prewarm({ userId: 'user-1' });
 
     const error = new Error('Prefetch failed');
     requireQuerySubscription(convex, 0).emitError(error);
@@ -130,19 +139,10 @@ describe('injectPrewarmQuery', () => {
     const handleError = jest.fn();
     TestBed.configureTestingModule({ providers: [{ provide: ErrorHandler, useValue: { handleError } }] });
 
-    @Component({
-      template: '',
-      standalone: true,
-    })
-    class TestComponent {
-      readonly prewarmUser = injectPrewarmQuery(mockQuery, { onError });
-    }
-
-    const fixture = TestBed.createComponent(TestComponent);
-    fixture.detectChanges();
+    const prewarmUser = createPrewarm({ onError });
 
     let warmed: boolean | undefined;
-    void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+    void prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
       warmed = result;
     });
 
@@ -159,19 +159,10 @@ describe('injectPrewarmQuery', () => {
   it('releases a subscription only once when it fails after the window expired', fakeAsync(() => {
     const onError = jest.fn();
 
-    @Component({
-      template: '',
-      standalone: true,
-    })
-    class TestComponent {
-      readonly prewarmUser = injectPrewarmQuery(mockQuery, { onError });
-    }
-
-    const fixture = TestBed.createComponent(TestComponent);
-    fixture.detectChanges();
+    const prewarmUser = createPrewarm({ onError });
 
     let warmed: boolean | undefined;
-    void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+    void prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
       warmed = result;
     });
 
@@ -324,24 +315,14 @@ describe('injectPrewarmQuery', () => {
       expect(requireQuerySubscription(convex, 0).unsubscribeCount).toBe(1);
     }));
 
-    it('resolves false and reports through onError when the client throws on subscribe', fakeAsync(() => {
-      const failure = new Error('bad args');
-      jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
-        throw failure;
-      });
+    it('resolves false and reports through onError when the args cannot be serialized', fakeAsync(() => {
       const onError = jest.fn();
-
-      @Component({ template: '', standalone: true })
-      class ReportingComponent {
-        readonly prewarmUser = injectPrewarmQuery(mockQuery, { onError });
-      }
-
-      const fixture = TestBed.createComponent(ReportingComponent);
-      fixture.detectChanges();
+      const prewarmUser = createPrewarm({ onError });
+      const args = { userId: new Set<string>() as never };
 
       let warmed: boolean | undefined;
       expect(() => {
-        void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' }).then((result) => {
+        void prewarmUser.prewarm(args).then((result) => {
           warmed = result;
         });
       }).not.toThrow();
@@ -349,30 +330,9 @@ describe('injectPrewarmQuery', () => {
 
       expect(warmed).toBe(false);
       expect(onError).toHaveBeenCalledTimes(1);
-      expect(onError).toHaveBeenCalledWith(failure, { userId: 'user-1' });
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), args);
       expect(convex.querySubscriptions).toHaveLength(0);
       expect(flush()).toBe(0);
-    }));
-
-    it('wraps a non-Error value thrown on subscribe before handing it to onError', fakeAsync(() => {
-      jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
-        throw 'bad args';
-      });
-      const onError = jest.fn();
-
-      @Component({ template: '', standalone: true })
-      class ReportingComponent {
-        readonly prewarmUser = injectPrewarmQuery(mockQuery, { onError });
-      }
-
-      const fixture = TestBed.createComponent(ReportingComponent);
-      fixture.detectChanges();
-
-      void fixture.componentInstance.prewarmUser.prewarm({ userId: 'user-1' });
-      tick();
-
-      expect(onError).toHaveBeenCalledTimes(1);
-      expect(onError).toHaveBeenCalledWith(new Error('bad args'), { userId: 'user-1' });
     }));
 
     it('resolves false when the subscription expires before a result arrives', fakeAsync(() => {

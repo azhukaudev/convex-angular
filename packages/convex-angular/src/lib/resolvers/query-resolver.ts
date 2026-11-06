@@ -5,7 +5,7 @@ import { FunctionArgs, FunctionReturnType } from 'convex/server';
 
 import { injectConvex } from '../providers/inject-convex';
 import { QueryReference } from '../providers/inject-query';
-import { WarmSubscription, openWarmSubscription } from '../providers/warm-subscription';
+import { openWarmSubscription } from '../providers/warm-subscription';
 import { SkipToken, skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
 import { serializeQueryArgs } from '../ssr/state-transfer';
@@ -122,23 +122,13 @@ export function convexQueryResolver<Query extends QueryReference>(
 
       // The client never calls back synchronously from onUpdate, so
       // `subscription` is always assigned before the first `settle`.
-      let subscription: WarmSubscription;
-      try {
-        subscription = openWarmSubscription(convex, query, args, destroyRef, {
-          onValue: settle,
-          onError: () => settle(undefined),
-          // A scope destroyed before the first result must not hang the
-          // navigation; resolving undefined matches the error path's contract.
-          onRelease: () => resolve(undefined),
-        });
-      } catch {
-        // The client throws synchronously for args it cannot serialize. A
-        // rejected resolver would fail the navigation; honor the contract that
-        // failures resolve undefined. The routed component's own injectQuery
-        // reports the same bad args. Nothing was subscribed, so there is no
-        // keep-warm window to arm.
-        resolve(undefined);
-      }
+      const subscription = openWarmSubscription(convex, query, args, destroyRef, {
+        onValue: settle,
+        onError: () => settle(undefined),
+        // A scope destroyed before the first result must not hang the
+        // navigation; resolving undefined matches the error path's contract.
+        onRelease: () => resolve(undefined),
+      });
     });
   };
 }

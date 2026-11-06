@@ -200,11 +200,8 @@ describe('convexQueryResolver', () => {
     tick(5000);
   }));
 
-  it('resolves undefined instead of rejecting when the client throws on subscribe', fakeAsync(() => {
-    jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
-      throw new Error('bad args');
-    });
-    const resolver = convexQueryResolver(mockQuery, () => ({ userId: 'user-1' }));
+  it('resolves undefined instead of rejecting when the args cannot be serialized', fakeAsync(() => {
+    const resolver = convexQueryResolver(mockQuery, () => ({ userId: new Set<string>() as never }));
 
     let resolved: unknown = 'sentinel';
     let rejected: unknown;
