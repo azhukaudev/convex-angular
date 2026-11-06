@@ -12,7 +12,7 @@ export default defineConfig({
   // repository subpath needs `base` set here *and* every authored link made
   // base-aware; Astro does not rewrite root-absolute links, and a pathname in
   // `site` alone is silently dropped.
-  site: 'https://azhukaudev.github.io',
+  site: 'https://convex-angular.vercel.app',
   // `allowBuilds` denies sharp's native install script, so keep Astro off its
   // optional sharp-backed image pipeline.
   image: { service: passthroughImageService() },
