@@ -8,6 +8,7 @@
 - The auth setup errors thrown by `injectAuth()` and `provideConvexAuth()` ("Could not find Convex auth state" and "Could not find `CONVEX_AUTH`") now name every provider helper that fixes them, including `provideBetterAuth()` and `provideConvexAuthFromExisting()`, which the messages previously omitted.
 - `convex-angular/better-auth`: `refreshSession()` now retries Convex authentication when the last token exchange failed. Convex gives up on auth after a failed exchange and does not ask again until the next `setAuth()`, and since the 1.11.0 change that stopped a same-session refresh from re-authenticating, one transient exchange failure left `injectAuth().status()` at `'unauthenticated'` (while `injectBetterAuth().isAuthenticated()` was `true`) until a reload or a new sign-in. A same-session `refreshSession()` after a failed exchange now re-registers Convex auth once; a refresh after a healthy exchange still leaves Convex untouched.
 - The published package now includes the MIT `LICENSE` file. Earlier releases, including 1.11.0, declared `"license": "MIT"` in `package.json` but shipped no license text in the tarball. The release workflow now fails when the built package has no `LICENSE`.
+- `injectQueries()`: `QueriesDefinition` is now typed `Record<string, QueryRequest | SkipToken>` instead of using `QueryRequest<any>`, so a definition holding an internal (non-public) query reference is rejected at compile time; such a query could never run from the client anyway.
 
 ### 📖 Documentation
 
