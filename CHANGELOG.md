@@ -20,6 +20,8 @@
 
 - Run the mutation suite on pushes to `main` as well as pull requests (it only ran on pull requests, so direct pushes were never mutation-tested), stop a Dependabot bump of `ci.yml` from forcing a full mutation run, derive `ci-changes.mjs`'s mutated roots from `stryker.config.mjs` and cover the script with `node:test` tests that `verify:ci` runs, remove the `.nx/cache` CI step that never hit, correct the `pnpm/action-setup` version comments, and have Dependabot open each major GitHub Actions bump as its own pull request (contributors only).
 - Clear the Verdaccio and undici advisories from the workspace's dev toolchain (contributors only; the published package is unaffected): `verdaccio`, which `@nx/js` only lists as an optional peer, is no longer installed; `undici` is patched in both copies (the Nx one through an override until Nx 24.0.4, the Astro one through an in-range refresh); and the unused `material-symbols` dependency is gone, since the demo self-hosts its icon subset.
+- Enable `@typescript-eslint/no-explicit-any` for the library and replace its remaining uses; extend the `src/lib/internal` boundary lint rule so `*_experimental` client members, like `BaseConvexClient`, can only be used in `convex-client-internals.ts` (contributors only).
+- Delete the unused `resolveEnvironmentInjector` helper, move the `@internal` tag of `ɵrunInResolvedInjectionContext` onto its declaration so the published `.d.ts` carries it, and remove the unused `release` blocks from `nx.json` and `project.json`.
 
 ## [1.11.0](https://github.com/azhukaudev/convex-angular/compare/v1.10.0...v1.11.0) (2026-11-06)
 
