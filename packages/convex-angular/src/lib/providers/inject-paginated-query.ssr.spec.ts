@@ -1,7 +1,7 @@
 import { Component, ErrorHandler, PLATFORM_ID, TransferState, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockConvexClient, MockPaginatedSubscription, provideConvexTesting } from 'convex-angular/testing';
-import { FunctionReference, PaginationResult } from 'convex/server';
+import { FunctionReference, PaginationOptions, PaginationResult } from 'convex/server';
 
 import { skipToken } from '../skip-token';
 import { ConvexServerQueryLoader } from '../ssr/server-query-loader';
@@ -17,7 +17,7 @@ jest.mock('convex/server', () => ({
 const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
   'query',
   'public',
-  { paginationOpts: any },
+  { paginationOpts: PaginationOptions },
   PaginationResult<{ _id: string; name: string }>
 > as PaginatedQueryReference;
 

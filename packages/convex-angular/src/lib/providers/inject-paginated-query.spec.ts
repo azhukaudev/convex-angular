@@ -2,7 +2,7 @@ import { Component, EnvironmentInjector, ErrorHandler, createEnvironmentInjector
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { MockConvexClient, MockPaginatedSubscription, provideConvexTesting } from 'convex-angular/testing';
 import { ConvexClient } from 'convex/browser';
-import { FunctionReference, PaginationResult } from 'convex/server';
+import { FunctionReference, PaginationOptions, PaginationResult } from 'convex/server';
 
 import { skipToken } from '../skip-token';
 import { CONVEX } from '../tokens/convex';
@@ -17,7 +17,7 @@ jest.mock('convex/server', () => ({
 const mockPaginatedQuery = (() => {}) as unknown as FunctionReference<
   'query',
   'public',
-  { paginationOpts: any },
+  { paginationOpts: PaginationOptions },
   PaginationResult<{ _id: string; name: string }>
 > as PaginatedQueryReference;
 

@@ -2,7 +2,7 @@ import { EnvironmentInjector, assertInInjectionContext, runInInjectionContext } 
 
 // Like assertInInjectionContext, but the error mentions the library's
 // injectRef escape hatch alongside Angular's standard guidance.
-function assertHelperInjectionContext(target: (...args: any[]) => unknown): void {
+function assertHelperInjectionContext(target: (...args: never[]) => unknown): void {
   try {
     assertInInjectionContext(target);
   } catch {
@@ -15,7 +15,7 @@ function assertHelperInjectionContext(target: (...args: any[]) => unknown): void
 }
 
 export function runInResolvedInjectionContext<T>(
-  target: (...args: any[]) => unknown,
+  target: (...args: never[]) => unknown,
   injectRef: EnvironmentInjector | undefined,
   fn: () => T,
 ): T {

@@ -18,6 +18,7 @@ export type PaginatedQueryReference = FunctionReference<
   'query',
   'public',
   { paginationOpts: PaginationOptions },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the page item type must stay `any`: with `unknown`, PaginatedQueryItem<PaginatedQueryReference> is `unknown` and helpers typed against the bare reference reject property access on items (TS18046)
   PaginationResult<any>
 >;
 

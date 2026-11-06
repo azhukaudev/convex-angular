@@ -39,7 +39,7 @@ class LocalQueryStoreFake implements OptimisticLocalStore {
   private readonly queries: Record<string, Record<string, { args: Record<string, Value>; value: undefined | Value }>> =
     {};
 
-  setQuery(query: StoreQuery, args: any, value: any): void {
+  setQuery(query: StoreQuery, args: Record<string, Value> | undefined, value: undefined | Value): void {
     const queriesByName = this.queries[getFunctionName(query)] ?? {};
     this.queries[getFunctionName(query)] = queriesByName;
 
@@ -60,9 +60,9 @@ class LocalQueryStoreFake implements OptimisticLocalStore {
     }));
   }
 
-  getQuery(query: StoreQuery, args: any) {
+  getQuery<Query extends StoreQuery>(query: Query, args: FunctionArgs<Query>) {
     const serializedArgs = JSON.stringify(convexToJson(args ?? {}));
-    return this.queries[getFunctionName(query)]?.[serializedArgs]?.value as Value | undefined;
+    return this.queries[getFunctionName(query)]?.[serializedArgs]?.value as undefined | FunctionReturnType<Query>;
   }
 }
 

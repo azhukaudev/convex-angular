@@ -515,7 +515,7 @@ describe('Auth Guards', () => {
         providers: [],
       });
 
-      const injector = TestBed.inject(CONVEX_AUTH_GUARD_CONFIG as any, null, {
+      const injector = TestBed.inject(CONVEX_AUTH_GUARD_CONFIG, null, {
         optional: true,
       });
 

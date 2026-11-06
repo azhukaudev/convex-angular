@@ -33,7 +33,7 @@ export interface QueryRequest<Query extends QueryReference = QueryReference> {
 /**
  * A keyed definition map used by injectQueries.
  */
-export type QueriesDefinition = Record<string, QueryRequest<any> | SkipToken>;
+export type QueriesDefinition = Record<string, QueryRequest | SkipToken>;
 
 type QueryData<Request> = Request extends QueryRequest<infer Query> ? FunctionReturnType<Query> | undefined : undefined;
 
