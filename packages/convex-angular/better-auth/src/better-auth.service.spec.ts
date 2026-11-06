@@ -287,10 +287,13 @@ describe('BetterAuthService', () => {
   }));
 
   describe('retrying a failed token exchange on a same-session refresh', () => {
-    // Fails the exchange the given way, refreshes the unchanged session twice,
-    // and expects exactly one extra reauth: the failure alone never re-registers
-    // Convex auth, the first refresh does, the second finds nothing left to retry.
-    function expectOneRetryAfter(failExchange: () => void): void {
+    // Loads the session, fails the Convex token exchange (a 500 response unless told otherwise) and lets one
+    // token request run against it.
+    function afterFailedExchange(
+      failExchange: () => void = () => {
+        client.tokenResult = fail(500, 'exchange exploded');
+      },
+    ) {
       const service = setup();
       tick();
       const initialVersion = service.reauthVersion();
@@ -298,49 +301,54 @@ describe('BetterAuthService', () => {
       failExchange();
       void service.fetchAccessToken({ forceRefreshToken: false });
       tick();
-      expect(service.reauthVersion()).toBe(initialVersion);
-
-      void service.refreshSession();
-      tick();
-      expect(service.reauthVersion()).toBe(initialVersion + 1);
-
-      void service.refreshSession();
-      tick();
-      expect(service.reauthVersion()).toBe(initialVersion + 1);
+      return { service, initialVersion };
     }
 
-    it('after an error response', fakeAsync(() => {
-      expectOneRetryAfter(() => {
-        client.tokenResult = fail(500, 'exchange exploded');
-      });
-    }));
+    // The failure alone never re-registers Convex auth, the first same-session refresh does, and the second finds
+    // nothing left to retry.
+    it.each([
+      [
+        'an error response',
+        () => {
+          client.tokenResult = fail(500, 'exchange exploded');
+        },
+      ],
+      [
+        'an expected 401 response',
+        () => {
+          client.tokenResult = fail(401);
+        },
+      ],
+      [
+        'a rejected exchange',
+        () => {
+          client.tokenRejection = new Error('socket closed');
+        },
+      ],
+      [
+        'a response that carries no token',
+        () => {
+          client.tokenResult = ok({ token: null });
+        },
+      ],
+    ])(
+      'after %s',
+      fakeAsync((_label: string, failExchange: () => void) => {
+        const { service, initialVersion } = afterFailedExchange(failExchange);
+        expect(service.reauthVersion()).toBe(initialVersion);
 
-    it('after an expected 401 response', fakeAsync(() => {
-      expectOneRetryAfter(() => {
-        client.tokenResult = fail(401);
-      });
-    }));
+        void service.refreshSession();
+        tick();
+        expect(service.reauthVersion()).toBe(initialVersion + 1);
 
-    it('after a rejected exchange', fakeAsync(() => {
-      expectOneRetryAfter(() => {
-        client.tokenRejection = new Error('socket closed');
-      });
-    }));
-
-    it('after a response that carries no token', fakeAsync(() => {
-      expectOneRetryAfter(() => {
-        client.tokenResult = ok({ token: null });
-      });
-    }));
+        void service.refreshSession();
+        tick();
+        expect(service.reauthVersion()).toBe(initialVersion + 1);
+      }),
+    );
 
     it('stays quiet once the retried exchange succeeded', fakeAsync(() => {
-      const service = setup();
-      tick();
-      const initialVersion = service.reauthVersion();
-
-      client.tokenResult = fail(500, 'exchange exploded');
-      void service.fetchAccessToken({ forceRefreshToken: false });
-      tick();
+      const { service, initialVersion } = afterFailedExchange();
       void service.refreshSession();
       tick();
       expect(service.reauthVersion()).toBe(initialVersion + 1);
@@ -355,13 +363,7 @@ describe('BetterAuthService', () => {
     }));
 
     it('does not bump while a token exchange is already in flight', fakeAsync(() => {
-      const service = setup();
-      tick();
-      const initialVersion = service.reauthVersion();
-
-      client.tokenResult = fail(500, 'exchange exploded');
-      void service.fetchAccessToken({ forceRefreshToken: false });
-      tick();
+      const { service, initialVersion } = afterFailedExchange();
 
       const retry = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
       client.tokenQueue.push(retry.promise);
@@ -378,13 +380,7 @@ describe('BetterAuthService', () => {
     }));
 
     it('bumps exactly once when the refresh also changes the session id', fakeAsync(() => {
-      const service = setup();
-      tick();
-      const initialVersion = service.reauthVersion();
-
-      client.tokenResult = fail(500, 'exchange exploded');
-      void service.fetchAccessToken({ forceRefreshToken: false });
-      tick();
+      const { service, initialVersion } = afterFailedExchange();
 
       client.sessionResult = ok(session('s2'));
       void service.refreshSession();
@@ -394,13 +390,7 @@ describe('BetterAuthService', () => {
     }));
 
     it('bumps exactly once when the refresh ends signed out', fakeAsync(() => {
-      const service = setup();
-      tick();
-      const initialVersion = service.reauthVersion();
-
-      client.tokenResult = fail(500, 'exchange exploded');
-      void service.fetchAccessToken({ forceRefreshToken: false });
-      tick();
+      const { service, initialVersion } = afterFailedExchange();
 
       client.sessionResult = fail(401);
       void service.refreshSession();
@@ -411,21 +401,15 @@ describe('BetterAuthService', () => {
     }));
 
     it('only bumps for the sign-out itself when clearSession() follows a failed exchange', fakeAsync(() => {
-      const service = setup();
-      tick();
-      const initialVersion = service.reauthVersion();
-
-      client.tokenResult = fail(500, 'exchange exploded');
-      void service.fetchAccessToken({ forceRefreshToken: false });
-      tick();
+      const { service, initialVersion } = afterFailedExchange();
 
       service.clearSession();
 
       expect(service.reauthVersion()).toBe(initialVersion + 1);
     }));
 
-    // Kills a flag that starts out `true`: a signed-out load never changes the
-    // session id, so nothing would reset it and the first refresh would bump.
+    // A signed-out first load is not a failed exchange: no token was ever requested, so a later
+    // refresh has nothing to retry.
     it('does not bump on a signed-out load', fakeAsync(() => {
       client.sessionResult = fail(401);
       const service = setup();
