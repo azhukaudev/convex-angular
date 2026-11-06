@@ -9,9 +9,8 @@ import { api } from './convex/api';
   imports: [RouterLink],
   template: `
     @for (id of userIds; track id) {
-      <a [routerLink]="['/users', id]" (mouseenter)="onIntent(id)" (focus)="onIntent(id)" (click)="open(id, $event)">
-        {{ id }}
-      </a>
+      <a [routerLink]="['/users', id]" (mouseenter)="onIntent(id)" (focus)="onIntent(id)">{{ id }}</a>
+      <button type="button" (click)="openWhenWarm(id)">Open {{ id }} when ready</button>
     }
   `,
 })
@@ -26,16 +25,18 @@ export class UserListComponent {
     onError: (error, args) => console.warn('prewarm failed for', args.userId, error),
   });
 
-  // Fire-and-forget on intent: the promise is not interesting here.
+  // Fire-and-forget on intent: the promise is not interesting here. The
+  // `routerLink` navigates on click by itself; this only warms the cache.
   onIntent(userId: string): void {
     void this.prewarmProfile.prewarm({ userId });
   }
 
-  // Or await it to hold navigation until the cache is warm. `prewarm()`
-  // resolves false on failure, expiry, or scope destruction — navigate
-  // either way and let the routed component's own query handle it.
-  async open(userId: string, event: Event): Promise<void> {
-    event.preventDefault();
+  // Or await it to hold navigation until the cache is warm. That only works on
+  // an element that does not navigate by itself, like this button: `routerLink`
+  // navigates on every click, whatever another (click) handler does. `prewarm()`
+  // resolves false on failure, expiry, or scope destruction — navigate either
+  // way and let the routed component's own query handle it.
+  async openWhenWarm(userId: string): Promise<void> {
     await this.prewarmProfile.prewarm({ userId });
     await this.router.navigate(['/users', userId]);
   }

@@ -95,17 +95,21 @@ onIntent(userId: string): void {
   void this.prewarmProfile.prewarm({ userId });
 }
 
-async open(userId: string): Promise<void> {
+async openWhenWarm(userId: string): Promise<void> {
   await this.prewarmProfile.prewarm({ userId });
   await this.router.navigate(['/users', userId]);
 }
 ```
 
-Wire `onIntent` to `mouseenter` and `focus` so keyboard users get the same benefit, and let
-the click handler either navigate immediately (the cache is probably warm already) or await
-the prewarm for a guaranteed-instant render. Because `prewarm()` resolves `false` rather than
-rejecting, the `await` form degrades to a normal loading state instead of blocking
-navigation.
+Wire `onIntent` to `mouseenter` and `focus` on a `routerLink` anchor so keyboard users get the
+same benefit. The link navigates on click by itself, and the cache is probably warm already.
+
+To hold navigation until the cache is warm, call `openWhenWarm` from the click handler of an
+element that does not navigate by itself, such as `<button type="button">`. Do not put it next
+to `routerLink`: `RouterLink` navigates on every click, even when another `(click)` handler
+calls `preventDefault()`, so the `await` would never delay anything. Because `prewarm()`
+resolves `false` rather than rejecting, the `await` form degrades to a normal loading state
+instead of blocking navigation.
 
 Server-side rendering needs no guard: `prewarm()` short-circuits on a disabled client and
 resolves `false` immediately, so it never registers a timer that would delay SSR stability.

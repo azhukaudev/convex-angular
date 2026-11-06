@@ -13,6 +13,7 @@
 
 - Correct the 1.11.0 changelog: the Angular-floor note said the release "ships as 2.0.0", but it shipped as 1.11.0 (Angular 21 projects should stay on `convex-angular@~1.10.0`).
 - `reference/errors`: stop suggesting that `provideConvexAuthFromExisting()` be registered alongside `provideConvexAuth()` (it already includes it), and document the `MockConvexClient.requireLastAuthRegistration()` error.
+- Fix two documentation examples that did not work when copied. The Auth0 example (docs page and `provideAuth0Auth()` TSDoc) awaited `AuthService.getAccessTokenSilently()`, which returns an Observable, so the id token was never read; it now unwraps it with `firstValueFrom()`, and the type-checked docs example models the real `AuthService` shape (Observables) instead of Signals and Promises. The prewarming example awaited `prewarm()` in a click handler on the same element as `routerLink`, which navigates regardless; the awaited variant now lives on a button.
 
 ## [1.11.0](https://github.com/azhukaudev/convex-angular/compare/v1.10.0...v1.11.0) (2026-11-06)
 
