@@ -113,7 +113,21 @@ Two other states fall outside the table:
 
 ## Errors
 
-On failure the helper keeps what you already have:
+<Aside type="caution" title="A failed page query breaks the client's paginated updates">
+  When the server fails one of a paginated query's page queries (your paginated function throws), the Convex client
+  (verified with `convex@1.49.0`) throws while it computes the paginated result, inside its own transition handling. In
+  the browser `onError` and `error()` are never reached for that failure, so the helper does not report it. Every
+  `onUpdate` listener the client registered **after** this subscription — including other `injectQuery()` calls — stops
+  receiving updates until the failed subscription is torn down or until a later server run of that page succeeds. The
+  transition that carried the failure is dropped for every listener, so other query updates batched into it are lost
+  until those queries change again. `reset()` throws synchronously from the resubscribe while the failed page is still
+  cached (reported to Angular's `ErrorHandler`). The client still asks the server again, and if that run succeeds the
+  list recovers. But `error()` never reports the failure, and the helper loses its handle on the new subscription, so it
+  is never unsubscribed. This is upstream behavior the library cannot intercept. Make paginated query functions return
+  an empty page or an explicit result for expected failures instead of throwing.
+</Aside>
+
+When the helper does receive an error (today: the server render's first-page fetch; in the browser see the caution below), it keeps what you already have:
 
 - `results()` is **preserved** — a failed `loadMore()` does not empty the list.
 - `error()` is set and `status()` becomes `'error'`.
@@ -127,9 +141,8 @@ On failure the helper keeps what you already have:
   silently swap back to a load-more affordance when the subscription fails. Check `error()` first.
 </Aside>
 
-`reset()` is the recovery path after a first-page error: it bumps the reset version, which
-changes the subscription identity and resubscribes from the first page even when the
-arguments are unchanged.
+`reset()` bumps the reset version, which changes the subscription identity and resubscribes
+from the first page even when the arguments are unchanged.
 
 ## `loadMore()` returns a boolean — check it
 

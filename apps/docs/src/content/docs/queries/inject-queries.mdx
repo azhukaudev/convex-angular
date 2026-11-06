@@ -150,3 +150,7 @@ queries.isLoading(); // true
 
 Combine that with an `isLoading()`-driven affordance rather than an empty state, or the whole
 dashboard will blink on every refresh.
+
+As with [`injectQuery().refetch()`](/queries/inject-query/#refetch), the Convex client replays each key's previous result
+— a value or an error — on the next macrotask, before the server answers, and a key whose query and arguments another
+subscriber also holds sends no request at all.

@@ -132,11 +132,18 @@ hatch for the args-dedup behavior above.
 
 Existing data is preserved while the refetch is pending, so the sequence for a query that
 already has data is: `isLoading()` goes true, `status()` returns to `'pending'`,
-`isRefetching()` becomes true, `data()` stays put, and the next emission settles everything.
+`isRefetching()` becomes true, `data()` stays put, and the next emission settles it.
+
+That next emission is usually not a fresh server result. The Convex client keeps the previous result — a value or an
+error — until the server answers, and replays it to the new subscription on the next macrotask. So `isLoading()` goes
+back to `false` almost immediately, with the old value or the old error, and the server's fresh result follows when it
+arrives.
 
 <Aside type="caution">
-  Convex subscriptions are already live. `refetch()` is for forcing a fresh subscription after an error or a connection
-  hiccup — it is not a polling primitive, and calling it on a healthy subscription only costs you a round trip.
+  Convex subscriptions are already live, so `refetch()` is not a polling primitive. After an error it re-delivers the
+  cached error first and recovers only when the server answers again. If another subscriber holds the same query and
+  arguments (another component, a prewarm, or a route resolver's keep-warm window), the client sends nothing to the
+  server, and `refetch()` cannot force the query to run again.
 </Aside>
 
 ## Errors
