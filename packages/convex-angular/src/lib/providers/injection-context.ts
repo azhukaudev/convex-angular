@@ -14,6 +14,11 @@ function assertHelperInjectionContext(target: (...args: never[]) => unknown): vo
   }
 }
 
+/**
+ * Not public API: shared with the library's secondary entry points only. May change without notice.
+ *
+ * @internal
+ */
 export function runInResolvedInjectionContext<T>(
   target: (...args: never[]) => unknown,
   injectRef: EnvironmentInjector | undefined,

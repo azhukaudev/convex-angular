@@ -40,9 +40,7 @@ export * from './lib/guards/auth-guards';
 // Route resolvers
 export * from './lib/resolvers/query-resolver';
 
-/**
- * Not public API: shared with the library's secondary entry points only. May change without notice.
- *
- * @internal
- */
+// Not public API: shared with the library's secondary entry points only (convex-angular/better-auth). May change
+// without notice. The `@internal` tag lives on the declaration in injection-context.ts: TypeScript drops a doc
+// comment on an export specifier from the .d.ts.
 export { runInResolvedInjectionContext as ɵrunInResolvedInjectionContext } from './lib/providers/injection-context';
