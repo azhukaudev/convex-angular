@@ -15,6 +15,9 @@ overrides:
   # advisories. The workspace no longer uses Verdaccio, so remove it from @nx/js's graph.
   # Remove when @nx/js no longer declares verdaccio as a peer (check its package.json peerDependencies).
   '@nx/js>verdaccio': '-'
+  # nx@23.3.1 pins undici 7.29.0 exactly (advisories fixed in 7.30.1; nx@24.0.4 pins 7.30.1).
+  # Remove when Nx >= 24.0.4. Do not raise past 7.30.1 without checking minimumReleaseAge.
+  'nx>undici': 7.30.1
 allowBuilds:
   '@parcel/watcher': true
   '@swc/core': true
