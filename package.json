@@ -44,7 +44,6 @@
     "@fontsource/roboto": "5.2.10",
     "better-auth": "1.7.17",
     "convex": "1.49.0",
-    "material-symbols": "0.45.7",
     "rxjs": "7.8.2",
     "zone.js": "0.16.3"
   },

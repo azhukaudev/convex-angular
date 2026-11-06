@@ -72,7 +72,6 @@ const config: KnipConfig = {
   ignoreDependencies: [
     // Fonts loaded via the project.json styles array, never imported from code
     '@fontsource/roboto',
-    'material-symbols',
     // Toolchain required by Nx Angular executors and `nx migrate`; never imported
     '@angular/cli',
     '@nx/workspace',
