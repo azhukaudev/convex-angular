@@ -95,7 +95,7 @@ Components and lazy routes inherit the root client automatically.
 ### Could not find `CONVEX_AUTH`
 
 ```text
-Could not find `CONVEX_AUTH`. Make sure to provide an auth provider using `CONVEX_AUTH`, `provideClerkAuth()`, or `provideAuth0Auth()` before calling `provideConvexAuth()`.
+Could not find `CONVEX_AUTH`. Bind an auth provider to `CONVEX_AUTH` alongside `provideConvexAuth()`, or replace the pair with `provideConvexAuthFromExisting()`, `provideClerkAuth()`, `provideAuth0Auth()`, or `provideBetterAuth()` (from `convex-angular/better-auth`).
 ```
 
 **When it happens.** `provideConvexAuth()` was registered, but no
@@ -103,10 +103,11 @@ Could not find `CONVEX_AUTH`. Make sure to provide an auth provider using `CONVE
 same injector tree. This surfaces during injector initialization, because
 `provideConvexAuth()` eagerly creates the auth state.
 
-**How to fix.** Register your provider implementation before, or alongside,
-`provideConvexAuth()` — as `{ provide: CONVEX_AUTH, useExisting: MyAuthService }`,
-or via `provideConvexAuthFromExisting(MyAuthService)`. See [custom auth
-provider](/auth/custom-provider/).
+**How to fix.** Bind your provider implementation to `CONVEX_AUTH` next to
+`provideConvexAuth()` — as `{ provide: CONVEX_AUTH, useExisting: MyAuthService }` — or
+replace the pair with `provideConvexAuthFromExisting(MyAuthService)`, which registers
+both. Do not use `provideConvexAuthFromExisting()` _and_ `provideConvexAuth()` together.
+See [custom auth provider](/auth/custom-provider/).
 
 Note that `provideClerkAuth()`, `provideAuth0Auth()`, and `provideBetterAuth()`
 already register a `CONVEX_AUTH` provider _and_ call `provideConvexAuth()`
@@ -159,7 +160,7 @@ the nested registration.
 ### Could not find Convex auth state
 
 ```text
-Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, or `provideAuth0Auth()` in your application providers.
+Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, `provideAuth0Auth()`, `provideBetterAuth()` (from `convex-angular/better-auth`), or `provideConvexAuthFromExisting()` in your application providers.
 ```
 
 **When it happens.** `injectAuth()` ran but no auth state was registered.
@@ -238,6 +239,22 @@ you are not testing that path, construct the mock without options —
 `new MockConvexClient()` — so it behaves like a connected client. See
 [MockConvexClient](/testing/mock-convex-client/) and [hydration
 semantics](/ssr/hydration-semantics/).
+
+### Expected `client.setAuth()` to have registered auth
+
+```text
+Expected client.setAuth() to have registered auth, but no registration was captured.
+```
+
+**When it happens.** `MockConvexClient.requireLastAuthRegistration()` was called before anything had called
+`client.setAuth()` on the mock. The library installs a token fetcher only once auth sync has run for a provider that
+reports a signed-in user, so a test that has not signed the provider in (for example `provider.signIn()` on
+`MockConvexAuthProvider`) or has not created the component and flushed effects yet has nothing to drive.
+
+**How to fix.** Put the provider in the state you are testing, create the component, and flush effects
+before calling `requireLastAuthRegistration()`. To assert that no registration happened, read
+`convex.authRegistrations` or `convex.lastAuthRegistration()` instead, which do not throw. See
+[MockConvexClient](/testing/mock-convex-client/) and [driving state](/testing/driving-state/).
 
 ## Errors reported through Signals
 

@@ -128,7 +128,7 @@ function createConvexAuthState(): ConvexAuthState {
   const provider = inject(CONVEX_AUTH, { optional: true });
   if (!provider) {
     throw new Error(
-      'Could not find `CONVEX_AUTH`. Make sure to provide an auth provider using `CONVEX_AUTH`, `provideClerkAuth()`, or `provideAuth0Auth()` before calling `provideConvexAuth()`.',
+      'Could not find `CONVEX_AUTH`. Bind an auth provider to `CONVEX_AUTH` alongside `provideConvexAuth()`, or replace the pair with `provideConvexAuthFromExisting()`, `provideClerkAuth()`, `provideAuth0Auth()`, or `provideBetterAuth()` (from `convex-angular/better-auth`).',
     );
   }
 
@@ -313,7 +313,7 @@ export function injectAuth(options?: InjectAuthOptions): ConvexAuthState {
 
     if (!state) {
       throw new Error(
-        'Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, or `provideAuth0Auth()` in your application providers.',
+        'Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, `provideAuth0Auth()`, `provideBetterAuth()` (from `convex-angular/better-auth`), or `provideConvexAuthFromExisting()` in your application providers.',
       );
     }
 
