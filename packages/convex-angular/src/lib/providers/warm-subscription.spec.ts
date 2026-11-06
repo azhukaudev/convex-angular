@@ -1,5 +1,5 @@
 import { DestroyRef, EnvironmentInjector, createEnvironmentInjector } from '@angular/core';
-import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
+import { TestBed, fakeAsync, flush, flushMicrotasks, tick } from '@angular/core/testing';
 import { MockConvexClient, MockQuerySubscription, provideConvexTesting } from 'convex-angular/testing';
 import { FunctionReference } from 'convex/server';
 
@@ -12,6 +12,8 @@ jest.mock('convex/server', () => ({
 }));
 
 const mockQuery = (() => {}) as unknown as FunctionReference<'query', 'public', { userId: string }, { name: string }>;
+
+const UNSERIALIZABLE_ARGS = { userId: new Set<string>() as never };
 
 function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscription {
   const subscription = convex.lastQuerySubscription();
@@ -56,12 +58,8 @@ describe('openWarmSubscription', () => {
     onRelease = jest.fn();
   });
 
-  function open(): WarmSubscription {
-    return openWarmSubscription(TestBed.inject(CONVEX), mockQuery, { userId: 'user-1' }, destroyRef, {
-      onValue,
-      onError,
-      onRelease,
-    });
+  function open(ref: DestroyRef = destroyRef, args: { userId: string } = { userId: 'user-1' }): WarmSubscription {
+    return openWarmSubscription(TestBed.inject(CONVEX), mockQuery, args, ref, { onValue, onError, onRelease });
   }
 
   it('forwards values and errors from the client to the handlers', () => {
@@ -216,49 +214,64 @@ describe('openWarmSubscription', () => {
     const scopeRef = scope.get(DestroyRef);
     scope.destroy();
 
-    expect(() =>
-      openWarmSubscription(TestBed.inject(CONVEX), mockQuery, { userId: 'user-1' }, scopeRef, {
-        onValue,
-        onError,
-        onRelease,
-      }),
-    ).toThrow();
+    expect(() => open(scopeRef)).toThrow();
     expect(convex.querySubscriptions).toHaveLength(0);
     expect(onRelease).not.toHaveBeenCalled();
   });
 
-  it('rethrows when the client throws on subscribe and leaves no destroy hook behind', () => {
-    const failure = new Error('bad args');
-    jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
-      throw failure;
-    });
-    const hooks = trackLiveDestroyHooks(destroyRef);
+  it('reports a throwing subscribe through onError on the next microtask and opens nothing', fakeAsync(() => {
+    const warm = open(destroyRef, UNSERIALIZABLE_ARGS);
 
-    expect(() => open()).toThrow(failure);
+    expect(onError).not.toHaveBeenCalled();
 
-    expect(hooks.live()).toBe(0);
+    flushMicrotasks();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.any(Error));
+    expect(convex.querySubscriptions).toHaveLength(0);
     expect(onRelease).not.toHaveBeenCalled();
-  });
 
-  it('does not break the scope teardown after a failed subscribe, so later destroy hooks still run', () => {
-    jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
-      throw new Error('bad args');
-    });
+    // The handle is inert: nothing to release, and no timer may be armed.
+    warm.release();
+    warm.releaseAfter(1000);
+    expect(onRelease).not.toHaveBeenCalled();
+    expect(flush()).toBe(0);
+  }));
+
+  it('leaves nothing on the scope after a failed subscribe, so later destroy hooks still run', fakeAsync(() => {
     const scope = createEnvironmentInjector([], TestBed.inject(EnvironmentInjector));
     const scopeRef = scope.get(DestroyRef);
+    const hooks = trackLiveDestroyHooks(scopeRef);
     const laterHook = jest.fn();
 
-    expect(() =>
-      openWarmSubscription(TestBed.inject(CONVEX), mockQuery, { userId: 'user-1' }, scopeRef, {
-        onValue,
-        onError,
-        onRelease,
-      }),
-    ).toThrow('bad args');
+    open(scopeRef, UNSERIALIZABLE_ARGS);
+    flushMicrotasks();
+
+    expect(hooks.live()).toBe(0);
     scopeRef.onDestroy(laterHook);
 
     expect(() => scope.destroy()).not.toThrow();
     expect(laterHook).toHaveBeenCalledTimes(1);
     expect(onRelease).not.toHaveBeenCalled();
-  });
+  }));
+
+  // The real client only ever throws an Error, so a spy is the only way to reach the non-Error branch. It is
+  // killable, so it needs a witness (AGENTS.md: no Stryker directive for code a test can reach).
+  it.each([
+    ['an Error as is', new Error('bad args'), new Error('bad args')],
+    ['a non-Error wrapped in an Error', 'bad args', new Error('bad args')],
+  ])(
+    'reports %s',
+    fakeAsync((_label: string, thrown: unknown, expected: Error) => {
+      jest.spyOn(convex, 'onUpdate').mockImplementationOnce(() => {
+        throw thrown;
+      });
+
+      open();
+      flushMicrotasks();
+
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(expected);
+    }),
+  );
 });

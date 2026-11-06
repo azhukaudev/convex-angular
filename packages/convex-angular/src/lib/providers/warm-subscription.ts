@@ -30,15 +30,20 @@ const MAX_TIMER_DELAY = 2_147_483_647;
  * Subscribe to a query and keep the subscription warm until it is released.
  *
  * `handlers.onValue` and `handlers.onError` are forwarded synchronously from
- * the client's listener dispatch. `handlers.onRelease` runs once, after the
- * subscription has been dropped, whichever path released it.
+ * the client's listener dispatch, except for a failed subscribe (below).
+ * `handlers.onRelease` runs once, after the subscription has been dropped,
+ * whichever path released it.
  *
  * `destroyRef` must not be destroyed: callers check `destroyRef.destroyed`
  * first, and a destroyed scope throws (NG0911 for a view, NG0205 for an
  * injector) before anything is subscribed.
  *
  * If the client throws while subscribing (for example on args that are not
- * Convex values), the destroy hook is removed and the error is rethrown.
+ * Convex values), nothing is subscribed and the destroy hook is removed. The
+ * error is forwarded to `handlers.onError` on the next microtask — never
+ * inline, so the caller holds the returned handle first — wrapped in an
+ * `Error` if it was not one. The returned handle is inert and
+ * `handlers.onRelease` does not run.
  *
  * @internal
  */
@@ -73,12 +78,14 @@ export function openWarmSubscription<Query extends FunctionReference<'query'>>(
   try {
     unsubscribe = convex.onUpdate(query, args, handlers.onValue, handlers.onError);
   } catch (error) {
-    // The client throws synchronously for args it cannot serialize. Nothing is
-    // subscribed, so drop the hook: left registered, `release` would hit the
-    // uninitialised `unsubscribe` at scope teardown and, because Angular does
-    // not guard its destroy loop, skip every later hook on the scope.
+    // The client throws synchronously for args it cannot serialize, before it registers anything. Mark the handle
+    // released first so it is inert (`release` would otherwise call the unassigned `unsubscribe`, and
+    // `releaseAfter` would arm a timer), and drop the destroy hook: left on the scope it would pin this
+    // closure in a long-lived injector. Report on a microtask rather than inline, like every other client
+    // failure, so callers always hold the returned handle before their `onError` runs.
+    released = true;
     removeDestroyHook();
-    throw error;
+    queueMicrotask(() => handlers.onError(error instanceof Error ? error : new Error(String(error))));
   }
 
   return {
