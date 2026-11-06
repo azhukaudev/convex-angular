@@ -37,7 +37,7 @@ class FakeBetterAuthClient implements BetterAuthClientLike {
   tokenCalls = 0;
   sessionCalls = 0;
   updateSessionCalls = 0;
-  sessionDataFallback: BetterAuthSessionData | null = null;
+  sessionDataFallback: unknown = null;
   lastSessionOptions: FetchOptions | undefined;
   lastTokenOptions: FetchOptions | undefined;
 
@@ -183,6 +183,30 @@ describe('BetterAuthService', () => {
     expect(service.session()).toEqual(session('cross-domain'));
     expect(service.isAuthenticated()).toBe(true);
   }));
+
+  it.each([
+    ['a session without an id', { session: {}, user: { id: 'u1' } }],
+    ['a session whose id is not a string', { session: { id: 1 }, user: { id: 'u1' } }],
+    ['a snapshot without a user', { session: { id: 's1' } }],
+    ['a user without an id', { session: { id: 's1' }, user: {} }],
+    ['a user whose id is not a string', { session: { id: 's1' }, user: { id: 1 } }],
+    ['a null session', { session: null, user: { id: 'u1' } }],
+    ['a null user', { session: { id: 's1' }, user: null }],
+    ['a non-object value', 'garbage'],
+    ['a function carrying a valid-looking snapshot', Object.assign(() => undefined, session('s1'))],
+  ])(
+    'ignores a getSessionData() fallback that is not a session snapshot: %s',
+    fakeAsync((_label: string, malformed: unknown) => {
+      client.sessionResult = ok(null as never);
+      client.sessionDataFallback = malformed;
+      const service = setup();
+      tick();
+
+      expect(service.session()).toBeNull();
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.error()).toBeUndefined();
+    }),
+  );
 
   it('exchanges, caches, and dedups Convex tokens', fakeAsync(() => {
     const service = setup();

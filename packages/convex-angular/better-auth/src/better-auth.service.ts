@@ -25,6 +25,18 @@ function isExpectedAuthStatus(status?: number): boolean {
   return status === 401 || status === 403;
 }
 
+function hasStringId(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && typeof (value as { id?: unknown }).id === 'string';
+}
+
+function isSessionData(value: unknown): value is BetterAuthSessionData {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const { session, user } = value as Partial<Record<'session' | 'user', unknown>>;
+  return hasStringId(session) && hasStringId(user);
+}
+
 function normalizeError(error: unknown, prefix: string): Error {
   if (error instanceof Error) {
     return new Error(`${prefix}: ${error.message}`);
@@ -122,9 +134,7 @@ export class BetterAuthService {
       // rejection (401/403) it can still hold a stale, now-invalid session.
       // Skip the fallback in that case; keep it for the no-error-no-data case.
       const sessionData =
-        result.error && isExpectedAuthStatus(result.error.status)
-          ? null
-          : (result.data ?? this.getClient().getSessionData?.() ?? null);
+        result.error && isExpectedAuthStatus(result.error.status) ? null : (result.data ?? this.readCachedSession());
       this.applySession(sessionData);
     } catch (error) {
       if (epoch !== this.sessionEpoch) {
@@ -249,6 +259,11 @@ export class BetterAuthService {
   private clearError(source: BetterAuthErrorSource): void {
     const state = source === 'session' ? this.sessionErrorState : this.tokenErrorState;
     state.set(undefined);
+  }
+
+  private readCachedSession(): BetterAuthSessionData | null {
+    const cached = this.getClient().getSessionData?.();
+    return isSessionData(cached) ? cached : null;
   }
 
   private applySession(session: BetterAuthSessionData | null): void {

@@ -23,5 +23,5 @@ export function getDemoAuthClient(): DemoAuthClient {
 
 /** Adapter for provideBetterAuth(); the real client satisfies the structural contract. */
 export function demoAuthClientFactory(): BetterAuthClientLike {
-  return getDemoAuthClient() as unknown as BetterAuthClientLike;
+  return getDemoAuthClient();
 }

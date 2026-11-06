@@ -36,7 +36,7 @@ export interface BetterAuthClientLike {
     token(options?: { fetchOptions?: { throw?: boolean } }): Promise<BetterAuthFetchResult<{ token?: string | null }>>;
   };
 
-  /** Cross-domain plugin extras; used when present. */
-  getSessionData?(): BetterAuthSessionData | null;
+  /** Cross-domain plugin's cached session; validated before use, so any return type is accepted. */
+  getSessionData?(): unknown;
   updateSession?(): void;
 }

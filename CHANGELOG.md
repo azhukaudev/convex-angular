@@ -39,6 +39,7 @@
 - `convex-angular/better-auth`: `injectBetterAuth()` now reports the guided errors the docs describe. Called from plain code with no `injectRef` it throws the library's standard `injectBetterAuth() must be called from an injection context …` message instead of Angular's `NG0203`, and with an `injectRef` that has no `provideBetterAuth()` it throws `Could not find BetterAuthService …` instead of a raw `NullInjectorError`.
 - `convexQueryResolver()`: a missing `provideConvex(...)` now raises the same guided "Could not find `CONVEX`" setup error as every other helper instead of Angular's generic `NullInjectorError`.
 - `convexQueryResolver()`/`injectPrewarmQuery()`: a `keepSubscribedFor`/`extendSubscriptionFor` of `Infinity` (or any value above 2,147,483,647 ms) no longer releases the subscription immediately — `setTimeout` overflows such delays to about 0 ms. They are now capped at that limit (about 24.8 days).
+- `convex-angular/better-auth`: `BetterAuthClientLike.getSessionData()` is now typed `unknown`, matching the real cross-domain client (`Record<string, unknown> | null`), so a real client no longer needs an `as unknown as` cast. The cached snapshot is validated before use; a value without a string `session.id` and `user.id` is ignored instead of being trusted as a session.
 
 ### 📖 Documentation
 

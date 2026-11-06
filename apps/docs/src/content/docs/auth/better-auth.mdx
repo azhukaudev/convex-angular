@@ -172,17 +172,17 @@ interface BetterAuthClientLike {
   };
 
   /** Cross-domain plugin extras; used when present. */
-  getSessionData?(): BetterAuthSessionData | null;
+  getSessionData?(): unknown;
   updateSession?(): void;
 }
 ```
 
-| Member           | Required | Used for                                                                                        |
-| ---------------- | -------- | ----------------------------------------------------------------------------------------------- |
-| `getSession`     | yes      | Reading the session on startup and on every `refreshSession()`.                                 |
-| `convex.token`   | yes      | Exchanging the session for the JWT Convex validates. Comes from the `convexClient()` plugin.    |
-| `getSessionData` | no       | Fallback session snapshot when `getSession()` returns no data and no error. Skipped on 401/403. |
-| `updateSession`  | no       | Notifying the client's own session listeners during `clearSession()`.                           |
+| Member           | Required | Used for                                                                                                                                                                                  |
+| ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getSession`     | yes      | Reading the session on startup and on every `refreshSession()`.                                                                                                                           |
+| `convex.token`   | yes      | Exchanging the session for the JWT Convex validates. Comes from the `convexClient()` plugin.                                                                                              |
+| `getSessionData` | no       | Fallback session snapshot when `getSession()` returns no data and no error. Skipped on 401/403. Validated: a value that is not a `{ session: { id }, user: { id } }` snapshot is ignored. |
+| `updateSession`  | no       | Notifying the client's own session listeners during `clearSession()`.                                                                                                                     |
 
 ### `BetterAuthSessionData`
 
