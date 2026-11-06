@@ -18,6 +18,10 @@ overrides:
   # nx@23.3.1 pins undici 7.29.0 exactly (advisories fixed in 7.30.1; nx@24.0.4 pins 7.30.1).
   # Remove when Nx >= 24.0.4. Do not raise past 7.30.1 without checking minimumReleaseAge.
   'nx>undici': 7.30.1
+  # unstorage (through astro) declares @vercel/functions as an optional peer for its Vercel cache driver;
+  # autoInstallPeers installs it anyway. The docs site runs on Cloudflare and never loads that driver.
+  # Remove when unstorage no longer declares the peer (check its package.json peerDependencies).
+  'unstorage>@vercel/functions': '-'
 allowBuilds:
   '@parcel/watcher': true
   '@swc/core': true
@@ -32,6 +36,8 @@ allowBuilds:
   # sharp is never loaded and its native install script stays denied.
   sharp: false
   unrs-resolver: true
+  # Wrangler (docs deploy) runs on workerd; its install script checks for the platform binary.
+  workerd: true
 # Release-age cooldown: pnpm will not install a version published less than
 # minimumReleaseAge minutes ago (1440 = 1 day) without approval. Strict mode
 # is set explicitly: without it pnpm installs a too-new version anyway and

@@ -1,17 +1,14 @@
 // @ts-check
+import cloudflare from '@astrojs/cloudflare';
 import starlight from '@astrojs/starlight';
-import vercel from '@astrojs/vercel';
-import { defineConfig, passthroughImageService } from 'astro/config';
+import { defineConfig } from 'astro/config';
 import starlightLinksValidator from 'starlight-links-validator';
 
 const GITHUB_REPO = 'https://github.com/azhukaudev/convex-angular';
 
 export default defineConfig({
   // Origin only, no `base`: the site deploys at the root, matching the root-absolute links in the content.
-  site: 'https://convex-angular.vercel.app',
-  // `allowBuilds` denies sharp's native install script, so keep Astro off its
-  // optional sharp-backed image pipeline.
-  image: { service: passthroughImageService() },
+  site: 'https://convex-angular.azhukau.com',
   integrations: [
     starlight({
       title: 'convex-angular',
@@ -64,9 +61,12 @@ export default defineConfig({
       ],
     }),
   ],
-  adapter: vercel({
-    webAnalytics: {
-      enabled: true,
-    },
-  }),
+  // Deployed to Cloudflare Workers (see wrangler.jsonc). Every page is prerendered, and in Node: in workerd (the
+  // adapter's default) Astro's Markdown pipeline resolves a WASI build of satteri that is not installed.
+  // `allowBuilds` denies sharp's native install script, so keep Astro off its sharp-backed image pipeline and off
+  // the adapter's Cloudflare Images binding.
+  adapter: cloudflare({ prerenderEnvironment: 'node', imageService: 'passthrough' }),
+  // Every page is static, so nothing uses sessions; without this the adapter adds a `SESSION` KV binding that
+  // the first deploy would provision.
+  session: false,
 });

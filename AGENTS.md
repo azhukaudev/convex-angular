@@ -16,6 +16,7 @@ Use pnpm. Prefer existing Nx targets and root scripts over ad hoc commands.
 - `pnpm dev:frontend` — serve the demo app.
 - `pnpm dev:docs` — serve the documentation site.
 - `pnpm build:docs` — build the docs site; it depends on `check:docs`.
+- `pnpm deploy:docs` — upload the built site to Cloudflare (`apps/docs/wrangler.jsonc`). Pushes to `main` deploy automatically through Cloudflare Workers Builds, so this is for manual deploys only.
 - `pnpm check:docs` — run `astro check`, type-check the compiled examples, and verify each one is rendered.
 - `pnpm dev:backend` — run the Convex development backend. Run it with the frontend for auth and data-flow testing.
 - `pnpm build:library` / `pnpm build:frontend` — build the library or demo.
@@ -117,6 +118,7 @@ Code samples resist drift by being real files. Anything substantial lives in `ap
 - Starlight itself validates only the slugs named in the `sidebar` config, so `starlight-links-validator` is registered to cover cross-links inside page content. Both fail the build.
 - `apps/docs/scripts/check-examples-referenced.mjs` fails the `check` target when an example is not rendered by any page, since the knip entry glob cannot distinguish an orphan from a rendered file.
 - `apps/docs/scripts/check-error-quotes.mjs` fails the `check` target when a `reference/errors.mdx` quote no longer matches a library error message, or when another page quotes one. Changing a library error message therefore needs `pnpm check:docs` (it is not part of `verify:quick`; CI runs it through the docs build).
+- The site deploys to Cloudflare Workers through the `@astrojs/cloudflare` adapter. Every page is prerendered (in Node, `prerenderEnvironment: 'node'`), so the deployed Worker serves static assets only, and `session: false` keeps the adapter from adding a KV binding. `apps/docs/wrangler.jsonc` holds only the Worker name, compatibility date and 404 handling; the adapter writes the deploy config into the build output (`dist/apps/docs`).
 - Astro's optional `sharp` dependency is denied in `pnpm-workspace.yaml`; the site uses Astro's passthrough image service instead. Do not add image optimization without revisiting that decision.
 
 ## Code Conventions

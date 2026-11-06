@@ -8,11 +8,12 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
+    "deploy": "wrangler deploy",
     "check": "astro check && ngc -p tsconfig.examples.json --noEmit && node scripts/check-examples-referenced.mjs && node scripts/check-error-quotes.mjs && ! grep -rnE \"\\['_(args|returnType)'\\]\" src/content"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "14.4.5",
     "@astrojs/starlight": "0.42.8",
-    "@astrojs/vercel": "11.0.18",
     "astro": "7.4.5",
     "starlight-links-validator": "0.27.0"
   },
@@ -26,6 +27,7 @@
     "@types/jest": "30.0.0",
     "convex": "1.49.0",
     "rxjs": "7.8.2",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "wrangler": "4.158.0"
   }
 }

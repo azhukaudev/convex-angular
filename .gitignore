@@ -52,8 +52,8 @@ Thumbs.db
 # Astro generated types for the docs site
 apps/docs/.astro
 
-# Vercel adapter build output for the docs site
-apps/docs/.vercel/output
+# Wrangler's local state for the docs deploy
+.wrangler
 
 .env.local
 

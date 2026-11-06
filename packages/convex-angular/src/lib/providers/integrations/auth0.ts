@@ -17,7 +17,7 @@ import { provideConvexAuth } from '../inject-auth';
  * exposes the signals below. See `provideAuth0Auth` for a complete example.
  *
  * @see provideAuth0Auth
- * @see https://convex-angular.vercel.app/auth/auth0/
+ * @see https://convex-angular.azhukau.com/auth/auth0/
  *
  * @public
  */

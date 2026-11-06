@@ -11,6 +11,7 @@
     "dev:docs": "nx serve docs",
     "build:docs": "nx build docs",
     "check:docs": "nx check docs",
+    "deploy:docs": "pnpm --filter @convex-angular/docs run deploy",
     "test:library": "nx test convex-angular",
     "test:mutation": "stryker run",
     "test:ci-scripts": "node --test \".github/scripts/*.test.mjs\"",

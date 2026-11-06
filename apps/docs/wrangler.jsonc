@@ -1,0 +1,11 @@
+// The @astrojs/cloudflare adapter fills in the Worker entry point and the static assets at build time;
+// `pnpm build:docs` writes them under dist/apps/docs and `pnpm deploy:docs` uploads them.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "convex-angular-docs",
+  "compatibility_date": "2026-11-06",
+  // Starlight emits 404.html.
+  "assets": { "not_found_handling": "404-page" },
+  // azhukau.com must be a zone on the Cloudflare account; the deploy creates the DNS record and certificate.
+  "routes": [{ "pattern": "convex-angular.azhukau.com", "custom_domain": true }],
+}
