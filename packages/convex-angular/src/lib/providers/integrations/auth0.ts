@@ -18,6 +18,10 @@ import { provideConvexAuth } from '../inject-auth';
  *
  * @example
  * ```typescript
+ * import { toSignal } from '@angular/core/rxjs-interop';
+ * import { AuthService } from '@auth0/auth0-angular';
+ * import { firstValueFrom } from 'rxjs';
+ *
  * @Injectable({ providedIn: 'root' })
  * export class Auth0AuthService implements Auth0AuthProvider {
  *   private auth0 = inject(AuthService); // from @auth0/auth0-angular
@@ -25,12 +29,14 @@ import { provideConvexAuth } from '../inject-auth';
  *   readonly isLoading = toSignal(this.auth0.isLoading$, { initialValue: true });
  *   readonly isAuthenticated = toSignal(this.auth0.isAuthenticated$, { initialValue: false });
  *
- *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
- *     const response = await this.auth0.getAccessTokenSilently({
- *       detailedResponse: true,
- *       cacheMode: options?.cacheMode,
- *     });
- *     return response.id_token;
+ *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }): Promise<string | null> {
+ *     const response = await firstValueFrom(
+ *       this.auth0.getAccessTokenSilently({
+ *         detailedResponse: true,
+ *         cacheMode: options?.cacheMode,
+ *       })
+ *     );
+ *     return response?.id_token ?? null;
  *   }
  * }
  * ```
@@ -90,6 +96,10 @@ export const AUTH0_AUTH = new InjectionToken<Auth0AuthProvider>('AUTH0_AUTH');
  *
  * @example
  * ```typescript
+ * import { toSignal } from '@angular/core/rxjs-interop';
+ * import { AuthService } from '@auth0/auth0-angular';
+ * import { firstValueFrom } from 'rxjs';
+ *
  * // 1. Create your Auth0 auth service
  * @Injectable({ providedIn: 'root' })
  * export class Auth0AuthService implements Auth0AuthProvider {
@@ -98,14 +108,14 @@ export const AUTH0_AUTH = new InjectionToken<Auth0AuthProvider>('AUTH0_AUTH');
  *   readonly isLoading = toSignal(this.auth0.isLoading$, { initialValue: true });
  *   readonly isAuthenticated = toSignal(this.auth0.isAuthenticated$, { initialValue: false });
  *
- *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }) {
+ *   async getAccessTokenSilently(options?: { cacheMode?: 'on' | 'off' }): Promise<string | null> {
  *     const response = await firstValueFrom(
  *       this.auth0.getAccessTokenSilently({
  *         detailedResponse: true,
  *         cacheMode: options?.cacheMode,
  *       })
  *     );
- *     return response.id_token;
+ *     return response?.id_token ?? null;
  *   }
  * }
  *

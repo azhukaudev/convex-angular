@@ -33,7 +33,7 @@ interface Auth0AuthProvider {
 
 <Aside type="caution" title="Return the id token, not the access token">
   Convex validates the **OIDC id token**. Call Auth0's `getAccessTokenSilently` with `detailedResponse: true` and return
-  `response.id_token`. Returning the opaque access token produces a token Convex will reject.
+  `response?.id_token ?? null`. Returning the opaque access token produces a token Convex will reject.
 </Aside>
 
 ## `AUTH0_AUTH`
@@ -90,7 +90,13 @@ In a real application the SDK binding comes from Auth0 directly:
 ```ts
 import { toSignal } from '@angular/core/rxjs-interop';
 import { AuthService } from '@auth0/auth0-angular';
+import { firstValueFrom } from 'rxjs';
 ```
+
+`AuthService` exposes Observables — `isLoading$`, `isAuthenticated$`, and the result of
+`getAccessTokenSilently()` — so bridge the first two with `toSignal(...)` and unwrap the
+token with `firstValueFrom(...)`. Awaiting the Observable directly yields the Observable
+itself, not the token, and Convex would never receive one.
 
 Then read the state with [`injectAuth()`](/auth/overview/), gate templates with
 [the auth directives](/auth/directives/), and protect routes with
