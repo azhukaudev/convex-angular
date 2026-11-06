@@ -86,14 +86,14 @@ export class BetterAuthService {
     return session.sequence >= token.sequence ? session.error : token.error;
   });
 
-  private cachedToken: string | null = null;
+  // What the latest exchange of this session produced: `undefined` until one
+  // completes, `null` when it ended without a token (an error response, a
+  // rejection, or an empty response), otherwise the token. Convex gives up on
+  // auth after a `null` outcome and does not ask again until the next
+  // setAuth(), so a same-session refreshSession() reads it to know it has to
+  // re-register Convex auth.
+  private cachedToken: string | null | undefined;
   private pendingToken: Promise<string | null> | null = null;
-  // True while the latest current token exchange ended without a token (an
-  // error response, a rejection, or an empty response). Convex gives up on
-  // auth after such an exchange and does not ask again until the next
-  // setAuth(), so this is what lets a same-session refreshSession() know it
-  // has to re-register Convex auth.
-  private tokenExchangeFailed = false;
   private lastSessionId: string | null = null;
   private tokenGeneration = 0;
   private sessionEpoch = 0;
@@ -142,7 +142,7 @@ export class BetterAuthService {
       const sessionData =
         result.error && isExpectedAuthStatus(result.error.status) ? null : (result.data ?? this.readCachedSession());
       this.applySession(sessionData);
-      this.retryFailedTokenExchange();
+      this.reauthAfterFailedExchange();
     } catch (error) {
       if (epoch !== this.sessionEpoch) {
         return;
@@ -209,14 +209,12 @@ export class BetterAuthService {
             this.setError('token', normalizeError(error, '[convex-angular better-auth] Convex token exchange failed'));
           }
           this.cachedToken = null;
-          this.tokenExchangeFailed = true;
           return null;
         }
 
         if (isCurrent) {
           this.clearError('token');
           this.cachedToken = token;
-          this.tokenExchangeFailed = token === null;
         }
         return token;
       })
@@ -227,7 +225,6 @@ export class BetterAuthService {
         if (this.pendingToken === request) {
           this.setError('token', normalizeError(error, '[convex-angular better-auth] Convex token exchange failed'));
           this.cachedToken = null;
-          this.tokenExchangeFailed = true;
         }
         return null;
       })
@@ -284,8 +281,7 @@ export class BetterAuthService {
     if (this.lastSessionId !== nextSessionId) {
       this.lastSessionId = nextSessionId;
       this.tokenGeneration += 1;
-      this.cachedToken = null;
-      this.tokenExchangeFailed = false;
+      this.cachedToken = undefined;
       this.pendingToken = null;
       this.reauthVersion.update((version) => version + 1);
     }
@@ -294,16 +290,17 @@ export class BetterAuthService {
   /**
    * A refresh that returns the same session deliberately leaves Convex alone
    * (see `convexAuth`), but Convex stops asking for tokens after a failed
-   * exchange, so the only thing that can recover it is a new setAuth(). Bump
-   * `reauthVersion` once in that case. A refresh that changed the session
-   * already bumped it in applySession(), which also cleared the flag.
-   * Skipped while an exchange is still in flight: its outcome is not known yet.
+   * exchange (`cachedToken === null`), so the only thing that can recover it
+   * is a new setAuth(). Bump `reauthVersion` once in that case. A refresh that
+   * changed the session already bumped it in applySession(), which also reset
+   * `cachedToken`. Skipped while an exchange is still in flight: its outcome
+   * is not known yet.
    */
-  private retryFailedTokenExchange(): void {
-    if (!this.tokenExchangeFailed || this.pendingToken !== null) {
+  private reauthAfterFailedExchange(): void {
+    if (this.cachedToken !== null || this.pendingToken !== null) {
       return;
     }
-    this.tokenExchangeFailed = false;
+    this.cachedToken = undefined;
     this.reauthVersion.update((version) => version + 1);
   }
 }
