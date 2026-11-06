@@ -11,7 +11,10 @@ updates:
     cooldown:
       default-days: 7
     groups:
+      # Minor and patch bumps share one pull request; a major bump arrives on its own so it
+      # can be reviewed (f68f76d landed six majors in one grouped PR).
       github-actions:
         patterns: ['*']
+        update-types: [minor, patch]
     commit-message:
       prefix: ci

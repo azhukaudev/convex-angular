@@ -6,15 +6,19 @@ on:
   pull_request:
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Only a superseded pull-request run is cancelled. Every push to main gets its own group:
+  # the change detection diffs each push against the commit before it, so cancelling a run
+  # would drop that push's changes from the mutation report for good.
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  # Decides what the slow jobs below need to do for this change. Pushes to main
-  # (no base ref) always get the full answer.
+  # Decides what the slow jobs below need to do for this change: it diffs against the pull
+  # request's base branch, or against the commit before a push to main. A base it cannot
+  # diff (a new branch, a commit missing from the clone after a force push) gets the full answer.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -24,12 +28,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0 # the diff against the pull request's base branch
+          fetch-depth: 0 # the diff against the base: a pull request's base branch or a push's previous commit
 
       - id: decide
         env:
           BASE_REF: ${{ github.base_ref }}
-        run: node .github/scripts/ci-changes.mjs ${BASE_REF:+"origin/$BASE_REF"}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$BASE_REF" ]; then
+            node .github/scripts/ci-changes.mjs "origin/$BASE_REF"
+          else
+            node .github/scripts/ci-changes.mjs "$BEFORE"
+          fi
 
   # Lints the workflow files themselves (expressions, `if:` conditions, job
   # wiring and, through the runner's shellcheck, the `run:` scripts).
@@ -52,42 +62,34 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # Nx affected/graph and knip see full history
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v4.3.0 — reads the version from packageManager
+      # Reads the pnpm version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .nx/cache
-          key: nx-${{ runner.os }}-${{ hashFiles('.nvmrc') }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-          restore-keys: |
-            nx-${{ runner.os }}-${{ hashFiles('.nvmrc') }}-${{ hashFiles('pnpm-lock.yaml') }}-
-
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm verify:ci
 
   mutation:
-    # Minutes-slow and report-only, so it runs on pull requests only: the PR that
-    # merged a change already carries its report, and pushes to main skip it.
-    # Within a pull request it mutates only the library files the change touched
-    # (see .github/scripts/ci-changes.mjs), and skips entirely when there are none.
+    # Minutes-slow and report-only. It runs on pull requests and on pushes to main: the
+    # repository is developed by direct pushes, so a pull-request-only rule left most
+    # library changes without a mutation report. It mutates only the library files the
+    # change touched (see .github/scripts/ci-changes.mjs) and skips entirely when there
+    # are none.
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.mutate != 'none'
+    if: needs.changes.outputs.mutate != 'none' && needs.changes.outputs.mutate != ''
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # Nx affected/graph and knip see full history
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v4.3.0 — reads the version from packageManager
+      # Reads the pnpm version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -115,9 +117,10 @@ jobs:
           retention-days: 14
 
   convex-peer-range:
-    # Skipped for pull requests that cannot affect the library (docs, demo-only, ...).
+    # Skipped for pull requests that cannot affect the library (docs, demo-only, ...);
+    # always runs on pushes to main.
     needs: changes
-    if: needs.changes.outputs.library == 'true'
+    if: github.event_name == 'push' || needs.changes.outputs.library == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -132,7 +135,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v4.3.0 — reads the version from packageManager
+      # Reads the pnpm version from `packageManager` in package.json.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
