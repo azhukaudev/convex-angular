@@ -41,6 +41,7 @@ const EXPECTED_RUNTIME_EXPORTS = [
   'provideConvexAuthFromExisting',
   'skipToken',
   'sortByField',
+  'ɵrunInResolvedInjectionContext',
 ];
 
 describe('convex-angular public API surface', () => {

@@ -39,3 +39,10 @@ export * from './lib/guards/auth-guards';
 
 // Route resolvers
 export * from './lib/resolvers/query-resolver';
+
+/**
+ * Not public API: shared with the library's secondary entry points only. May change without notice.
+ *
+ * @internal
+ */
+export { runInResolvedInjectionContext as ɵrunInResolvedInjectionContext } from './lib/providers/injection-context';
