@@ -54,10 +54,10 @@ export default [
   },
   {
     // Only src/lib/internal/convex-client-internals.ts may reach into the BaseConvexClient that
-    // `ConvexClient.client` exposes: that one seam is pinned against a real client by
-    // internal/convex-internals.spec.ts, so a convex bump that moves this surface fails once, loudly,
-    // instead of silently at N call sites. Specs keep `jest.spyOn(convex.client, …)` as the documented
-    // escape hatch; testing/ and better-auth/ have their own (unrelated) `client` members.
+    // `ConvexClient.client` exposes, or use a `*_experimental` ConvexClient member: those seams are pinned
+    // against a real client by internal/convex-internals.spec.ts, so a convex bump that moves this surface
+    // fails once, loudly, instead of silently at N call sites. Specs keep `jest.spyOn(convex.client, …)`
+    // as the documented escape hatch; testing/ and better-auth/ have their own (unrelated) `client` members.
     // Patterns are `**/`-prefixed because Nx runs ESLint from the workspace root.
     files: ['**/src/lib/**/*.ts'],
     ignores: ['**/src/lib/internal/**', '**/*.spec.ts'],
@@ -78,6 +78,16 @@ export default [
           selector: "MemberExpression[computed=true][property.value='client']",
           message:
             'Do not read ConvexClient.client (the BaseConvexClient) outside src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
+        },
+        {
+          selector: 'MemberExpression[computed=false][property.name=/_experimental$/]',
+          message:
+            'Experimental Convex client APIs (members named *_experimental) may only be used in src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
+        },
+        {
+          selector: 'MemberExpression[computed=true][property.value=/_experimental$/]',
+          message:
+            'Experimental Convex client APIs (members named *_experimental) may only be used in src/lib/internal/convex-client-internals.ts. Add a wrapper there instead.',
         },
       ],
     },
