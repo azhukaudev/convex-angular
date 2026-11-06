@@ -1,22 +1,9 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import {
-  MockAuthRegistration,
-  MockConvexAuthProvider,
-  MockConvexClient,
-  provideConvexTesting,
-} from 'convex-angular/testing';
+import { MockConvexAuthProvider, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import { injectAuth, provideConvexAuth } from './inject-auth';
-
-function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
-  const registration = convex.lastAuthRegistration();
-  if (!registration) {
-    throw new Error('Expected a captured auth registration');
-  }
-  return registration;
-}
 
 describe('injectAuth', () => {
   let convex: MockConvexClient;
@@ -233,7 +220,7 @@ describe('injectAuth', () => {
     expect(auth.isAuthenticated()).toBe(false);
     expect(auth.status()).toBe('loading');
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -247,7 +234,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -263,7 +250,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setAuthenticated(false);
+    convex.requireLastAuthRegistration().setAuthenticated(false);
     fixture.detectChanges();
     tick();
 
@@ -279,14 +266,14 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.status()).toBe('authenticated');
     expect(fixture.componentInstance.auth.isRefreshing()).toBe(false);
 
-    requireLastAuthRegistration(convex).setRefreshing(true);
+    convex.requireLastAuthRegistration().setRefreshing(true);
     fixture.detectChanges();
     tick();
 
@@ -301,14 +288,14 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
-    requireLastAuthRegistration(convex).setRefreshing(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
+    convex.requireLastAuthRegistration().setRefreshing(true);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.status()).toBe('refreshing');
 
-    requireLastAuthRegistration(convex).setRefreshing(false);
+    convex.requireLastAuthRegistration().setRefreshing(false);
     fixture.detectChanges();
     tick();
 
@@ -322,7 +309,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setRefreshing(true);
+    convex.requireLastAuthRegistration().setRefreshing(true);
     fixture.detectChanges();
     tick();
 
@@ -337,8 +324,8 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
-    requireLastAuthRegistration(convex).setRefreshing(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
+    convex.requireLastAuthRegistration().setRefreshing(true);
     fixture.detectChanges();
     tick();
 
@@ -358,15 +345,15 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
-    const staleRegistration = requireLastAuthRegistration(convex);
+    const staleRegistration = convex.requireLastAuthRegistration();
 
     provider.bumpReauth();
     tick();
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -386,7 +373,8 @@ describe('injectAuth', () => {
     const fixture = createAuthFixture();
 
     let token: string | null | undefined;
-    requireLastAuthRegistration(convex)
+    convex
+      .requireLastAuthRegistration()
       .fetchToken({ forceRefreshToken: false })
       .then((value) => {
         token = value;
@@ -409,7 +397,8 @@ describe('injectAuth', () => {
     const fixture = createAuthFixture();
 
     let token: string | null | undefined;
-    requireLastAuthRegistration(convex)
+    convex
+      .requireLastAuthRegistration()
       .fetchToken({ forceRefreshToken: false })
       .then((value) => {
         token = value;
@@ -428,7 +417,7 @@ describe('injectAuth', () => {
     configureTestingModule();
 
     const fixture = createAuthFixture();
-    const staleRegistration = requireLastAuthRegistration(convex);
+    const staleRegistration = convex.requireLastAuthRegistration();
 
     provider.bumpReauth();
     fixture.detectChanges();
@@ -451,7 +440,7 @@ describe('injectAuth', () => {
     configureTestingModule();
 
     const fixture = createAuthFixture();
-    const staleRegistration = requireLastAuthRegistration(convex);
+    const staleRegistration = convex.requireLastAuthRegistration();
 
     provider.bumpReauth();
     fixture.detectChanges();
@@ -476,13 +465,13 @@ describe('injectAuth', () => {
     configureTestingModule();
 
     const fixture = createAuthFixture();
-    const staleRegistration = requireLastAuthRegistration(convex);
+    const staleRegistration = convex.requireLastAuthRegistration();
 
     provider.bumpReauth();
     fixture.detectChanges();
     tick();
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -504,7 +493,8 @@ describe('injectAuth', () => {
     const fixture = createAuthFixture();
 
     let token: string | null | undefined;
-    requireLastAuthRegistration(convex)
+    convex
+      .requireLastAuthRegistration()
       .fetchToken({ forceRefreshToken: true })
       .then((value) => {
         token = value;
@@ -530,7 +520,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
+    convex.requireLastAuthRegistration().fetchToken({ forceRefreshToken: false });
     tick();
     fixture.detectChanges();
 
@@ -548,7 +538,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
+    convex.requireLastAuthRegistration().fetchToken({ forceRefreshToken: false });
     tick();
     fixture.detectChanges();
 
@@ -558,7 +548,7 @@ describe('injectAuth', () => {
       }),
     );
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -573,11 +563,11 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
+    convex.requireLastAuthRegistration().fetchToken({ forceRefreshToken: false });
     tick();
     fixture.detectChanges();
 
-    requireLastAuthRegistration(convex).setAuthenticated(false);
+    convex.requireLastAuthRegistration().setAuthenticated(false);
     fixture.detectChanges();
     tick();
 
@@ -645,7 +635,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
+    convex.requireLastAuthRegistration().fetchToken({ forceRefreshToken: false });
     tick();
     fixture.detectChanges();
 
@@ -670,7 +660,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).fetchToken({ forceRefreshToken: false });
+    convex.requireLastAuthRegistration().fetchToken({ forceRefreshToken: false });
     tick();
 
     // The client holds a token, so signing out has something to clear.
@@ -692,7 +682,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -731,7 +721,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -748,7 +738,7 @@ describe('injectAuth', () => {
 
     const fixture = createAuthFixture();
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -791,7 +781,7 @@ describe('injectAuth', () => {
     configureTestingModule();
 
     const fixture = createAuthFixture();
-    const firstRegistration = requireLastAuthRegistration(convex);
+    const firstRegistration = convex.requireLastAuthRegistration();
 
     provider.bumpReauth();
     fixture.detectChanges();

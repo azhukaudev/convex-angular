@@ -1,7 +1,6 @@
 import { Component, Directive, TemplateRef, ViewContainerRef, inject } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import {
-  MockAuthRegistration,
   MockConvexAuthProvider,
   MockConvexClient,
   provideConvexAuthTesting,
@@ -14,14 +13,6 @@ import {
   CvaAuthenticatedDirective,
   CvaUnauthenticatedDirective,
 } from './auth-helpers';
-
-function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
-  const registration = convex.lastAuthRegistration();
-  if (!registration) {
-    throw new Error('Expected a captured auth registration');
-  }
-  return registration;
-}
 
 describe('Auth Helper Directives', () => {
   let convex: MockConvexClient;
@@ -95,7 +86,7 @@ describe('Auth Helper Directives', () => {
       tick();
 
       // Convex confirms authentication
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
       fixture.detectChanges();
 
       expect(fixture.nativeElement.textContent).toContain('Authenticated content');
@@ -117,7 +108,7 @@ describe('Auth Helper Directives', () => {
       tick();
 
       // Convex confirms authentication
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).toContain('Authenticated content');
 
@@ -182,7 +173,7 @@ describe('Auth Helper Directives', () => {
       tick();
 
       // Convex confirms authentication
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
       fixture.detectChanges();
 
       expect(fixture.nativeElement.textContent).not.toContain('Login form');
@@ -204,7 +195,7 @@ describe('Auth Helper Directives', () => {
       tick();
 
       // Convex confirms authentication
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).not.toContain('Login form');
 
@@ -269,7 +260,7 @@ describe('Auth Helper Directives', () => {
       tick();
 
       // Convex confirms authentication
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
       fixture.detectChanges();
 
       expect(fixture.nativeElement.textContent).not.toContain('Loading...');
@@ -291,7 +282,7 @@ describe('Auth Helper Directives', () => {
       tick();
 
       // Convex confirms authentication
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).not.toContain('Loading...');
 
@@ -320,7 +311,7 @@ describe('Auth Helper Directives', () => {
       fixture.detectChanges();
       tick();
 
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
       fixture.detectChanges();
 
       expect(fixture.nativeElement.textContent).not.toContain('Reconnecting…');
@@ -341,13 +332,13 @@ describe('Auth Helper Directives', () => {
       fixture.detectChanges();
       tick();
 
-      requireLastAuthRegistration(convex).setAuthenticated(true);
-      requireLastAuthRegistration(convex).setRefreshing(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
+      convex.requireLastAuthRegistration().setRefreshing(true);
       fixture.detectChanges();
 
       expect(fixture.nativeElement.textContent).toContain('Reconnecting…');
 
-      requireLastAuthRegistration(convex).setRefreshing(false);
+      convex.requireLastAuthRegistration().setRefreshing(false);
       fixture.detectChanges();
 
       expect(fixture.nativeElement.textContent).not.toContain('Reconnecting…');
@@ -429,7 +420,7 @@ describe('Auth Helper Directives', () => {
       expect(fixture.nativeElement.textContent).not.toContain('Welcome!');
       expect(fixture.nativeElement.textContent).not.toContain('Please sign in');
 
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
       fixture.detectChanges();
       tick();
 

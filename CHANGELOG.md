@@ -11,6 +11,7 @@
 - Add `MockConvexClient.seedQueryError()` to seed the warm cache with a failed result: `client.localQueryResult()` throws it, and `query()` rejects with it, matching the real client's behavior for a warmed query that failed on the server.
 - Add `MockConvexAuthProvider` and `provideConvexAuthTesting()` to `convex-angular/testing`: a driveable `ConvexAuthProvider` double (`setLoading()`, `signIn()`/`signOut()`, `setError()`, `bumpReauth()`, `failNextFetch()`) plus one-call registration under `CONVEX_AUTH` alongside `provideConvexAuth()`, so `injectAuth()`, the auth directives, and the route guards no longer need a hand-rolled `ConvexAuthProvider` literal in every test. The double is deliberately inert — it never flips its own state, so `MockAuthRegistration` still drives Convex's side of the handshake.
 - `convex-angular/testing`: `MockCallableCall.reject()` now accepts any rejection value (`unknown`), not only an `Error`.
+- `convex-angular/testing`: add `MockConvexClient.requireLastAuthRegistration()`, which returns the latest auth registration or throws when `setAuth` was never called, so tests no longer narrow `lastAuthRegistration()` by hand.
 
 ### ⚠️ Breaking Changes
 

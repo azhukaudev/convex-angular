@@ -1,7 +1,7 @@
 import { Component, EnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { CONVEX_AUTH, injectAuth } from 'convex-angular';
-import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 
 import { BetterAuthClientLike, BetterAuthFetchResult, BetterAuthSessionData } from './better-auth-client';
 import { BetterAuthService } from './better-auth.service';
@@ -16,14 +16,6 @@ function fakeClient(): BetterAuthClientLike {
       }) as BetterAuthFetchResult<BetterAuthSessionData>,
     convex: { token: async () => ({ data: { token: 'jwt-1' }, error: null }) },
   };
-}
-
-function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
-  const registration = convex.lastAuthRegistration();
-  if (!registration) {
-    throw new Error('Expected a captured auth registration');
-  }
-  return registration;
 }
 
 type SessionResult = BetterAuthFetchResult<BetterAuthSessionData>;
@@ -178,7 +170,7 @@ describe('provideBetterAuth', () => {
       tick();
       TestBed.tick();
       stack.convex.seedAuth({ token: 'jwt-1', decoded: { sub: 'u1' } });
-      requireLastAuthRegistration(stack.convex).setAuthenticated(true);
+      stack.convex.requireLastAuthRegistration().setAuthenticated(true);
       TestBed.tick();
       expect(stack.auth.status()).toBe('authenticated');
       expect(stack.convex.authRegistrations).toHaveLength(1);
@@ -234,7 +226,7 @@ describe('provideBetterAuth', () => {
       TestBed.tick();
       expect(stack.convex.authRegistrations).toHaveLength(2);
 
-      requireLastAuthRegistration(stack.convex).setAuthenticated(true);
+      stack.convex.requireLastAuthRegistration().setAuthenticated(true);
       TestBed.tick();
       expect(stack.auth.status()).toBe('authenticated');
     }));
@@ -255,7 +247,7 @@ describe('provideBetterAuth', () => {
       TestBed.tick();
       expect(stack.convex.authRegistrations).toHaveLength(1);
 
-      requireLastAuthRegistration(stack.convex).setAuthenticated(true);
+      stack.convex.requireLastAuthRegistration().setAuthenticated(true);
       TestBed.tick();
       expect(stack.auth.status()).toBe('authenticated');
     }));

@@ -402,6 +402,18 @@ export class MockConvexClient {
   }
 
   /**
+   * The most recent auth registration; throws when `setAuth` was never called.
+   * Use it to drive Convex's side of the auth handshake without narrowing `lastAuthRegistration()`.
+   */
+  requireLastAuthRegistration(): MockAuthRegistration {
+    const registration = this.lastAuthRegistration();
+    if (!registration) {
+      throw new Error('Expected client.setAuth() to have registered auth, but no registration was captured.');
+    }
+    return registration;
+  }
+
+  /**
    * Give the client a token, as the real client holds one once its fetcher has
    * resolved. This is the single source of current auth: it is what `getAuth()`
    * reports and what makes `client.hasAuth()` true, and `client.clearAuth()`

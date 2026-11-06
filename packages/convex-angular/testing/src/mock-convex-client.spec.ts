@@ -12,7 +12,6 @@ import { ConnectionState } from 'convex/browser';
 import { FunctionReference } from 'convex/server';
 
 import {
-  MockAuthRegistration,
   MockConvexClient,
   MockPaginatedSubscription,
   MockQuerySubscription,
@@ -25,14 +24,6 @@ function requireLastQuerySubscription(convex: MockConvexClient): MockQuerySubscr
     throw new Error('Expected a captured query subscription');
   }
   return subscription;
-}
-
-function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
-  const registration = convex.lastAuthRegistration();
-  if (!registration) {
-    throw new Error('Expected a captured auth registration');
-  }
-  return registration;
 }
 
 function requireLastPaginatedSubscription(convex: MockConvexClient): MockPaginatedSubscription {
@@ -380,10 +371,23 @@ describe('MockConvexClient contract', () => {
     it('captures the token fetcher a setAuth caller registers', async () => {
       convex.client.setAuth(fetchToken);
 
-      const registration = requireLastAuthRegistration(convex);
+      const registration = convex.requireLastAuthRegistration();
       expect(convex.authRegistrations).toHaveLength(1);
       expect(registration.cleared).toBe(false);
       await expect(registration.fetchToken({ forceRefreshToken: false })).resolves.toBe('token');
+    });
+
+    it('requireLastAuthRegistration() returns the latest registration', () => {
+      convex.client.setAuth(fetchToken);
+      convex.client.setAuth(fetchToken);
+
+      expect(convex.authRegistrations).toHaveLength(2);
+      expect(convex.requireLastAuthRegistration()).toBe(convex.lastAuthRegistration());
+      expect(convex.requireLastAuthRegistration()).toBe(convex.authRegistrations[1]);
+    });
+
+    it('requireLastAuthRegistration() throws when setAuth was never called', () => {
+      expect(() => convex.requireLastAuthRegistration()).toThrow(/setAuth/);
     });
 
     it('reports no authentication from registration alone', () => {
@@ -403,7 +407,7 @@ describe('MockConvexClient contract', () => {
       const changes: boolean[] = [];
       convex.client.setAuth(fetchToken, (isAuthenticated) => changes.push(isAuthenticated));
 
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
 
       expect(changes).toEqual([true]);
     });
@@ -416,7 +420,7 @@ describe('MockConvexClient contract', () => {
         (isRefreshing) => refreshes.push(isRefreshing),
       );
 
-      const registration = requireLastAuthRegistration(convex);
+      const registration = convex.requireLastAuthRegistration();
       registration.setRefreshing(true);
       registration.setRefreshing(false);
 
@@ -426,7 +430,7 @@ describe('MockConvexClient contract', () => {
     it('tolerates a registration made without optional callbacks', () => {
       convex.client.setAuth(fetchToken);
 
-      const registration = requireLastAuthRegistration(convex);
+      const registration = convex.requireLastAuthRegistration();
 
       expect(() => {
         registration.setAuthenticated(true);
@@ -437,7 +441,7 @@ describe('MockConvexClient contract', () => {
     it('keeps calling back after clearAuth, like the real client', () => {
       const changes: boolean[] = [];
       convex.client.setAuth(fetchToken, (isAuthenticated) => changes.push(isAuthenticated));
-      const registration = requireLastAuthRegistration(convex);
+      const registration = convex.requireLastAuthRegistration();
 
       convex.client.clearAuth();
       registration.setAuthenticated(true);
@@ -465,7 +469,7 @@ describe('MockConvexClient contract', () => {
 
       expect(convex.authRegistrations).toHaveLength(2);
       expect(convex.authRegistrations[0].cleared).toBe(true);
-      expect(requireLastAuthRegistration(convex).cleared).toBe(false);
+      expect(convex.requireLastAuthRegistration().cleared).toBe(false);
     });
 
     it('lets a test stand in for an already-authenticated client', () => {

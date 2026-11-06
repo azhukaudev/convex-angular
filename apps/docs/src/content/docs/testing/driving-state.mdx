@@ -25,9 +25,9 @@ page is the matrix of what you can drive and the call that drives it.
 | A mutation result                          | `convex.mutationCalls[i].resolve(value)`                                   |
 | A mutation failure                         | `convex.mutationCalls[i].reject(err)`                                      |
 | An action result or failure                | `convex.actionCalls[i].resolve(value)` / `.reject(err)`                    |
-| Convex confirming or rejecting a token     | `convex.lastAuthRegistration()!.setAuthenticated(bool)`                    |
-| Convex asking for a token                  | `convex.lastAuthRegistration()!.fetchToken({ forceRefreshToken })`         |
-| A token refresh in progress                | `convex.lastAuthRegistration()!.setRefreshing(bool)`                       |
+| Convex confirming or rejecting a token     | `convex.requireLastAuthRegistration().setAuthenticated(bool)`              |
+| Convex asking for a token                  | `convex.requireLastAuthRegistration().fetchToken({ forceRefreshToken })`   |
+| A token refresh in progress                | `convex.requireLastAuthRegistration().setRefreshing(bool)`                 |
 | The token the client holds                 | `convex.seedAuth({ token, decoded })`                                      |
 | Warm-cache data before the first emission  | `convex.seedQueryResult(queryName, args, result)` before `createComponent` |
 | A warm-cache entry that already failed     | `convex.seedQueryError(queryName, args, err)` before `createComponent`     |

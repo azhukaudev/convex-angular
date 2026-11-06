@@ -2,7 +2,6 @@ import { Component, DestroyRef, EnvironmentProviders, Provider } from '@angular/
 import { TestBed, fakeAsync, flush, tick } from '@angular/core/testing';
 import { Router, Routes, provideRouter } from '@angular/router';
 import {
-  MockAuthRegistration,
   MockConvexAuthProvider,
   MockConvexClient,
   provideConvexAuthTesting,
@@ -16,14 +15,6 @@ import {
   convexUnauthGuard,
   createConvexAuthGuard,
 } from './auth-guards';
-
-function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
-  const registration = convex.lastAuthRegistration();
-  if (!registration) {
-    throw new Error('Expected a captured auth registration');
-  }
-  return registration;
-}
 
 describe('Auth Guards', () => {
   let convex: MockConvexClient;
@@ -62,7 +53,7 @@ describe('Auth Guards', () => {
   function authenticateAndNavigate(router: Router, url: string) {
     router.navigateByUrl(url);
     tick();
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     tick();
     flush();
   }
@@ -137,7 +128,7 @@ describe('Auth Guards', () => {
 
       expect(router.url).toBe('/');
 
-      requireLastAuthRegistration(convex).setAuthenticated(true);
+      convex.requireLastAuthRegistration().setAuthenticated(true);
       tick();
       flush();
 
@@ -153,7 +144,7 @@ describe('Auth Guards', () => {
 
       // Server rejects the previously confirmed token: Convex pauses the
       // socket while fetching a replacement. The user is still authenticated.
-      requireLastAuthRegistration(convex).setRefreshing(true);
+      convex.requireLastAuthRegistration().setRefreshing(true);
       tick();
 
       router.navigate(['/']);
@@ -240,7 +231,7 @@ describe('Auth Guards', () => {
 
       // Convex is fetching a replacement token; the user stays signed in, so
       // the login route must still bounce them instead of waiting it out.
-      requireLastAuthRegistration(convex).setRefreshing(true);
+      convex.requireLastAuthRegistration().setRefreshing(true);
       tick();
 
       router.navigate(['/login']);
@@ -341,7 +332,7 @@ describe('Auth Guards', () => {
       // The server rejects the token; mid-refresh there is no usable
       // snapshot, so the guard must not run `allow` yet.
       convex.seedAuth(undefined);
-      requireLastAuthRegistration(convex).setRefreshing(true);
+      convex.requireLastAuthRegistration().setRefreshing(true);
       tick();
 
       router.navigate(['/admin']);
@@ -353,7 +344,7 @@ describe('Auth Guards', () => {
       // The refresh completes with a fresh token; the pending guard decides
       // with the new claims.
       convex.seedAuth({ token: 'fresh-jwt', decoded: { role: 'admin' } });
-      requireLastAuthRegistration(convex).setRefreshing(false);
+      convex.requireLastAuthRegistration().setRefreshing(false);
       tick();
       flush();
 

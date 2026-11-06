@@ -2,7 +2,6 @@ import { Component } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { injectAuth } from 'convex-angular';
 import {
-  MockAuthRegistration,
   MockConvexAuthProvider,
   MockConvexClient,
   provideConvexAuthTesting,
@@ -65,15 +64,6 @@ describe('AccountBadge', () => {
     return fixture;
   }
 
-  /** `lastAuthRegistration()` is optional; narrow it once instead of at every call site. */
-  function lastRegistration(): MockAuthRegistration {
-    const registration = convex.lastAuthRegistration();
-    if (!registration) {
-      throw new Error('Expected the helper to have registered auth with the client');
-    }
-    return registration;
-  }
-
   it('stays loading until Convex confirms the token', fakeAsync(() => {
     provider.signIn();
     const fixture = createFixture();
@@ -83,7 +73,7 @@ describe('AccountBadge', () => {
     expect(convex.authRegistrations).toHaveLength(1);
     expect(fixture.componentInstance.auth.status()).toBe('loading');
 
-    lastRegistration().setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -95,7 +85,8 @@ describe('AccountBadge', () => {
     createFixture();
 
     let resolved: string | null | undefined;
-    lastRegistration()
+    convex
+      .requireLastAuthRegistration()
       .fetchToken({ forceRefreshToken: true })
       .then((token) => (resolved = token));
     tick();
@@ -108,14 +99,14 @@ describe('AccountBadge', () => {
     provider.signIn();
     const fixture = createFixture();
 
-    lastRegistration().setAuthenticated(true);
-    lastRegistration().setRefreshing(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
+    convex.requireLastAuthRegistration().setRefreshing(true);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.status()).toBe('refreshing');
 
-    lastRegistration().setRefreshing(false);
+    convex.requireLastAuthRegistration().setRefreshing(false);
     fixture.detectChanges();
     tick();
 
@@ -129,7 +120,7 @@ describe('AccountBadge', () => {
     provider.signIn();
     const fixture = createFixture();
 
-    lastRegistration().setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
@@ -141,11 +132,11 @@ describe('AccountBadge', () => {
     provider.signIn();
     const fixture = createFixture();
 
-    lastRegistration().setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
-    const registration = lastRegistration();
+    const registration = convex.requireLastAuthRegistration();
     provider.signOut();
     fixture.detectChanges();
     tick();

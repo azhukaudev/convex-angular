@@ -1,18 +1,10 @@
 import { Component, EnvironmentInjector, createEnvironmentInjector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { MockAuthRegistration, MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
+import { MockConvexClient, provideConvexTesting } from 'convex-angular/testing';
 
 import { CONVEX_AUTH } from '../../tokens/auth';
 import { injectAuth, provideConvexAuth } from '../inject-auth';
 import { CLERK_AUTH, ClerkAuthProvider, provideClerkAuth } from './clerk';
-
-function requireLastAuthRegistration(convex: MockConvexClient): MockAuthRegistration {
-  const registration = convex.lastAuthRegistration();
-  if (!registration) {
-    throw new Error('Expected a captured auth registration');
-  }
-  return registration;
-}
 
 describe('provideClerkAuth', () => {
   let convex: MockConvexClient;
@@ -215,7 +207,8 @@ describe('provideClerkAuth', () => {
     tick();
 
     let token: string | null | undefined;
-    requireLastAuthRegistration(convex)
+    convex
+      .requireLastAuthRegistration()
       .fetchToken({ forceRefreshToken: true })
       .then((value) => {
         token = value;
@@ -247,12 +240,12 @@ describe('provideClerkAuth', () => {
     expect(convex.authRegistrations).toHaveLength(1);
     expect(fixture.componentInstance.auth.status()).toBe('loading');
 
-    requireLastAuthRegistration(convex).setAuthenticated(true);
+    convex.requireLastAuthRegistration().setAuthenticated(true);
     fixture.detectChanges();
     tick();
 
     expect(fixture.componentInstance.auth.status()).toBe('authenticated');
-    expect(requireLastAuthRegistration(convex).fetchToken).toBeDefined();
+    expect(convex.requireLastAuthRegistration().fetchToken).toBeDefined();
   }));
 
   it('names CLERK_AUTH when no Clerk provider implementation is registered', () => {
