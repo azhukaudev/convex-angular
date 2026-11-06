@@ -5,6 +5,22 @@ import { MockConvexAuthProvider, MockConvexClient, provideConvexTesting } from '
 import { CONVEX_AUTH, ConvexAuthProvider } from '../tokens/auth';
 import { injectAuth, provideConvexAuth } from './inject-auth';
 
+const AUTH_SETUP_HELPERS = [
+  'provideClerkAuth()',
+  'provideAuth0Auth()',
+  'provideBetterAuth()',
+  'provideConvexAuthFromExisting()',
+];
+
+function captureThrown(run: () => unknown): Error {
+  try {
+    run();
+  } catch (error) {
+    return error as Error;
+  }
+  throw new Error('Expected the call to throw, but it returned normally.');
+}
+
 describe('injectAuth', () => {
   let convex: MockConvexClient;
   let provider: MockConvexAuthProvider;
@@ -100,7 +116,12 @@ describe('injectAuth', () => {
       readonly auth = injectAuth();
     }
 
-    expect(() => TestBed.createComponent(TestComponent)).toThrow(/Could not find Convex auth state/);
+    const { message } = captureThrown(() => TestBed.createComponent(TestComponent));
+    expect(message).toMatch(/Could not find Convex auth state/);
+    for (const helper of AUTH_SETUP_HELPERS) {
+      expect(message).toContain(helper);
+    }
+    expect(message).toMatch(/ in your application providers\.$/);
   });
 
   it('throws when provideConvexAuth is configured without CONVEX_AUTH', () => {
@@ -116,7 +137,12 @@ describe('injectAuth', () => {
       readonly auth = injectAuth();
     }
 
-    expect(() => TestBed.createComponent(TestComponent)).toThrow(/Could not find `CONVEX_AUTH`/);
+    const { message } = captureThrown(() => TestBed.createComponent(TestComponent));
+    expect(message).toMatch(/Could not find `CONVEX_AUTH`/);
+    for (const helper of AUTH_SETUP_HELPERS) {
+      expect(message).toContain(helper);
+    }
+    expect(message).toMatch(/`provideConvexAuthFromExisting\(\)`\.$/);
   });
 
   it('throws when provideConvexAuth is configured without a Convex client', () => {

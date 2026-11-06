@@ -31,6 +31,12 @@ interface SequencedError {
   sequence: number;
 }
 
+// The setup helpers that both "Could not find ..." errors below recommend, kept in one place so the two
+// messages list them in the same order. The messages are quoted verbatim in the docs (reference/errors.mdx).
+const AUTH_SETUP_HELPERS =
+  '`provideClerkAuth()`, `provideAuth0Auth()`, `provideBetterAuth()` (from `convex-angular/better-auth`), ' +
+  'or `provideConvexAuthFromExisting()`';
+
 const CONVEX_AUTH_STATE = new InjectionToken<ConvexAuthState>('CONVEX_AUTH_STATE');
 // Internal multi-token used as a per-injector registration marker for
 // provideConvexAuth(). The number of values in the current injector tells us
@@ -128,7 +134,8 @@ function createConvexAuthState(): ConvexAuthState {
   const provider = inject(CONVEX_AUTH, { optional: true });
   if (!provider) {
     throw new Error(
-      'Could not find `CONVEX_AUTH`. Bind an auth provider to `CONVEX_AUTH` alongside `provideConvexAuth()`, or replace the pair with `provideConvexAuthFromExisting()`, `provideClerkAuth()`, `provideAuth0Auth()`, or `provideBetterAuth()` (from `convex-angular/better-auth`).',
+      'Could not find `CONVEX_AUTH`. Bind an auth provider to `CONVEX_AUTH` alongside `provideConvexAuth()`, ' +
+        `or replace the pair with ${AUTH_SETUP_HELPERS}.`,
     );
   }
 
@@ -313,7 +320,9 @@ export function injectAuth(options?: InjectAuthOptions): ConvexAuthState {
 
     if (!state) {
       throw new Error(
-        'Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, `provideAuth0Auth()`, `provideBetterAuth()` (from `convex-angular/better-auth`), or `provideConvexAuthFromExisting()` in your application providers.',
+        'Could not find Convex auth state. Make sure to call `provideConvexAuth()`, ' +
+          AUTH_SETUP_HELPERS +
+          ' in your application providers.',
       );
     }
 
