@@ -127,7 +127,7 @@ Two other states fall outside the table:
   an empty page or an explicit result for expected failures instead of throwing.
 </Aside>
 
-When the helper does receive an error (today: the server render's first-page fetch; in the browser see the caution below), it keeps what you already have:
+When the helper does receive an error (today: the server render's first-page fetch; in the browser see the caution above), it keeps what you already have:
 
 - `results()` is **preserved** — a failed `loadMore()` does not empty the list.
 - `error()` is set and `status()` becomes `'error'`.
