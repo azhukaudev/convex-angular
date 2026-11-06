@@ -7,18 +7,52 @@
 //                       what Stryker should mutate: everything, nothing, or only
 //                       the library source files the change touched
 //
-// Usage: node .github/scripts/ci-changes.mjs <base-ref>   (pull requests)
-//        node .github/scripts/ci-changes.mjs              (anything else: run all)
+// Usage: node .github/scripts/ci-changes.mjs <base>   (the commit or ref to diff against:
+//                                                      origin/<base branch> for a pull request,
+//                                                      github.event.before for a push)
+//        node .github/scripts/ci-changes.mjs          (no usable base: run all)
+//
+// A base that is empty, all zeros (a new branch), unknown to this clone (typically a force
+// push), or sharing no history with HEAD gets the full answer.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
+import strykerConfig from '../../stryker.config.mjs';
+
 const LIBRARY = 'packages/convex-angular/';
 
-// The source roots Stryker mutates (keep in sync with `mutate` in stryker.config.mjs).
-const MUTATED_ROOTS = [`${LIBRARY}src/lib/`, `${LIBRARY}testing/src/`, `${LIBRARY}better-auth/src/`];
+// `mutate` in stryker.config.mjs is the single source of truth for what Stryker mutates.
+// Only the pattern shapes that file uses today are understood; anything else throws, so a
+// new shape fails loudly here instead of silently drifting from the config.
+export function parseMutatePatterns(patterns) {
+  const roots = []; // 'dir/**/*.ts' -> 'dir/'
+  const excludedSuffixes = []; // '!**/*.spec.ts' -> '.spec.ts'
+  const excludedNames = new Set(); // '!**/index.ts' -> 'index.ts'
+  const excludedFiles = new Set(); // '!path/to/file.ts' -> 'path/to/file.ts'
+  for (const pattern of patterns) {
+    let match;
+    if (!pattern.startsWith('!')) {
+      match = /^([^*]+\/)\*\*\/\*\.ts$/.exec(pattern);
+      if (!match) throw new Error(`Unsupported stryker mutate pattern: ${pattern}`);
+      roots.push(match[1]);
+    } else if ((match = /^!\*\*\/\*(\.[\w.]+)$/.exec(pattern))) {
+      excludedSuffixes.push(match[1]);
+    } else if ((match = /^!\*\*\/([^*/]+)$/.exec(pattern))) {
+      excludedNames.add(match[1]);
+    } else if ((match = /^!([^*]+)$/.exec(pattern))) {
+      excludedFiles.add(match[1]);
+    } else {
+      throw new Error(`Unsupported stryker mutate pattern: ${pattern}`);
+    }
+  }
+  return { roots, excludedSuffixes, excludedNames, excludedFiles };
+}
+
+const MUTATE = parseMutatePatterns(strykerConfig.mutate);
 
 // Files that change what the mutation run itself means: any of these runs everything.
+// `.github/workflows/ci.yml` is deliberately NOT here (see LIBRARY_AFFECTING_FILES).
 const FULL_RUN_FILES = new Set([
   'package.json',
   'pnpm-lock.yaml',
@@ -26,7 +60,6 @@ const FULL_RUN_FILES = new Set([
   'tsconfig.base.json',
   'stryker.config.mjs',
   '.nvmrc',
-  '.github/workflows/ci.yml',
   '.github/scripts/ci-changes.mjs',
   `${LIBRARY}package.json`,
   `${LIBRARY}jest.config.cjs`,
@@ -34,14 +67,19 @@ const FULL_RUN_FILES = new Set([
   `${LIBRARY}src/lib/types.ts`,
 ]);
 
-// Outside the library, these can still change how the library builds or tests.
-const LIBRARY_AFFECTING_FILES = new Set(FULL_RUN_FILES);
+// Outside the library, these can still change how the library builds or tests. ci.yml is
+// here (the peer-range job is cheap, ~1 minute) but not in FULL_RUN_FILES: Dependabot bumps
+// its action SHAs almost weekly, and a ~27-minute full mutation run for that is pure noise.
+// Trade-off: a hand edit to the Stryker step in ci.yml no longer forces a full run; touch
+// stryker.config.mjs or run `pnpm test:mutation` locally to re-check it.
+const LIBRARY_AFFECTING_FILES = new Set([...FULL_RUN_FILES, '.github/workflows/ci.yml']);
 
 const isMutated = (file) =>
-  MUTATED_ROOTS.some((root) => file.startsWith(root)) &&
+  MUTATE.roots.some((root) => file.startsWith(root)) &&
   file.endsWith('.ts') &&
-  !file.endsWith('.spec.ts') &&
-  basename(file) !== 'index.ts' &&
+  !MUTATE.excludedSuffixes.some((suffix) => file.endsWith(suffix)) &&
+  !MUTATE.excludedNames.has(basename(file)) &&
+  !MUTATE.excludedFiles.has(file) &&
   !FULL_RUN_FILES.has(file);
 
 // The source a spec tests: `better-auth.service.spec.ts` → `better-auth.service.ts`, and
@@ -57,7 +95,7 @@ function sourceOfSpec(file) {
   return join(dirname(file), `${parts.join('.')}.ts`);
 }
 
-function decide(changed) {
+export function decide(changed) {
   const library = changed.some((file) => file.startsWith(LIBRARY) || LIBRARY_AFFECTING_FILES.has(file));
   const toMutate = new Set();
 
@@ -67,7 +105,7 @@ function decide(changed) {
     }
     if (isMutated(file)) {
       toMutate.add(file);
-    } else if (file.endsWith('.spec.ts') && MUTATED_ROOTS.some((root) => file.startsWith(root))) {
+    } else if (file.endsWith('.spec.ts') && MUTATE.roots.some((root) => file.startsWith(root))) {
       const source = sourceOfSpec(file);
       if (isMutated(source) && existsSync(source)) {
         toMutate.add(source);
@@ -83,17 +121,40 @@ function decide(changed) {
   return { library, mutate: mutate.length ? mutate.join(',') : 'none' };
 }
 
-const base = process.argv[2];
-const result = base
-  ? decide(
-      execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], { encoding: 'utf8' })
-        .split('\n')
-        .filter(Boolean),
-    )
-  : { library: true, mutate: 'full' };
+// Whether `base` names a commit that `git diff base...HEAD` can use: set, not the all-zeros
+// "before" of a new branch, present in this clone, and sharing history with HEAD. Not "an
+// ancestor of HEAD": a pull request's merge commit stops descending from origin/<base> as soon
+// as the base branch moves (e.g. on a re-run), and the three-dot diff copes via the merge base.
+export function isUsableBase(base, git = (args) => execFileSync('git', args, { stdio: 'ignore' })) {
+  if (!base || /^0+$/.test(base)) {
+    return false;
+  }
+  try {
+    git(['merge-base', base, 'HEAD']);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-const lines = `library=${result.library}\nmutate=${result.mutate}\n`;
-process.stdout.write(lines);
-if (process.env.GITHUB_OUTPUT) {
-  appendFileSync(process.env.GITHUB_OUTPUT, lines);
+function main(base) {
+  const result = isUsableBase(base)
+    ? decide(
+        execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], { encoding: 'utf8' })
+          .split('\n')
+          .filter(Boolean),
+      )
+    : { library: true, mutate: 'full' };
+
+  const lines = `library=${result.library}\nmutate=${result.mutate}\n`;
+  process.stdout.write(lines);
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, lines);
+  }
+}
+
+// Run only as a CLI, so the spec can import `decide` without executing a diff.
+// `import.meta.main` needs Node >= 24.2 (or 22.18); `.nvmrc` is 24.
+if (import.meta.main) {
+  main(process.argv[2]);
 }

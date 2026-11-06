@@ -13,6 +13,7 @@
     "check:docs": "nx check docs",
     "test:library": "nx test convex-angular",
     "test:mutation": "stryker run",
+    "test:ci-scripts": "node --test \".github/scripts/*.test.mjs\"",
     "check:duplication": "jscpd packages/convex-angular/src packages/convex-angular/testing/src packages/convex-angular/better-auth/src apps/frontend/src",
     "check:deadcode": "knip",
     "typecheck": "tsc --noEmit -p packages/convex-angular/tsconfig.typecheck.json",
@@ -20,8 +21,8 @@
     "lint": "nx run-many -t lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "verify:quick": "pnpm run typecheck && pnpm run lint && pnpm run check:duplication && pnpm run check:deadcode",
-    "verify:ci": "pnpm run format:check && pnpm run typecheck && pnpm run typecheck:spec && nx run-many -t lint,test,build && pnpm run check:duplication && pnpm run check:deadcode",
+    "verify:quick": "pnpm run typecheck && pnpm run lint && pnpm run check:duplication && pnpm run check:deadcode && pnpm run test:ci-scripts",
+    "verify:ci": "pnpm run format:check && pnpm run typecheck && pnpm run typecheck:spec && nx run-many -t lint,test,build && pnpm run check:duplication && pnpm run check:deadcode && pnpm run test:ci-scripts",
     "verify:full": "pnpm run verify:ci && pnpm run test:mutation",
     "prepare": "lefthook install",
     "update": "nx migrate latest"
