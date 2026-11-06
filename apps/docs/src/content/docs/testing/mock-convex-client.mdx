@@ -167,6 +167,10 @@ Behavior worth knowing:
   flag and increments its `unsubscribeCount`. When `disabled` is true the call still succeeds and
   still returns a callable no-op unsubscribe — the subscription is simply never established, and a
   `MockRefusedSubscription` is recorded instead of a capture.
+- Both subscription methods validate `args` the way the real client does, before capturing anything: a value that is
+  not a Convex value (a `Set`, a `Map`, a `Date`, a class instance, an `undefined` inside an array, a field name that
+  starts with `$`) throws, and no subscription is recorded. A `disabled` mock accepts any args, because the real
+  disabled client returns before reading them.
 - `mutation()` and `action()` return a promise that only the corresponding capture's `resolve` /
   `reject` settles. Only `mutation()` takes an options argument, matching the real client;
   `injectMutation()` always passes `{ optimisticUpdate }` there (the property is `undefined` when no

@@ -2,7 +2,7 @@ import { Provider } from '@angular/core';
 import { AuthTokenFetcher, CONVEX } from 'convex-angular';
 import type { BaseConvexClient, ConnectionState, ConvexClient } from 'convex/browser';
 import { getFunctionName } from 'convex/server';
-import type { Value } from 'convex/values';
+import { Value, convexToJson } from 'convex/values';
 
 /**
  * The `ConvexClient` surface the library and its own specs actually call on
@@ -218,6 +218,16 @@ export interface MockConvexClientOptions {
    * disabled'`, exactly like the real client. Defaults to false.
    */
   disabled?: boolean;
+}
+
+/**
+ * Throws what the real client throws for args that are not Convex values (a `Set`, a `Map`, a `Date`, a class
+ * instance, an `undefined` inside an array, a `$`-prefixed field name, …). Both real subscribe paths serialize
+ * the args with `convexToJson` before registering anything, so nothing is recorded when this throws.
+ */
+function assertConvexValueArgs(args: Record<string, unknown>): void {
+  // The public signature stays `unknown`-typed on purpose (see `seedQueryResult`); the check is the point.
+  convexToJson(args as Record<string, Value>);
 }
 
 // Key-order-independent serialization so seeded results are found regardless
@@ -476,6 +486,8 @@ export class MockConvexClient {
       return () => undefined;
     }
 
+    assertConvexValueArgs(args);
+
     const subscription: MockQuerySubscription = {
       query,
       args,
@@ -514,6 +526,8 @@ export class MockConvexClient {
       this.refusedSubscriptions.push({ kind: 'paginated', query, args });
       return () => undefined;
     }
+
+    assertConvexValueArgs(args);
 
     const subscription: MockPaginatedSubscription = {
       query,
