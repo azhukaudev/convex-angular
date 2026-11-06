@@ -67,8 +67,9 @@ ancestor of `origin/main`), install, `pnpm verify:ci` (which includes `pnpm type
 waits for the `Production` environment's approval once one is configured, downloads that artifact,
 and runs `npm publish dist/packages/convex-angular --provenance --access public --ignore-scripts`.
 `publish` installs nothing from the workspace. The mutation suite (`pnpm test:mutation`) does not run in the release workflow. It is
-report-only in CI (`stryker.config.mjs` sets no break threshold) and runs on pull requests only,
-so if you want that signal, review the `mutation-report` artifact of the pull requests going into
+report-only in CI (`stryker.config.mjs` sets no break threshold) and runs on pull requests and on pushes to `main`
+(mutating only the files each change touched),
+so if you want that signal, review the `mutation-report` artifacts of the CI runs for the commits going into
 the release, or run `pnpm test:mutation` locally before tagging.
 
 ## 7. Auth
