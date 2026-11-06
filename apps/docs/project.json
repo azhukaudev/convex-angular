@@ -27,6 +27,7 @@
           "astro check",
           "ngc -p tsconfig.examples.json --noEmit",
           "node scripts/check-examples-referenced.mjs",
+          "node scripts/check-error-quotes.mjs",
           "! grep -rnE \"\\['_(args|returnType)'\\]\" src/content"
         ],
         "parallel": false

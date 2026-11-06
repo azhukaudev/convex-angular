@@ -83,18 +83,9 @@ delivers — a brief flash rather than none.
 
 ## `provideConvex` is root-only and once-only
 
-`provideConvex()` validates its own placement eagerly at bootstrap. Registering it twice in the same
-injector throws:
+`provideConvex()` validates its own placement eagerly at bootstrap. Registering it twice in the same injector throws ([message and fix](/reference/errors/#provideconvex-registered-more-than-once-in-the-same-injector)).
 
-```text
-`provideConvex(...)` was registered more than once in the same injector. Register it exactly once in your root application providers (for example, in `app.config.ts`).
-```
-
-Registering it in a child injector below one that already registered it throws:
-
-```text
-`provideConvex(...)` must be configured only in your root application providers (for example, in `app.config.ts`). Remove nested or route-level registrations.
-```
+Registering it in a child injector below one that already registered it throws ([message and fix](/reference/errors/#provideconvex-configured-outside-the-root-injector)).
 
 This matters for authenticated SSR because the obvious wiring does not work. In the Angular CLI's SSR
 scaffold, `app.config.server.ts` merges a server-only config into the shared one:

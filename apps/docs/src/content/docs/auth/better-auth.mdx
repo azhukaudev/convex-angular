@@ -40,7 +40,8 @@ authenticated SSR use `provideConvex(...)`'s `ssr.authToken` option instead.
   Internally it registers `BetterAuthService`, binds `CONVEX_AUTH` to the service's Convex-facing view, and includes
   `provideConvexAuth()`. Adding `provideConvexAuth()` alongside it puts two registrations in the same injector and
   throws at bootstrap. All auth providers are root-only and once-only, validated eagerly during bootstrap — see [the
-  overview](/auth/overview/#provideconvexauth) for the exact messages.
+  error catalogue](/reference/errors/#provideconvexauth-registered-more-than-once-in-the-same-injector) for the exact
+  messages.
 </Aside>
 
 ## One shared client instance
@@ -106,14 +107,7 @@ interface InjectBetterAuthOptions {
 }
 ```
 
-Called without `provideBetterAuth(...)` registered, it throws:
-
-```text
-Could not find BetterAuthService. Call provideBetterAuth(...) in your providers, or pass { injectRef } when calling injectBetterAuth() outside an injection context.
-```
-
-Called outside an injection context without `injectRef`, it throws the standard injection-context
-error.
+Called without `provideBetterAuth(...)` registered, it throws [Could not find BetterAuthService](/reference/errors/#could-not-find-betterauthservice). Called outside an injection context without `injectRef`, it throws the [standard injection-context error](/reference/errors/#called-outside-an-injection-context).
 
 ### `BetterAuthState`
 

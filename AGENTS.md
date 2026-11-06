@@ -105,6 +105,7 @@ Code samples resist drift by being real files. Anything substantial lives in `ap
 - Examples import package names (`convex-angular`), never relative paths into `packages/`.
 - Starlight itself validates only the slugs named in the `sidebar` config, so `starlight-links-validator` is registered to cover cross-links inside page content. Both fail the build.
 - `apps/docs/scripts/check-examples-referenced.mjs` fails the `check` target when an example is not rendered by any page, since the knip entry glob cannot distinguish an orphan from a rendered file.
+- `apps/docs/scripts/check-error-quotes.mjs` fails the `check` target when a `reference/errors.mdx` quote no longer matches a library error message, or when another page quotes one. Changing a library error message therefore needs `pnpm check:docs` (it is not part of `verify:quick`; CI runs it through the docs build).
 - Astro's optional `sharp` dependency is denied in `pnpm-workspace.yaml`; the site uses Astro's passthrough image service instead. Do not add image optimization without revisiting that decision.
 
 ## Code Conventions

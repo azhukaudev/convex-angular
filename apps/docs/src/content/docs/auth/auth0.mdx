@@ -57,7 +57,8 @@ It registers a `CONVEX_AUTH` factory that adapts `AUTH0_AUTH`, and then `provide
 <Aside type="danger" title="provideAuth0Auth() already includes provideConvexAuth()">
   Do not add `provideConvexAuth()` (or `provideConvexAuthFromExisting()`) next to it — two registrations in the same
   injector throw at bootstrap. All auth providers are root-only and once-only, validated eagerly during bootstrap. See
-  [the overview](/auth/overview/#provideconvexauth) for the exact messages.
+  [the error catalogue](/reference/errors/#provideconvexauth-registered-more-than-once-in-the-same-injector) for the
+  exact messages.
 </Aside>
 
 ## Token fetching

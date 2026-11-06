@@ -39,16 +39,7 @@ export class TodoListComponent {
 
 ## What it throws
 
-When a helper is called outside an injection context and no explicit injector was supplied, it
-throws an error naming the offending helper:
-
-```text
-<helperName>() must be called from an injection context (for example, a component or service field initializer or constructor), or be given an explicit injector via the `injectRef` option to create it later from plain code.
-```
-
-`<helperName>` is the real function name, so calling `injectQuery` from a method body produces
-`injectQuery() must be called from an injection context …`. This replaces Angular's generic
-`NG0203` message specifically to point at the `injectRef` option.
+When a helper is called outside an injection context and no explicit injector was supplied, it throws an error naming the offending helper: calling `injectQuery` from a method body produces `injectQuery() must be called from an injection context …` ([full message](/reference/errors/#called-outside-an-injection-context)). This replaces Angular's generic `NG0203` message specifically to point at the `injectRef` option.
 
 ## The `injectRef` escape hatch
 

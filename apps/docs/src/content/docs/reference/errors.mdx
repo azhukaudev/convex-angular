@@ -15,7 +15,7 @@ the library, and are covered in [error handling](/concepts/error-handling/).
 
 ## Setup and placement errors
 
-### `<helper>() must be called from an injection context …`
+### Called outside an injection context
 
 ```text
 injectQuery() must be called from an injection context (for example, a component or service field initializer or constructor), or be given an explicit injector via the `injectRef` option to create it later from plain code.
@@ -95,7 +95,7 @@ Components and lazy routes inherit the root client automatically.
 ### Could not find `CONVEX_AUTH`
 
 ```text
-Could not find `CONVEX_AUTH`. Bind an auth provider to `CONVEX_AUTH` alongside `provideConvexAuth()`, or replace the pair with `provideConvexAuthFromExisting()`, `provideClerkAuth()`, `provideAuth0Auth()`, or `provideBetterAuth()` (from `convex-angular/better-auth`).
+Could not find `CONVEX_AUTH`. Bind an auth provider to `CONVEX_AUTH` alongside `provideConvexAuth()`, or replace the pair with `provideClerkAuth()`, `provideAuth0Auth()`, `provideBetterAuth()` (from `convex-angular/better-auth`), or `provideConvexAuthFromExisting()`.
 ```
 
 **When it happens.** `provideConvexAuth()` was registered, but no

@@ -92,19 +92,11 @@ Two rules are enforced, and both throw.
 
 ### Once per injector
 
-Registering `provideConvex()` twice in the same providers array throws:
-
-```text
-`provideConvex(...)` was registered more than once in the same injector. Register it exactly once in your root application providers (for example, in `app.config.ts`).
-```
+Registering `provideConvex()` twice in the same providers array throws ([message and fix](/reference/errors/#provideconvex-registered-more-than-once-in-the-same-injector)).
 
 ### Not below an injector that already registered it
 
-Registering it in a child injector when a parent injector already registered it throws:
-
-```text
-`provideConvex(...)` must be configured only in your root application providers (for example, in `app.config.ts`). Remove nested or route-level registrations.
-```
+Registering it in a child injector when a parent injector already registered it throws ([message and fix](/reference/errors/#provideconvex-configured-outside-the-root-injector)).
 
 ### When validation runs
 

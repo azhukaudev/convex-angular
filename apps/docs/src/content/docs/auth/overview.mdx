@@ -159,37 +159,7 @@ immediately rather than on first use.
   throws at bootstrap. The same applies to `provideConvexAuthFromExisting()`, which also includes it.
 </Aside>
 
-### Exact error messages
-
-**Two registrations in the same injector:**
-
-```text
-`provideConvexAuth()` was registered more than once in the same injector. Register it exactly once in your root application providers (for example, in `app.config.ts`).
-```
-
-**Registered in a child or route-level injector below an existing registration:**
-
-```text
-`provideConvexAuth()` must be configured only in your root application providers (for example, in `app.config.ts`). Remove nested or route-level registrations.
-```
-
-**No `CONVEX_AUTH` provider was registered:**
-
-```text
-Could not find `CONVEX_AUTH`. Bind an auth provider to `CONVEX_AUTH` alongside `provideConvexAuth()`, or replace the pair with `provideConvexAuthFromExisting()`, `provideClerkAuth()`, `provideAuth0Auth()`, or `provideBetterAuth()` (from `convex-angular/better-auth`).
-```
-
-**No Convex client — `provideConvex(...)` is missing:**
-
-```text
-Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers before calling `provideConvexAuth()`.
-```
-
-**`injectAuth()` called with no auth configured at all:**
-
-```text
-Could not find Convex auth state. Make sure to call `provideConvexAuth()`, `provideClerkAuth()`, `provideAuth0Auth()`, `provideBetterAuth()` (from `convex-angular/better-auth`), or `provideConvexAuthFromExisting()` in your application providers.
-```
+A missing or misplaced registration fails with a focused message; each one is quoted, with its cause and fix, in the [error catalogue](/reference/errors/#provideconvexauth-registered-more-than-once-in-the-same-injector).
 
 ## Next steps
 

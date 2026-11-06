@@ -89,17 +89,7 @@ sees.
 
 ## Errors
 
-The helper resolves the client through `injectConvex()`, so a missing provider throws:
-
-```text
-Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers (for example, in `app.config.ts`).
-```
-
-Calling it outside an injection context without an `injectRef` throws:
-
-```text
-injectConvexConnectionState() must be called from an injection context (for example, a component or service field initializer or constructor), or be given an explicit injector via the `injectRef` option to create it later from plain code.
-```
+The helper resolves the client through `injectConvex()`, so a missing provider throws [Could not find `CONVEX`](/reference/errors/#could-not-find-convex). Calling it outside an injection context without an `injectRef` throws [the injection-context error](/reference/errors/#called-outside-an-injection-context).
 
 ## Related
 
