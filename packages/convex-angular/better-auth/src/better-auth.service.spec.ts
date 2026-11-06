@@ -367,6 +367,155 @@ describe('BetterAuthService', () => {
     expect(client.tokenCalls).toBe(1); // still served from the untouched cache
   }));
 
+  describe('retrying a failed token exchange on a same-session refresh', () => {
+    // Fails the exchange the given way, refreshes the unchanged session twice,
+    // and expects exactly one extra reauth: the failure alone never re-registers
+    // Convex auth, the first refresh does, the second finds nothing left to retry.
+    function expectOneRetryAfter(failExchange: () => void): void {
+      const service = setup();
+      tick();
+      const initialVersion = service.reauthVersion();
+
+      failExchange();
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick();
+      expect(service.reauthVersion()).toBe(initialVersion);
+
+      void service.refreshSession();
+      tick();
+      expect(service.reauthVersion()).toBe(initialVersion + 1);
+
+      void service.refreshSession();
+      tick();
+      expect(service.reauthVersion()).toBe(initialVersion + 1);
+    }
+
+    it('after an error response', fakeAsync(() => {
+      expectOneRetryAfter(() => {
+        client.tokenResult = fail(500, 'exchange exploded');
+      });
+    }));
+
+    it('after an expected 401 response', fakeAsync(() => {
+      expectOneRetryAfter(() => {
+        client.tokenResult = fail(401);
+      });
+    }));
+
+    it('after a rejected exchange', fakeAsync(() => {
+      expectOneRetryAfter(() => {
+        client.tokenRejection = new Error('socket closed');
+      });
+    }));
+
+    it('after a response that carries no token', fakeAsync(() => {
+      expectOneRetryAfter(() => {
+        client.tokenResult = ok({ token: null });
+      });
+    }));
+
+    it('stays quiet once the retried exchange succeeded', fakeAsync(() => {
+      const service = setup();
+      tick();
+      const initialVersion = service.reauthVersion();
+
+      client.tokenResult = fail(500, 'exchange exploded');
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick();
+      void service.refreshSession();
+      tick();
+      expect(service.reauthVersion()).toBe(initialVersion + 1);
+
+      client.tokenResult = ok({ token: 'jwt-2' });
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick();
+      void service.refreshSession();
+      tick();
+
+      expect(service.reauthVersion()).toBe(initialVersion + 1);
+    }));
+
+    it('does not bump while a token exchange is already in flight', fakeAsync(() => {
+      const service = setup();
+      tick();
+      const initialVersion = service.reauthVersion();
+
+      client.tokenResult = fail(500, 'exchange exploded');
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick();
+
+      const retry = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
+      client.tokenQueue.push(retry.promise);
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      void service.refreshSession();
+      tick();
+      expect(service.reauthVersion()).toBe(initialVersion);
+
+      retry.resolve(ok({ token: 'jwt-2' }));
+      tick();
+      void service.refreshSession();
+      tick();
+      expect(service.reauthVersion()).toBe(initialVersion);
+    }));
+
+    it('bumps exactly once when the refresh also changes the session id', fakeAsync(() => {
+      const service = setup();
+      tick();
+      const initialVersion = service.reauthVersion();
+
+      client.tokenResult = fail(500, 'exchange exploded');
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick();
+
+      client.sessionResult = ok(session('s2'));
+      void service.refreshSession();
+      tick();
+
+      expect(service.reauthVersion()).toBe(initialVersion + 1);
+    }));
+
+    it('bumps exactly once when the refresh ends signed out', fakeAsync(() => {
+      const service = setup();
+      tick();
+      const initialVersion = service.reauthVersion();
+
+      client.tokenResult = fail(500, 'exchange exploded');
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick();
+
+      client.sessionResult = fail(401);
+      void service.refreshSession();
+      tick();
+
+      expect(service.isAuthenticated()).toBe(false);
+      expect(service.reauthVersion()).toBe(initialVersion + 1);
+    }));
+
+    it('only bumps for the sign-out itself when clearSession() follows a failed exchange', fakeAsync(() => {
+      const service = setup();
+      tick();
+      const initialVersion = service.reauthVersion();
+
+      client.tokenResult = fail(500, 'exchange exploded');
+      void service.fetchAccessToken({ forceRefreshToken: false });
+      tick();
+
+      service.clearSession();
+
+      expect(service.reauthVersion()).toBe(initialVersion + 1);
+    }));
+
+    // Kills a flag that starts out `true`: a signed-out load never changes the
+    // session id, so nothing would reset it and the first refresh would bump.
+    it('does not bump on a signed-out load', fakeAsync(() => {
+      client.sessionResult = fail(401);
+      const service = setup();
+      tick();
+
+      expect(service.reauthVersion()).toBe(0);
+    }));
+  });
+
   it('clearSession() signs out locally and notifies the client', fakeAsync(() => {
     const service = setup();
     tick();

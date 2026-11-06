@@ -92,8 +92,9 @@ library to re-read the session:
 
 Re-reading a session that did not change (the same `session.id`) does not touch Convex auth: there
 is no re-authentication and no resubscription, and `injectAuth().status()` stays `'authenticated'`.
-A different session id re-runs Convex auth setup. `betterAuth.isLoading()` still reports every
-(re)load.
+The one exception is a failed Convex token exchange: Convex does not ask again after it, so the next
+`refreshSession()` for the same session retries it once. A different session id re-runs Convex auth
+setup. `betterAuth.isLoading()` still reports every (re)load.
 
 ## `injectBetterAuth()`
 
