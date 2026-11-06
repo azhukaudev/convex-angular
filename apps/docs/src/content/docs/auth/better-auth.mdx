@@ -37,7 +37,7 @@ the session is first needed — and **only in the browser**. It never runs on th
 authenticated SSR use `provideConvex(...)`'s `ssr.authToken` option instead.
 
 <Aside type="danger" title="provideBetterAuth() already includes provideConvexAuth()">
-  Internally it registers `BetterAuthService` and `provideConvexAuthFromExisting(BetterAuthService)`, which includes
+  Internally it registers `BetterAuthService`, binds `CONVEX_AUTH` to the service's Convex-facing view, and includes
   `provideConvexAuth()`. Adding `provideConvexAuth()` alongside it puts two registrations in the same injector and
   throws at bootstrap. All auth providers are root-only and once-only, validated eagerly during bootstrap — see [the
   overview](/auth/overview/#provideconvexauth) for the exact messages.
