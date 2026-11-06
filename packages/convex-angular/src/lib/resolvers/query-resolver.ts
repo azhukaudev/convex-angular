@@ -103,8 +103,8 @@ export function convexQueryResolver<Query extends QueryReference>(
     }
 
     // A disabled client never emits; resolve immediately instead of hanging
-    // the navigation.
-    if (convex.disabled) {
+    // the navigation; a destroyed scope cannot own a subscription either.
+    if (convex.disabled || destroyRef.destroyed) {
       return undefined;
     }
 
@@ -127,9 +127,6 @@ export function convexQueryResolver<Query extends QueryReference>(
         onError: () => settle(undefined),
         // A scope destroyed before the first result must not hang the
         // navigation; resolving undefined matches the error path's contract.
-        // Resolve directly: on an already-destroyed scope this runs inside
-        // openWarmSubscription, before `subscription` is initialised, and the
-        // keep-warm timer `settle` would arm is moot after a release anyway.
         onRelease: () => resolve(undefined),
       });
     });

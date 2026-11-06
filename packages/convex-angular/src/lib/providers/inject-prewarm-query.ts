@@ -81,8 +81,9 @@ export function injectPrewarmQuery<Query extends PrewarmQueryReference>(
 
     const prewarm = (args: FunctionArgs<Query>): Promise<boolean> => {
       // On a disabled client (server-side rendering) subscriptions are
-      // no-ops and the cleanup timer would only delay SSR stability.
-      if (convex.disabled) {
+      // no-ops and the cleanup timer would only delay SSR stability. A destroyed
+      // scope cannot own a subscription either.
+      if (convex.disabled || destroyRef.destroyed) {
         return Promise.resolve(false);
       }
 
