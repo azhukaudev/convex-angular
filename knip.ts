@@ -82,11 +82,9 @@ const config: KnipConfig = {
     'angular-eslint',
     'typescript-eslint',
     '@typescript-eslint/utils',
-    // Required at runtime: jest-preset-angular's preset selects
-    // `testEnvironment: 'jsdom'`, which Jest resolves to this package. The preset
-    // is spread into the jest configs, so knip never sees the reference. Knip
-    // previously counted it as used via @angular-devkit/build-angular's optional peer, which
-    // Angular 22 dropped.
+    // Jest needs this at runtime. jest-preset-angular's preset selects `testEnvironment: 'jsdom'`,
+    // which Jest resolves to this package. The jest configs spread the preset in, so knip never
+    // sees the reference.
     'jest-environment-jsdom',
     // Nx toolchain: a dependency of @nx/angular, @nx/eslint, @nx/jest and @nx/web.
     // Its `verdaccio` executor in project.json was the only direct reference.

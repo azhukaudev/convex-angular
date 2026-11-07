@@ -458,8 +458,6 @@ export class MockConvexClient {
    * deployment already rejected this exact query + args before the helper
    * subscribed. Mirrors the real client: `client.localQueryResult` throws
    * this error instead of returning a value, and `query()` rejects with it.
-   *
-   * @public
    */
   seedQueryError(queryName: string, args: Record<string, unknown>, error: Error): void {
     this.warmCache.set(`${queryName}:${stableStringify(args)}`, { err: error });

@@ -38,17 +38,14 @@ allowBuilds:
   unrs-resolver: true
   # Wrangler (docs deploy) runs on workerd; its install script checks for the platform binary.
   workerd: true
-# Release-age cooldown: pnpm will not install a version published less than
-# minimumReleaseAge minutes ago (1440 = 1 day) without approval. Strict mode
-# is set explicitly: without it pnpm installs a too-new version anyway and
-# silently appends it to minimumReleaseAgeExclude, which protects nothing.
-# Strict: an interactive install asks for approval (default No); CI and other
-# non-interactive installs fail with NO_MATURE_MATCHING_VERSION.
-# For a same-day security bump, approve at the prompt (pnpm then writes the
-# exact versions below) or add them by hand, e.g.
+# Release-age cooldown. pnpm will not install a version published in the last 1440 minutes, one
+# day, without approval. Strict mode is set explicitly. Without it, pnpm installs a too-new
+# version anyway and quietly adds it to minimumReleaseAgeExclude, which protects nothing. With it,
+# an interactive install asks for approval and CI fails with NO_MATURE_MATCHING_VERSION.
+# For a same-day security bump, approve at the prompt or add the exact version by hand, for example
 #   minimumReleaseAgeExclude:
 #     - '@angular/router@21.2.25'
-# and remove them in a follow-up once the versions are a day old — every
-# entry disables the cooldown for that version.
+# Remove the entry once the version is a day old, because every entry turns off the cooldown for
+# that version.
 minimumReleaseAge: 1440
 minimumReleaseAgeStrict: true

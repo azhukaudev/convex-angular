@@ -78,11 +78,9 @@ export function openWarmSubscription<Query extends FunctionReference<'query'>>(
   try {
     unsubscribe = convex.onUpdate(query, args, handlers.onValue, handlers.onError);
   } catch (error) {
-    // The client throws synchronously for args it cannot serialize, before it registers anything. Mark the handle
-    // released first so it is inert (`release` would otherwise call the unassigned `unsubscribe`, and
-    // `releaseAfter` would arm a timer), and drop the destroy hook: left on the scope it would pin this
-    // closure in a long-lived injector. Report on a microtask rather than inline, like every other client
-    // failure, so callers always hold the returned handle before their `onError` runs.
+    // The client throws before it registers anything. Mark the handle released so it does nothing, because
+    // `release` would otherwise call the unassigned `unsubscribe`. Drop the destroy hook so a long-lived injector
+    // does not keep this closure alive. Report on a microtask so callers hold the handle before `onError` runs.
     released = true;
     removeDestroyHook();
     queueMicrotask(() => handlers.onError(error instanceof Error ? error : new Error(String(error))));

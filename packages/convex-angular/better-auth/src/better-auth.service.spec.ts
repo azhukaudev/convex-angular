@@ -227,7 +227,7 @@ describe('BetterAuthService', () => {
     tick();
 
     client.tokenRejection = new Error('socket closed');
-    let failed: string | null = 'sentinel' as never;
+    let failed: string | null = 'sentinel';
     void service.fetchAccessToken({ forceRefreshToken: true }).then((t) => (failed = t));
     tick();
 

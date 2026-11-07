@@ -51,7 +51,7 @@ export class MockConvexAuthProvider implements ConvexAuthProvider {
   private readonly errorSignal: WritableSignal<Error | undefined>;
   private readonly reauthVersionSignal: WritableSignal<number>;
   private readonly recordedFetchCalls: Array<{ forceRefreshToken: boolean }> = [];
-  private pendingFailure: Error | undefined = undefined;
+  private pendingFailure: Error | undefined;
 
   /** Whether the identity provider is still loading its initial state. */
   readonly isLoading: Signal<boolean>;

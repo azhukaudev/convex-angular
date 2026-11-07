@@ -22,10 +22,9 @@ import strykerConfig from '../../stryker.config.mjs';
 
 const LIBRARY = 'packages/convex-angular/';
 
-// `mutate` in stryker.config.mjs is the single source of truth for what Stryker mutates.
-// Stryker applies the patterns in order (a `!` pattern removes what the earlier ones added);
-// folding them the same way keeps this script faithful to it, and `matchesGlob` is
-// minimatch-compatible for the plain `**`/`*` globs the config uses.
+// `mutate` in stryker.config.mjs is the source of truth for what Stryker mutates. Stryker applies
+// the patterns in order, and a `!` pattern removes what earlier ones added, so `isMutated` folds
+// them the same way.
 const MUTATE = strykerConfig.mutate;
 
 const inMutateScope = (file) => MUTATE.some((pattern) => !pattern.startsWith('!') && matchesGlob(file, pattern));
@@ -53,11 +52,10 @@ const FULL_RUN_FILES = new Set([
   `${LIBRARY}src/lib/types.ts`,
 ]);
 
-// Outside the library, these can still change how the library builds or tests. ci.yml is
-// here (the peer-range job is cheap, ~1 minute) but not in FULL_RUN_FILES: Dependabot bumps
-// its action SHAs almost weekly, and a ~27-minute full mutation run for that is pure noise.
-// Trade-off: a hand edit to the Stryker step in ci.yml no longer forces a full run; touch
-// stryker.config.mjs or run `pnpm test:mutation` locally to re-check it.
+// These files sit outside the library but can still change how it builds or tests. ci.yml is
+// here because the peer-range job is cheap. It is not in FULL_RUN_FILES because Dependabot bumps
+// its action SHAs almost weekly, and a full mutation run for each bump is wasted. After
+// hand-editing the Stryker step, touch stryker.config.mjs or run `pnpm test:mutation` locally.
 const LIBRARY_AFFECTING_FILES = new Set([...FULL_RUN_FILES, '.github/workflows/ci.yml']);
 
 // The source a spec tests: `better-auth.service.spec.ts` → `better-auth.service.ts`, and
@@ -99,11 +97,11 @@ export function decide(changed) {
   return { library, mutate: mutate.length ? mutate.join(',') : 'none' };
 }
 
-// The files changed since `base`, or null when there is no usable base. An empty base needs
-// its own check (`git diff ...HEAD` would quietly diff HEAD against itself); an all-zeros
-// "before" (a new branch), a commit missing from this clone (a force push) and a base sharing
-// no history with HEAD all make `git diff` exit 128. The three-dot form diffs against the
-// merge base, so a pull request whose base branch has moved on since the run started is fine.
+// Returns the files changed since `base`, or null when there is no usable base. An empty base
+// needs its own check, because `git diff ...HEAD` would diff HEAD against itself. `git diff` exits
+// with 128 for an all-zeros base, a commit missing from this clone, or a base that shares no
+// history with HEAD. The three-dot form diffs against the merge base, so a base branch that has
+// moved on still works.
 function changedFiles(base) {
   if (!base) {
     return null;

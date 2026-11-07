@@ -256,7 +256,7 @@ describe('BetterAuthService races', () => {
       const late = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
       client.tokenQueue = [late.promise];
 
-      let stale: string | null = 'sentinel' as never;
+      let stale: string | null = 'sentinel';
       void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (stale = t));
 
       client.sessionResult = ok(session('s2'));
@@ -284,7 +284,7 @@ describe('BetterAuthService races', () => {
       const late = createDeferred<BetterAuthFetchResult<{ token?: string | null }>>();
       client.tokenQueue = [late.promise];
 
-      let stale: string | null = 'sentinel' as never;
+      let stale: string | null = 'sentinel';
       void service.fetchAccessToken({ forceRefreshToken: false }).then((t) => (stale = t));
 
       client.sessionResult = ok(session('s2'));

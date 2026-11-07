@@ -276,8 +276,6 @@ function createConvexAuthState(): ConvexAuthState {
     try {
       const { fetchToken, onAuthChange, onRefreshChange } = createSetAuthCallbacks(generation);
 
-      // Use the underlying base client directly: `ConvexClient.setAuth` drops
-      // the `onRefreshChange` callback, but `BaseConvexClient.setAuth` forwards it.
       // untracked: the real client calls fetchToken synchronously inside setAuth,
       // so provider signals read before its first await must not become effect deps.
       untracked(() => setAuthWithRefresh(convex, fetchToken, onAuthChange, onRefreshChange));

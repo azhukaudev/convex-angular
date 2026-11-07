@@ -250,10 +250,7 @@ describe('convexQueryResolver', () => {
 
     expect(resolved).toBeUndefined();
     expect(requireLastQuerySubscription(convex).unsubscribeCount).toBe(1);
-    // A scope destroyed before the first result has nothing to keep warm, so
-    // it must not schedule a keep-warm timer on its way out. `flush` reports
-    // the virtual time it had to advance to drain the queue: zero means the
-    // resolver left no pending work behind.
+    // With nothing to keep warm, the resolver sets no keep-warm timer, so `flush()` returns 0.
     expect(flush()).toBe(0);
   }));
 
