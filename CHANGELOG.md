@@ -21,6 +21,7 @@
 - Fix the prewarming example: it awaited `prewarm()` in a click handler on the same element as `routerLink`, which navigates regardless; the awaited variant now lives on a button.
 - The documentation site is now published at https://convex-angular.azhukau.com/. The README, the package `homepage` and a new `bugs` URL link to it and to the issue tracker.
 - The documentation site now has a favicon, a link-preview image and search metadata (a `robots.txt` and structured data).
+- The documentation site now reports page views and Web Vitals to Cloudflare Web Analytics.
 
 ### 🏡 Chore
 

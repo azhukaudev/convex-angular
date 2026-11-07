@@ -40,6 +40,15 @@ export default defineConfig({
             license: 'https://opensource.org/licenses/MIT',
           }),
         },
+        // Cloudflare Web Analytics; the token is a public site ID, not a secret.
+        {
+          tag: 'script',
+          attrs: {
+            type: 'module',
+            src: 'https://static.cloudflareinsights.com/beacon.min.js',
+            'data-cf-beacon': JSON.stringify({ token: '1d6ac246506640d2817cda74236a5695' }),
+          },
+        },
       ],
       social: [{ icon: 'github', label: 'GitHub', href: GITHUB_REPO }],
       editLink: { baseUrl: `${GITHUB_REPO}/edit/main/apps/docs/` },
