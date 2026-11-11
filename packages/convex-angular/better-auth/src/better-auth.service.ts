@@ -37,14 +37,26 @@ function isSessionData(value: unknown): value is BetterAuthSessionData {
   return hasStringId(session) && hasStringId(user);
 }
 
+// The cause after the prefix. Better Auth's error is better-fetch's `{ ...jsonBody, status, statusText }`, so a
+// non-JSON body (a proxy's 502 page) has no `message`; describe it by its HTTP status instead.
+function describeError(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const { message, statusText, status } = error as { message?: unknown; statusText?: unknown; status?: unknown };
+    if (typeof message === 'string') {
+      return message;
+    }
+    if (typeof statusText === 'string' && statusText !== '') {
+      return statusText;
+    }
+    if (typeof status === 'number') {
+      return `HTTP ${status}`;
+    }
+  }
+  return String(error);
+}
+
 function normalizeError(error: unknown, prefix: string): Error {
-  if (error instanceof Error) {
-    return new Error(`${prefix}: ${error.message}`);
-  }
-  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
-    return new Error(`${prefix}: ${error.message}`);
-  }
-  return new Error(`${prefix}: ${String(error)}`);
+  return new Error(`${prefix}: ${describeError(error)}`);
 }
 
 /**

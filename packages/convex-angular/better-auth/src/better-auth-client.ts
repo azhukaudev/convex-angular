@@ -16,7 +16,8 @@ export interface BetterAuthSessionData {
  */
 export interface BetterAuthFetchResult<T> {
   data: T | null;
-  error: { message?: string; status?: number } | null;
+  /** Better Auth's error: the response's JSON body (usually with `message`) plus its HTTP `status` and `statusText`. */
+  error: { message?: string; status?: number; statusText?: string } | null;
 }
 
 /**

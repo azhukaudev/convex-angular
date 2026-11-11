@@ -1,7 +1,7 @@
 import { PLATFORM_ID } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 
-import { BetterAuthFetchResult } from './better-auth-client';
+import { BetterAuthFetchResult, BetterAuthSessionData } from './better-auth-client';
 import { FakeBetterAuthClient, createDeferred, fail, ok, session } from './better-auth-client.fake';
 import { BETTER_AUTH_CLIENT_FACTORY, BetterAuthService } from './better-auth.service';
 
@@ -468,6 +468,43 @@ describe('BetterAuthService', () => {
   });
 
   describe('error normalisation', () => {
+    const SESSION_FAILED = '[convex-angular better-auth] Session refresh failed: ';
+
+    it.each<[string, NonNullable<BetterAuthFetchResult<BetterAuthSessionData>['error']>, string]>([
+      ['its message', { status: 500, message: 'boom' }, 'boom'],
+      ['its status text when it has no message', { status: 502, statusText: 'Bad Gateway' }, 'Bad Gateway'],
+      ['its status code when the status text is empty', { status: 502, statusText: '' }, 'HTTP 502'],
+      ['its status code when there is no status text', { status: 500 }, 'HTTP 500'],
+      ['its string form when it carries nothing', {}, '[object Object]'],
+    ])(
+      'describes an error envelope by %s',
+      fakeAsync(
+        (_label: string, error: NonNullable<BetterAuthFetchResult<BetterAuthSessionData>['error']>, cause: string) => {
+          client.sessionResult = { data: null, error };
+          const service = setup();
+          tick();
+
+          expect(service.error()?.message).toBe(`${SESSION_FAILED}${cause}`);
+        },
+      ),
+    );
+
+    it.each<[string, unknown, string]>([
+      ['an Error by its message', new Error('network down'), 'network down'],
+      ['a string as is', 'network offline', 'network offline'],
+      ['null', null, 'null'],
+      ['undefined', undefined, 'undefined'],
+    ])(
+      'describes a rejection with %s',
+      fakeAsync((_label: string, rejection: unknown, cause: string) => {
+        client.sessionQueue.push(Promise.reject(rejection));
+        const service = setup();
+        tick();
+
+        expect(service.error()?.message).toBe(`${SESSION_FAILED}${cause}`);
+      }),
+    );
+
     it('clears the session and surfaces the failure when the session request throws', fakeAsync(() => {
       const service = setup();
       tick();
