@@ -17,8 +17,9 @@ permissions:
 
 jobs:
   # Decides what the slow jobs below need to do for this change: it diffs against the pull
-  # request's base branch, or against the commit before a push to main. A base it cannot
-  # diff (a new branch, a commit missing from the clone after a force push) gets the full answer.
+  # request's base branch, or against the commit before a push to main. A previous commit that
+  # a force push left out of the clone is fetched by SHA first; a base that still cannot be
+  # diffed (a new branch, a commit GitHub no longer has) gets the full answer.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -83,7 +84,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.mutate != 'none'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # A full run takes 35-45 minutes, and Stryker writes its report only when it finishes.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

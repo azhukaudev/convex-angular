@@ -1,7 +1,10 @@
 // Run with `node --test '.github/scripts/*.test.mjs'` from the repository root: `decide()`
 // checks which files exist relative to the working directory.
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -68,12 +71,16 @@ test('a deleted source file leaves nothing to mutate', () => {
   assert.deepEqual(decide([`${LIB}src/lib/providers/deleted-long-ago.ts`]), { library: true, mutate: 'none' });
 });
 
+const script = fileURLToPath(new URL('./ci-changes.mjs', import.meta.url));
+// No GITHUB_OUTPUT (the CLI would append to it), and no GIT_* variables (inside a git hook
+// GIT_DIR would point the temporary repositories below at this one).
+const env = Object.fromEntries(
+  Object.entries(process.env).filter(([name]) => name !== 'GITHUB_OUTPUT' && !name.startsWith('GIT_')),
+);
+
 // The CLI is what CI runs. A base it cannot diff against must fall back to the full answer
 // rather than an empty or partial one.
 test('a base that cannot be diffed gets the full answer', () => {
-  const script = fileURLToPath(new URL('./ci-changes.mjs', import.meta.url));
-  const env = { ...process.env };
-  delete env.GITHUB_OUTPUT;
   const bases = [[], [''], ['0000000000000000000000000000000000000000'], ['not-a-commit-0123456789abcdef']];
   for (const args of bases) {
     const stdout = execFileSync('node', [script, ...args], {
@@ -83,4 +90,37 @@ test('a base that cannot be diffed gets the full answer', () => {
     });
     assert.equal(stdout, 'library=true\nmutate=full\n', JSON.stringify(args));
   }
+});
+
+// A force push that rewinds main leaves the push's `before` commit unreachable from every ref, so
+// even a full-history clone lacks it. The script must fetch it by SHA instead of running everything.
+test('a push base missing from the clone is fetched from origin and diffed', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'ci-changes-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const origin = join(dir, 'origin');
+  const clone = join(dir, 'clone');
+  const identity = ['-c', 'user.name=ci', '-c', 'user.email=ci@example.com', '-c', 'commit.gpgsign=false'];
+  const git = (cwd, ...args) => execFileSync('git', [...identity, ...args], { cwd, encoding: 'utf8', env }).trim();
+
+  git(dir, 'init', '--quiet', '--initial-branch=main', origin);
+  // GitHub serves a commit no ref reaches; make the local origin do the same under any protocol version.
+  git(origin, 'config', 'uploadpack.allowAnySHA1InWant', 'true');
+  git(origin, 'commit', '--quiet', '--allow-empty', '-m', 'kept');
+  writeFileSync(join(origin, 'pnpm-lock.yaml'), 'rewound away\n');
+  git(origin, 'add', 'pnpm-lock.yaml');
+  git(origin, 'commit', '--quiet', '-m', 'rewound');
+  const rewound = git(origin, 'rev-parse', 'HEAD');
+  git(origin, 'reset', '--quiet', '--hard', 'HEAD~1');
+  // file:// (not a plain path) so the clone receives only reachable objects, like a GitHub checkout.
+  git(dir, 'clone', '--quiet', `file://${origin}`, clone);
+  assert.notEqual(spawnSync('git', ['cat-file', '-e', rewound], { cwd: clone, env }).status, 0, 'precondition');
+
+  const run = (base) => spawnSync('node', [script, base], { cwd: clone, encoding: 'utf8', env });
+  const rewind = run(rewound);
+  assert.equal(rewind.stdout, 'library=false\nmutate=none\n');
+  assert.equal(rewind.stderr, '');
+
+  const unknown = run('0123456789abcdef0123456789abcdef01234567');
+  assert.equal(unknown.stdout, 'library=true\nmutate=full\n');
+  assert.match(unknown.stderr, /ci-changes: cannot diff against base/);
 });

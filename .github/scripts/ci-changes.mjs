@@ -12,8 +12,10 @@
 //                                                      github.event.before for a push)
 //        node .github/scripts/ci-changes.mjs          (no base: run all)
 //
-// A base that is empty, all zeros (a new branch), unknown to this clone (typically a force
-// push), or sharing no history with HEAD gets the full answer.
+// A push's base that this clone lacks (a force push leaves it unreachable from every ref, so even a
+// full-history checkout misses it) is fetched from origin by SHA and the diff retried once. A base
+// that is empty, all zeros (a new branch), still missing after that, or sharing no history with HEAD
+// gets the full answer, with one stderr line saying why.
 import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync } from 'node:fs';
 import { basename, dirname, join, matchesGlob } from 'node:path';
@@ -102,15 +104,28 @@ export function decide(changed, exists = existsSync) {
 // needs its own check, because `git diff ...HEAD` would diff HEAD against itself. `git diff` exits
 // with 128 for an all-zeros base, a commit missing from this clone, or a base that shares no
 // history with HEAD. The three-dot form diffs against the merge base, so a base branch that has
-// moved on still works.
+// moved on still works, and a push that only rewound the branch diffs to nothing.
 function changedFiles(base) {
   if (!base) {
     return null;
   }
+  // stderr is captured, not inherited: a first attempt that the fetch below rescues must not print
+  // git's "fatal:" into the log. main() reports a base that stays unusable. The timeout turns a hung
+  // fetch into that same fallback instead of failing the `changes` job at its 5-minute limit.
+  const git = (...args) =>
+    execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60_000 });
+  const diff = () => git('diff', '--name-only', `${base}...HEAD`).split('\n').filter(Boolean);
   try {
-    return execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], { encoding: 'utf8' })
-      .split('\n')
-      .filter(Boolean);
+    return diff();
+  } catch {
+    // Only a full commit SHA is worth fetching: a pull request's `origin/<branch>` is already here.
+  }
+  if (!/^(?!0+$)[0-9a-f]{40}$/.test(base)) {
+    return null;
+  }
+  try {
+    git('fetch', '--no-tags', '--quiet', 'origin', base);
+    return diff();
   } catch {
     return null;
   }
@@ -118,6 +133,9 @@ function changedFiles(base) {
 
 function main(base) {
   const changed = changedFiles(base);
+  if (!changed) {
+    process.stderr.write(`ci-changes: cannot diff against base "${base ?? ''}", so everything runs\n`);
+  }
   const result = changed ? decide(changed) : { library: true, mutate: 'full' };
 
   const lines = `library=${result.library}\nmutate=${result.mutate}\n`;
