@@ -91,11 +91,12 @@ its own token cache.
 The adapter builds it for you:
 
 ```ts
-reauthVersion: computed(() => [clerk.sessionId?.(), clerk.orgId?.(), clerk.orgRole?.()]);
+reauthVersion: computed(() => [clerk.sessionId?.(), clerk.orgId?.(), clerk.orgRole?.()], {
+  equal: (previous, next) => previous.every((value, index) => value === next[index]),
+});
 ```
 
-Any change to that tuple makes `provideConvexAuth()` tear down the current auth wiring and re-run
-setup with a fresh token, while the user stays signed in.
+A change to any of the three ids makes `provideConvexAuth()` tear down the current auth wiring and re-run setup with a fresh token, while the user stays signed in. The tuple is compared id by id, so a re-evaluation that yields the same ids changes nothing.
 
 `orgId` and `orgRole` cover organization switching, where the token's claims change but the user
 does not. **`sessionId` is the one that is easy to omit and expensive to miss.** Signing out and

@@ -103,6 +103,23 @@ describe('provideClerkAuth', () => {
     expect(provider.reauthVersion?.()).not.toEqual(initialVersion);
   });
 
+  it('keeps the same reauthVersion value when the Clerk ids change and change back', () => {
+    sessionId.set('sess_1');
+    orgId.set('org_123');
+    orgRole.set('admin');
+    configureTestingModule();
+
+    const provider = TestBed.inject(CONVEX_AUTH);
+    const before = provider.reauthVersion?.();
+
+    // The computed re-evaluates, but to the same ids: a fresh array here would
+    // rerun Convex auth setup for nothing.
+    orgRole.set('member');
+    orgRole.set('admin');
+
+    expect(provider.reauthVersion?.()).toBe(before);
+  });
+
   it('falls back to undefined reauth values when session and org signals are missing', () => {
     configureTestingModule({
       isLoaded,

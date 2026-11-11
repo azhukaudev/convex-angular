@@ -15,10 +15,12 @@ export class MyAuthService implements ConvexAuthProvider {
   readonly isLoading = this.loading.asReadonly();
   readonly isAuthenticated = computed(() => this.session() !== null);
 
-  // Optional. Any change re-runs Convex auth setup while the user stays signed
-  // in — use it for context switches (organization, workspace, impersonation)
-  // that require a different token.
-  readonly reauthVersion = computed(() => [this.session()?.id, this.session()?.organizationId]);
+  // Optional. Any new value re-runs Convex auth setup while the user stays
+  // signed in — use it for context switches (organization, workspace,
+  // impersonation) that require a different token. Return a primitive: a fresh
+  // array or object is a new value on every evaluation, and the token refresh
+  // below replaces `session`, so it would re-run auth after every refresh.
+  readonly reauthVersion = computed(() => `${this.session()?.id}:${this.session()?.organizationId}`);
 
   // Optional. `injectAuth().error()` mirrors this signal unless a newer
   // internal auth error was recorded.

@@ -146,6 +146,14 @@ export interface ConvexAuthProvider {
    * Optional signal that forces Convex to rerun auth setup while the user
    * remains authenticated. Use this for auth context changes like organization
    * switches that require a new token.
+   *
+   * Every new value reruns auth setup (status returns to `'loading'` until
+   * Convex confirms the new token), and "new" is decided by the signal's
+   * equality — `Object.is` unless you pass `equal`. Return a primitive (a
+   * string key or a counter), or give the `computed()` an `equal` function:
+   * a `computed()` that builds a fresh array or object is a new value every
+   * time it re-evaluates, for example after a token refresh that updates
+   * your session state, and would rerun auth setup each time.
    */
   reauthVersion?: Signal<unknown>;
 

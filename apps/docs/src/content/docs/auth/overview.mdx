@@ -119,7 +119,9 @@ Notable edges:
   client and resets the refreshing flag.
 - **Context switch.** When the provider exposes `reauthVersion` and it changes, auth setup re-runs:
   the backend confirmation resets to pending, so `status()` returns to `'loading'` and then settles
-  again. Callbacks from the superseded attempt are ignored.
+  again. Callbacks from the superseded attempt are ignored. "Changes" means a new value by the
+  signal's equality, so a `computed()` that returns a fresh array re-runs auth every time it
+  re-evaluates — see [Custom auth providers](/auth/custom-provider/).
 
 ## Errors
 

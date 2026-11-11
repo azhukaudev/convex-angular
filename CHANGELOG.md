@@ -22,6 +22,7 @@
 - The documentation site is now published at https://convex-angular.azhukau.com/. The README, the package `homepage` and a new `bugs` URL link to it and to the issue tracker.
 - The documentation site now has a favicon, a link-preview image and search metadata (a `robots.txt` and structured data).
 - The documentation site now reports page views and Web Vitals to Cloudflare Web Analytics.
+- Fix the custom auth provider example: its `reauthVersion` built a new array on every evaluation and its forced token refresh replaced the session object, so every refresh re-ran Convex auth setup (`status()` back to `'loading'`, another token fetch) in a loop against a real deployment. The example now returns a string key, and the `ConvexAuthProvider.reauthVersion` TSDoc and the auth pages say the value must compare equal when nothing changed. `provideClerkAuth()` now compares its `reauthVersion` tuple id by id, so a re-evaluation with the same ids no longer counts as a change.
 
 ### 🏡 Chore
 

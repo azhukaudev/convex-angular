@@ -181,7 +181,11 @@ export function provideClerkAuth(): EnvironmentProviders {
         return {
           isLoading: computed(() => !clerk.isLoaded()),
           isAuthenticated: computed(() => clerk.isSignedIn() ?? false),
-          reauthVersion: computed(() => [clerk.sessionId?.(), clerk.orgId?.(), clerk.orgRole?.()]),
+          // A fresh array is never `Object.is`-equal, so compare the ids: only a
+          // real session or organization change may rerun Convex auth setup.
+          reauthVersion: computed(() => [clerk.sessionId?.(), clerk.orgId?.(), clerk.orgRole?.()], {
+            equal: (previous, next) => previous.every((value, index) => value === next[index]),
+          }),
           error: clerk.error,
           fetchAccessToken,
         };
