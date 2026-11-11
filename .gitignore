@@ -52,8 +52,10 @@ Thumbs.db
 # Astro generated types for the docs site
 apps/docs/.astro
 
-# Wrangler's local state for the docs deploy
+# Wrangler's local state and local secrets for the docs deploy
 .wrangler
+.dev.vars*
+.env
 
 .env.local
 

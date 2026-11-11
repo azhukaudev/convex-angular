@@ -35,6 +35,7 @@
 ### 🏡 Chore
 
 - Host the documentation site on Cloudflare Workers through the `@astrojs/cloudflare` adapter (contributors only; the published package is unaffected).
+- Serve the documentation site with baseline security headers (`Strict-Transport-Security`, `X-Content-Type-Options`, `Referrer-Policy`, and a `frame-ancestors 'none'` content security policy), and ignore local Wrangler secret files (contributors only; the published package is unaffected).
 - Run the mutation suite on pushes to `main` as well as pull requests (it only ran on pull requests, so direct pushes were never mutation-tested), and stop a Dependabot bump of `ci.yml` from forcing a full mutation run (contributors only; the published package is unaffected).
 - Clear the Verdaccio and undici advisories from the workspace's dev toolchain: `verdaccio`, which `@nx/js` only lists as an optional peer, is no longer installed; `undici` is patched in both copies (the Nx one through an override until Nx 24.0.4, the Astro one through an in-range refresh); and the unused `material-symbols` dependency is gone, since the demo self-hosts its icon subset (contributors only; the published package is unaffected).
 - Enable `@typescript-eslint/no-explicit-any` for the library and replace its remaining uses; extend the `src/lib/internal` boundary lint rule so `*_experimental` client members, like `BaseConvexClient`, can only be used in `convex-client-internals.ts` (contributors only; the published package is unaffected).

@@ -1,0 +1,10 @@
+# Security headers for every docs page and asset. Cloudflare applies this file to static-asset
+# responses; the docs Worker is assets-only, so that is every response.
+# Never add Cache-Control under /*: the @astrojs/cloudflare adapter then skips the immutable
+# /_astro/* rule it prepends to this file at build time.
+# HSTS starts short; raise max-age to 31536000 once HTTPS-only has run cleanly for a week.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Content-Security-Policy: frame-ancestors 'none'
+  Strict-Transport-Security: max-age=86400
