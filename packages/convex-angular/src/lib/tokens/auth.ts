@@ -5,8 +5,11 @@ import type { AuthTokenFetcher as ConvexAuthTokenFetcher } from 'convex/browser'
  * An async function returning a JWT token for authentication.
  *
  * This function is called by the Convex client when it needs a token.
- * The `forceRefreshToken` argument is `true` if the server rejected a
- * previously returned token or the token is anticipated to expire soon.
+ * The client passes `forceRefreshToken: false` only once per `setAuth`, on
+ * its first call. Every later call passes `true`: an immediate retry when
+ * that first call returned no token, a refresh once the server accepts the
+ * first token, a scheduled refresh before the token expires, and a retry
+ * after the server rejects a token.
  *
  * @param args - Object containing forceRefreshToken flag
  * @returns A promise that resolves to the JWT token, or null/undefined if not available
@@ -136,6 +139,11 @@ export interface ConvexAuthProvider {
   /**
    * Function to fetch the access token.
    * Should return null/undefined if no token is available (e.g., user is logged out).
+   * A null from the first (non-forced) call is not final: Convex retries at
+   * once with `forceRefreshToken: true`, and `injectAuth()` stays 'loading'
+   * until that retry, or the server, decides. (On a `reauthVersion` re-run,
+   * where the client still holds the previous token, a null settles
+   * 'unauthenticated' at once.)
    *
    * @param args.forceRefreshToken - True if a fresh token is required (cache bypass)
    * @returns Promise resolving to the JWT token, or null if not available

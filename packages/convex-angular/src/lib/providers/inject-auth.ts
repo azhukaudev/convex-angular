@@ -168,8 +168,19 @@ function createConvexAuthState(): ConvexAuthState {
   // The fetchToken/onAuthChange/onRefreshChange trio handed to
   // BaseConvexClient.setAuth, bound to one generation so callbacks from a
   // superseded setup never touch current state.
-  const createSetAuthCallbacks = (generation: number) => ({
+  const createSetAuthCallbacks = (generation: number, heldAuthAtSetup: boolean) => ({
     fetchToken: async (args: { forceRefreshToken: boolean }) => {
+      // An empty answer to the first (non-forced) fetch is not final: the client
+      // retries at once with forceRefreshToken: true and reports that outcome
+      // through onAuthChange, so stay 'loading' instead of flashing
+      // 'unauthenticated'. Not when a token was already held at setup: the
+      // client can then accept the retry's token without calling onAuthChange.
+      const settleUnauthenticatedIfFinal = () => {
+        if (args.forceRefreshToken || heldAuthAtSetup) {
+          backendAuthenticated.set(false);
+        }
+      };
+
       try {
         const token = await provider.fetchAccessToken(args);
 
@@ -178,7 +189,7 @@ function createConvexAuthState(): ConvexAuthState {
         }
 
         if (token == null) {
-          backendAuthenticated.set(false);
+          settleUnauthenticatedIfFinal();
           return null;
         }
 
@@ -186,7 +197,7 @@ function createConvexAuthState(): ConvexAuthState {
       } catch (fetchError) {
         if (generation === currentGeneration) {
           errors.setInternalError(fetchError, '[convex-angular auth] Token fetch failed');
-          backendAuthenticated.set(false);
+          settleUnauthenticatedIfFinal();
         }
 
         return null;
@@ -274,7 +285,7 @@ function createConvexAuthState(): ConvexAuthState {
     backendRefreshing.set(false);
 
     try {
-      const { fetchToken, onAuthChange, onRefreshChange } = createSetAuthCallbacks(generation);
+      const { fetchToken, onAuthChange, onRefreshChange } = createSetAuthCallbacks(generation, hasAuth(convex));
 
       // untracked: the real client calls fetchToken synchronously inside setAuth,
       // so provider signals read before its first await must not become effect deps.

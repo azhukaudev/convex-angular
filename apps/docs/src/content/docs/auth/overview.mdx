@@ -46,7 +46,7 @@ type ConvexAuthStatus = 'loading' | 'authenticated' | 'refreshing' | 'unauthenti
 | `'loading'`         | Auth state is not yet known. Either the upstream provider is still initializing, or the provider reports the user as signed in and Convex has not yet confirmed or rejected the token. |
 | `'authenticated'`   | The provider reports the user as signed in **and** the Convex backend confirmed the token. Queries and mutations run with an identity.                                                 |
 | `'refreshing'`      | The server rejected a previously-confirmed token and Convex paused the socket while it fetches a replacement. The user remains authenticated throughout.                               |
-| `'unauthenticated'` | Auth has settled and there is no confirmed identity — the provider reports signed out, no token was available, or Convex rejected the token.                                           |
+| `'unauthenticated'` | Auth has settled and there is no confirmed identity — the provider reports signed out, no token was available even after Convex's forced retry, or Convex rejected the token.          |
 
 <Aside type="tip" title="'refreshing' is not routine rotation">
   Convex refreshes tokens in the background well before they expire, and that ordinary rotation never enters

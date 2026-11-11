@@ -169,8 +169,10 @@ export interface MockCallableCall {
 export interface MockAuthRegistration {
   /**
    * The token fetcher the helper registered. Await it to simulate Convex asking
-   * for a token. The real client calls it synchronously inside setAuth and again
-   * on expiry or rejection; the mock never calls it on its own.
+   * for a token. The real client calls it synchronously inside setAuth with
+   * `forceRefreshToken: false`, at once again with `true` when that first
+   * answer is empty, and again on expiry or rejection; the mock never calls it
+   * on its own.
    */
   fetchToken: AuthTokenFetcher;
   /**
@@ -381,8 +383,11 @@ export class MockConvexClient {
   }
 
   /**
-   * How many times the helper consulted `client.hasAuth`. Distinguishes "asked
-   * and declined to clear" from "never looked".
+   * How many times the helper consulted `client.hasAuth`: once per signed-in
+   * auth setup (including `reauthVersion` re-runs), once per loading or
+   * signed-out run, which may then clear, and once when the auth state is
+   * destroyed. To prove sign-out looked and declined to clear, compare the
+   * count from just before sign-out with the count after.
    */
   get hasAuthCount(): number {
     return this.hasAuthCallCount;

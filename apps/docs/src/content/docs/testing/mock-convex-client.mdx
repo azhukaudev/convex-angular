@@ -96,7 +96,7 @@ Every array is readonly, ordered oldest first, and **never cleared** — build a
 | `disabled`                     | `boolean` | `options.disabled ?? false`.                                                                                                                         |
 | `client`                       | object    | The low-level client surface used by the helpers. **Throws `Error('ConvexClient is disabled')` when `disabled` is true**, mirroring the real client. |
 | `clearAuthCount`               | `number`  | How many times the code under test called `client.clearAuth()`.                                                                                      |
-| `hasAuthCount`                 | `number`  | How many times it consulted `client.hasAuth()`. Distinguishes "asked and declined to clear" from "never looked".                                     |
+| `hasAuthCount`                 | `number`  | How many times it consulted `client.hasAuth()`. Signed-in setup reads it too, so compare before and after sign-out.                                  |
 | `connectionStateReads`         | `number`  | How many times it read `connectionState()`. Counted **before** the disabled throw, so the attempt is recorded either way.                            |
 | `connectionStateSubscriptions` | `number`  | How many times it called `subscribeToConnectionState()`, including calls a disabled client counted but never registered.                             |
 | `connectionStateUnsubscribes`  | `number`  | How many times it released a connection-state subscription.                                                                                          |

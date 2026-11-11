@@ -391,7 +391,7 @@ describe('injectAuth', () => {
     expect(fixture.componentInstance.auth.status()).toBe('authenticated');
   }));
 
-  it('treats a null token as unauthenticated without setting an error', fakeAsync(() => {
+  it('keeps loading after an empty non-forced token fetch until Convex decides', fakeAsync(() => {
     provider.signIn();
     provider.token = null;
     configureTestingModule();
@@ -409,8 +409,99 @@ describe('injectAuth', () => {
     fixture.detectChanges();
 
     expect(token).toBeNull();
+    expect(fixture.componentInstance.auth.status()).toBe('loading');
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
+
+    convex.requireLastAuthRegistration().setAuthenticated(false);
+    fixture.detectChanges();
+    tick();
+
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
     expect(fixture.componentInstance.auth.error()).toBeUndefined();
+  }));
+
+  it('treats an empty forced token fetch as unauthenticated without setting an error', fakeAsync(() => {
+    provider.signIn();
+    provider.token = null;
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    let token: string | null | undefined;
+    convex
+      .requireLastAuthRegistration()
+      .fetchToken({ forceRefreshToken: true })
+      .then((value) => {
+        token = value;
+      });
+    tick();
+    fixture.detectChanges();
+
+    expect(token).toBeNull();
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
+    expect(fixture.componentInstance.auth.error()).toBeUndefined();
+  }));
+
+  it('keeps loading when the non-forced token fetch throws, and records the error', fakeAsync(() => {
+    provider.signIn();
+    provider.failNextFetch(new Error('provider exploded'));
+    configureTestingModule();
+
+    const fixture = createAuthFixture();
+
+    void convex.requireLastAuthRegistration().fetchToken({ forceRefreshToken: false });
+    tick();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.auth.status()).toBe('loading');
+    expect(fixture.componentInstance.auth.error()).toEqual(
+      expect.objectContaining({ message: '[convex-angular auth] Token fetch failed: provider exploded' }),
+    );
+  }));
+
+  it('goes from loading straight to authenticated when the forced retry returns a token', fakeAsync(() => {
+    const statuses: string[] = [];
+    provider.signIn();
+    provider.token = null;
+    configureTestingModule();
+    const fixture = createAuthFixture();
+    const auth = fixture.componentInstance.auth;
+    const registration = convex.requireLastAuthRegistration();
+    statuses.push(auth.status());
+
+    void registration.fetchToken({ forceRefreshToken: false });
+    tick();
+    fixture.detectChanges();
+    statuses.push(auth.status());
+
+    provider.token = 'fresh-token';
+    let retried: string | null | undefined;
+    void registration.fetchToken({ forceRefreshToken: true }).then((value) => (retried = value));
+    tick();
+    fixture.detectChanges();
+    statuses.push(auth.status());
+
+    registration.setAuthenticated(true);
+    fixture.detectChanges();
+    tick();
+    statuses.push(auth.status());
+
+    expect(retried).toBe('fresh-token');
+    expect(statuses).toEqual(['loading', 'loading', 'loading', 'authenticated']);
+  }));
+
+  it('still reports unauthenticated at once when the client already held a token', fakeAsync(() => {
+    provider.signIn();
+    provider.token = null;
+    convex.seedAuth({ token: 'held-token', decoded: {} });
+    configureTestingModule();
+    const fixture = createAuthFixture();
+
+    void convex.requireLastAuthRegistration().fetchToken({ forceRefreshToken: false });
+    tick();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
   }));
 
   it('hands the provider token to Convex unchanged', fakeAsync(() => {
@@ -712,11 +803,13 @@ describe('injectAuth', () => {
     fixture.detectChanges();
     tick();
 
+    // The signed-in setup already read hasAuth; only a further read proves sign-out looked.
+    const hasAuthCountBeforeSignOut = convex.hasAuthCount;
     provider.signOut();
     fixture.detectChanges();
     tick();
 
-    expect(convex.hasAuthCount).toBeGreaterThan(0);
+    expect(convex.hasAuthCount).toBeGreaterThan(hasAuthCountBeforeSignOut);
     expect(convex.clearAuthCount).toBe(0);
     expect(fixture.componentInstance.auth.status()).toBe('unauthenticated');
   }));

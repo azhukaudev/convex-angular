@@ -137,11 +137,13 @@ describe('AccountBadge', () => {
     tick();
 
     const registration = convex.requireLastAuthRegistration();
+    // The signed-in setup already read `hasAuth()`; count from here.
+    const hasAuthCountBeforeSignOut = convex.hasAuthCount;
     provider.signOut();
     fixture.detectChanges();
     tick();
 
-    expect(convex.hasAuthCount).toBeGreaterThan(0);
+    expect(convex.hasAuthCount).toBeGreaterThan(hasAuthCountBeforeSignOut);
     expect(convex.clearAuthCount).toBe(1);
     expect(registration.cleared).toBe(true);
     expect(fixture.componentInstance.auth.getAuth()).toBeUndefined();
