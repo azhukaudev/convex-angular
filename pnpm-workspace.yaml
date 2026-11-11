@@ -1,7 +1,3 @@
-# Force a single @better-fetch/fetch copy. better-auth pins 1.3.3 exactly while
-# @convex-dev/better-auth resolves ^1.3.3 independently; two copies produce
-# incompatible BetterFetch type identities and break the better-auth client
-# plugin types (crossDomainClient/convexClient) during the Angular build.
 # The docs site owns its own manifest so Astro's toolchain (Vite 8) resolves
 # independently of the Angular build (which pins Vite exactly through
 # @angular/build). The root manifest stays the workspace root; overrides,
@@ -9,6 +5,12 @@
 packages:
   - apps/docs
 overrides:
+  # Force a single @better-fetch/fetch copy. better-auth pins 1.3.3 exactly while
+  # @convex-dev/better-auth resolves ^1.3.3 independently; two copies produce
+  # incompatible BetterFetch type identities and break the better-auth client
+  # plugin types (crossDomainClient/convexClient) during the Angular build.
+  # Keep it equal to the version better-auth pins. Remove when `pnpm why @better-fetch/fetch`
+  # shows a single version without it.
   '@better-fetch/fetch': 1.3.3
   # @nx/js declares verdaccio as an optional peer (for its removed-from-this-repo local-registry
   # executor); autoInstallPeers installs it anyway and drags in handlebars/js-yaml/compression
@@ -22,6 +24,11 @@ overrides:
   # autoInstallPeers installs it anyway. The docs site runs on Cloudflare and never loads that driver.
   # Remove when unstorage no longer declares the peer (check its package.json peerDependencies).
   'unstorage>@vercel/functions': '-'
+  # typed-rest-client@2.3.1 (through every @stryker-mutator package) pins qs 6.15.1 exactly
+  # (four moderate advisories, fixed by 6.16.1); the rest of the tree already uses 6.17.1.
+  # Remove when the installed typed-rest-client depends on qs >= 6.16.1 (typed-rest-client 3.x does);
+  # @stryker-mutator/core 9.6.1 and 10.1.1 still depend on typed-rest-client ~2.3.0.
+  'typed-rest-client>qs': 6.17.1
 allowBuilds:
   '@parcel/watcher': true
   '@swc/core': true
@@ -44,7 +51,7 @@ allowBuilds:
 # an interactive install asks for approval and CI fails with NO_MATURE_MATCHING_VERSION.
 # For a same-day security bump, approve at the prompt or add the exact version by hand, for example
 #   minimumReleaseAgeExclude:
-#     - '@angular/router@21.2.25'
+#     - '@angular/router@22.2.5'
 # Remove the entry once the version is a day old, because every entry turns off the cooldown for
 # that version.
 minimumReleaseAge: 1440
