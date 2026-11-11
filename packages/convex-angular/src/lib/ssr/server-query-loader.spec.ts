@@ -27,7 +27,7 @@ describe('ConvexServerQueryLoader', () => {
     TestBed.configureTestingModule({
       providers: [
         ConvexServerQueryLoader,
-        { provide: CONVEX_SSR_CONFIG, useValue: { url: 'https://test.convex.cloud', ssr } },
+        { provide: CONVEX_SSR_CONFIG, useValue: { ssr } },
         { provide: CONVEX_HTTP_CLIENT, useValue: { query: mockHttpQuery, setAuth: mockSetAuth } },
       ],
     });

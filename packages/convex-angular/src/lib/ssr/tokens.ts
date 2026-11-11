@@ -52,7 +52,6 @@ export interface ConvexSsrOptions {
  * @internal
  */
 export interface ConvexSsrConfig {
-  url: string;
   ssr: ConvexSsrOptions;
 }
 

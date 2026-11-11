@@ -151,7 +151,7 @@ export function provideConvex(convexUrl: string, options?: ProvideConvexOptions)
     // SSR/hydration support: configuration, the HTTP client used for
     // server-side fetches, the server query loader, and the browser-side
     // hydration state reader. All are inert until injected.
-    { provide: CONVEX_SSR_CONFIG, useValue: { url: convexUrl, ssr: options?.ssr ?? {} } },
+    { provide: CONVEX_SSR_CONFIG, useValue: { ssr: options?.ssr ?? {} } },
     {
       provide: CONVEX_HTTP_CLIENT,
       // Only the options ConvexHttpClient also accepts; the rest are

@@ -77,7 +77,7 @@ A single call provides all of the following into the injector:
 | `CONVEX`                        | The `ConvexClient` instance. `injectConvex()` reads this token.                    |
 | An internal registration marker | A `multi` token used to count registrations per injector scope.                    |
 | An internal guard token         | Runs the placement validation described below before the client is constructed.    |
-| `CONVEX_SSR_CONFIG`             | The resolved `{ url, ssr }` configuration.                                         |
+| `CONVEX_SSR_CONFIG`             | The resolved `ssr` options passed to `provideConvex()`.                            |
 | `CONVEX_HTTP_CLIENT`            | A `ConvexHttpClient` pointed at the same deployment, used for server-side fetches. |
 | `ConvexServerQueryLoader`       | Performs and tracks server-side query fetches so SSR serialization waits for them. |
 | `ConvexHydrationState`          | Browser-side reader for results transferred from the server render.                |

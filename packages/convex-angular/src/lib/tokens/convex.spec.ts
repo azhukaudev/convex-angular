@@ -64,10 +64,7 @@ describe('provideConvex (SSR)', () => {
       ],
     });
 
-    expect(TestBed.inject(CONVEX_SSR_CONFIG)).toEqual({
-      url: 'https://test.convex.cloud',
-      ssr: { fetchOnServer: false },
-    });
+    expect(TestBed.inject(CONVEX_SSR_CONFIG)).toEqual({ ssr: { fetchOnServer: false } });
     expect(TestBed.inject(ConvexHydrationState)).toBeInstanceOf(ConvexHydrationState);
   });
 
