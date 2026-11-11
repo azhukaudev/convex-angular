@@ -47,12 +47,15 @@ Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your roo
 ```
 
 **When it happens.** `injectConvex()` — which every query, mutation, action,
-pagination and prewarm helper, and `convexQueryResolver()`, calls internally —
-looked up the `CONVEX` token optionally and found nothing. The library injects optionally on purpose so it
-can raise this focused setup error rather than Angular's generic
-`NullInjectorError`. The usual causes are a missing `provideConvex(...)` call, a
-helper resolved from an injector that is not a descendant of the one holding the
-providers, or a test bed configured without a Convex provider.
+pagination and prewarm helper, `convexQueryResolver()`, and the auth state that
+`provideConvexAuth()` builds (also through `provideClerkAuth()`, `provideAuth0Auth()`
+and `provideBetterAuth()`) call internally — looked up the `CONVEX` token optionally
+and found nothing. The library injects optionally on purpose so it can raise this
+focused setup error rather than Angular's generic `NullInjectorError`. The usual
+causes are a missing `provideConvex(...)` call, a helper resolved from an injector
+that is not a descendant of the one holding the providers, or a test bed configured
+without a Convex provider. With an auth provider registered, it surfaces during
+injector initialization, because `provideConvexAuth()` creates the auth state eagerly.
 
 **How to fix.** Add `provideConvex(convexUrl)` to your application's root
 providers, as described in [providers](/concepts/providers/). In unit tests,
@@ -114,20 +117,6 @@ already register a `CONVEX_AUTH` provider _and_ call `provideConvexAuth()`
 internally. If you are using one of them, do not call `provideConvexAuth()`
 yourself — see [Clerk](/auth/clerk/), [Auth0](/auth/auth0/), and [Better
 Auth](/auth/better-auth/).
-
-### Could not find `CONVEX` (from `provideConvexAuth()`)
-
-```text
-Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers before calling `provideConvexAuth()`.
-```
-
-**When it happens.** Auth sync needs the Convex client to install its token
-fetcher on. This variant of the missing-client error is raised while building the
-auth state, which means `provideConvexAuth()` (or an integration helper that
-includes it) is registered but `provideConvex(...)` is not.
-
-**How to fix.** Add `provideConvex(convexUrl)` to the root providers, ahead of
-the auth providers in the same array.
 
 ### `provideConvexAuth()` registered more than once in the same injector
 

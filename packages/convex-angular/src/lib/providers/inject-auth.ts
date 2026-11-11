@@ -15,7 +15,7 @@ import {
 
 import { clearAuth, hasAuth, setAuthWithRefresh } from '../internal/convex-client-internals';
 import { CONVEX_AUTH, ConvexAuthProvider, ConvexAuthState, ConvexAuthStatus } from '../tokens/auth';
-import { CONVEX } from '../tokens/convex';
+import { injectConvex } from './inject-convex';
 import { runInResolvedInjectionContext } from './injection-context';
 
 export interface InjectAuthOptions {
@@ -139,12 +139,7 @@ function createConvexAuthState(): ConvexAuthState {
     );
   }
 
-  const convex = inject(CONVEX, { optional: true });
-  if (!convex) {
-    throw new Error(
-      'Could not find `CONVEX`. Make sure to call `provideConvex(...)` once in your root application providers before calling `provideConvexAuth()`.',
-    );
-  }
+  const convex = injectConvex();
 
   const destroyRef = inject(DestroyRef);
 

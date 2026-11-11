@@ -159,7 +159,7 @@ describe('injectAuth', () => {
     }
 
     expect(() => TestBed.createComponent(TestComponent)).toThrow(
-      /once in your root application providers before calling/,
+      /Could not find `CONVEX`.*\(for example, in `app\.config\.ts`\)/,
     );
   });
 
