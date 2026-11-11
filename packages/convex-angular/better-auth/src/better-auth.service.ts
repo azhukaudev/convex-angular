@@ -73,9 +73,12 @@ export class BetterAuthService {
 
   private readonly sessionState = signal<BetterAuthSessionData | null>(null);
   readonly session = this.sessionState.asReadonly();
-  readonly isLoading = signal(true);
-  readonly isAuthenticated = signal(false);
-  readonly reauthVersion = signal(0);
+  private readonly isLoadingState = signal(true);
+  readonly isLoading = this.isLoadingState.asReadonly();
+  private readonly isAuthenticatedState = signal(false);
+  readonly isAuthenticated = this.isAuthenticatedState.asReadonly();
+  private readonly reauthVersionState = signal(0);
+  readonly reauthVersion = this.reauthVersionState.asReadonly();
 
   // Session and token failures are tracked independently (each tagged with a
   // shared monotonic sequence) so a successful exchange on one path can't
@@ -114,7 +117,7 @@ export class BetterAuthService {
     if (this.isServer) {
       // Browser-only by design: server-side authenticated SSR goes through
       // provideConvex's ssr.authToken instead.
-      this.isLoading.set(false);
+      this.isLoadingState.set(false);
       return;
     }
 
@@ -133,7 +136,7 @@ export class BetterAuthService {
     // Captured so a superseded refresh (a sign-out, or a later overlapping
     // refresh) can detect it's stale and bail before applying its result.
     const epoch = ++this.sessionEpoch;
-    this.isLoading.set(true);
+    this.isLoadingState.set(true);
 
     try {
       const result = await this.getClient().getSession({ fetchOptions: { throw: false } });
@@ -163,7 +166,7 @@ export class BetterAuthService {
       this.applySession(null);
     } finally {
       if (epoch === this.sessionEpoch) {
-        this.isLoading.set(false);
+        this.isLoadingState.set(false);
       }
     }
   }
@@ -180,7 +183,7 @@ export class BetterAuthService {
       this.client?.updateSession?.();
     }
     this.applySession(null);
-    this.isLoading.set(false);
+    this.isLoadingState.set(false);
   }
 
   readonly fetchAccessToken = async ({ forceRefreshToken }: { forceRefreshToken: boolean }): Promise<string | null> => {
@@ -287,7 +290,7 @@ export class BetterAuthService {
 
   private applySession(session: BetterAuthSessionData | null): void {
     this.sessionState.set(session);
-    this.isAuthenticated.set(Boolean(session?.session));
+    this.isAuthenticatedState.set(Boolean(session?.session));
 
     const nextSessionId = session?.session.id ?? null;
     if (this.lastSessionId !== nextSessionId) {
@@ -295,7 +298,7 @@ export class BetterAuthService {
       this.tokenGeneration += 1;
       this.cachedToken = undefined;
       this.pendingToken = null;
-      this.reauthVersion.update((version) => version + 1);
+      this.reauthVersionState.update((version) => version + 1);
     }
   }
 
@@ -313,6 +316,6 @@ export class BetterAuthService {
       return;
     }
     this.cachedToken = undefined;
-    this.reauthVersion.update((version) => version + 1);
+    this.reauthVersionState.update((version) => version + 1);
   }
 }

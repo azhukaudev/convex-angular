@@ -47,6 +47,14 @@ describe('BetterAuthService', () => {
     expect(service.error()).toBeUndefined();
   }));
 
+  it('exposes its state signals read-only', () => {
+    const service = setup('server');
+    for (const state of [service.session, service.isLoading, service.isAuthenticated, service.reauthVersion]) {
+      expect('set' in state).toBe(false);
+    }
+    expect('set' in service.convexAuth.isAuthenticated).toBe(false);
+  });
+
   it('treats 401/403 session responses as signed out, not errors', fakeAsync(() => {
     client.sessionResult = fail(401);
     const service = setup();
