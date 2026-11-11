@@ -42,7 +42,9 @@ const CONVEX_AUTH_STATE = new InjectionToken<ConvexAuthState>('CONVEX_AUTH_STATE
 // provideConvexAuth(). The number of values in the current injector tells us
 // how many times provideConvexAuth() was registered in that scope; the values
 // themselves are never inspected.
+// Stryker disable next-line StringLiteral: provided beside its only reader and never on an NG0200/NG0201 path.
 const CONVEX_AUTH_PROVIDER_REGISTRATION = new InjectionToken<unknown[]>('CONVEX_AUTH_PROVIDER_REGISTRATION');
+// Stryker disable next-line StringLiteral: its factory resolves only the marker and throws plain errors, so no DI path names it.
 const CONVEX_AUTH_PROVIDER_GUARD = new InjectionToken<true>('CONVEX_AUTH_PROVIDER_GUARD');
 
 function assertConvexAuthProviderConfiguration() {
@@ -108,6 +110,7 @@ function createAuthErrorState() {
       return currentProviderError.error;
     }
 
+    // Stryker disable next-line EqualityOperator: both sequences come from one counter, so they are never equal.
     return currentProviderError.sequence >= currentInternalError.sequence
       ? currentProviderError.error
       : currentInternalError.error;
@@ -144,6 +147,7 @@ function createConvexAuthState(): ConvexAuthState {
   const destroyRef = inject(DestroyRef);
 
   const backendAuthenticated = signal<boolean | null>(null);
+  // Stryker disable next-line BooleanLiteral: unread until the effect's setAuth branch has reset it to false.
   const backendRefreshing = signal<boolean>(false);
   const errors = createAuthErrorState();
 
@@ -262,7 +266,6 @@ function createConvexAuthState(): ConvexAuthState {
     if (upstreamLoading) {
       errors.clearInternalError();
       backendAuthenticated.set(null);
-      backendRefreshing.set(false);
       untracked(clearAuthIfNeeded);
       return;
     }
@@ -270,7 +273,6 @@ function createConvexAuthState(): ConvexAuthState {
     if (!upstreamAuthenticated) {
       errors.clearInternalError();
       backendAuthenticated.set(false);
-      backendRefreshing.set(false);
       untracked(clearAuthIfNeeded);
       return;
     }
@@ -350,6 +352,7 @@ export function provideConvexAuth(): EnvironmentProviders {
   return makeEnvironmentProviders([
     {
       provide: CONVEX_AUTH_PROVIDER_REGISTRATION,
+      // Stryker disable next-line BooleanLiteral: a registration marker; only the number of values is read, never a value.
       useValue: true,
       multi: true,
     },

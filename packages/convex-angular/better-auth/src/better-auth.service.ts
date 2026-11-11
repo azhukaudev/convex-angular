@@ -73,6 +73,7 @@ export class BetterAuthService {
 
   private readonly sessionState = signal<BetterAuthSessionData | null>(null);
   readonly session = this.sessionState.asReadonly();
+  // Stryker disable next-line BooleanLiteral: the constructor overwrites it before any read.
   private readonly isLoadingState = signal(true);
   readonly isLoading = this.isLoadingState.asReadonly();
   private readonly isAuthenticatedState = signal(false);
@@ -98,6 +99,7 @@ export class BetterAuthService {
     if (!token) {
       return session.error;
     }
+    // Stryker disable next-line EqualityOperator: both sequences come from one counter, so they are never equal.
     return session.sequence >= token.sequence ? session.error : token.error;
   });
 
@@ -179,9 +181,8 @@ export class BetterAuthService {
     // Bump the epoch first so a refreshSession() already in flight discards
     // its result instead of reverting this sign-out when it resolves.
     this.sessionEpoch += 1;
-    if (!this.isServer) {
-      this.client?.updateSession?.();
-    }
+    // No platform check: `client` is still null on the server, where nothing reaches getClient().
+    this.client?.updateSession?.();
     this.applySession(null);
     this.isLoadingState.set(false);
   }
@@ -295,6 +296,7 @@ export class BetterAuthService {
     const nextSessionId = session?.session.id ?? null;
     if (this.lastSessionId !== nextSessionId) {
       this.lastSessionId = nextSessionId;
+      // Stryker disable next-line AssignmentOperator: only compared with a captured copy; counting down never repeats a value either.
       this.tokenGeneration += 1;
       this.cachedToken = undefined;
       this.pendingToken = null;

@@ -460,6 +460,7 @@ export function injectPaginatedQuery<Query extends PaginatedQueryReference>(
     };
 
     const reset = () => {
+      // Stryker disable next-line ArithmeticOperator: the version only has to differ from earlier ones; counting down never repeats either.
       resetVersion.update((v) => v + 1);
     };
 

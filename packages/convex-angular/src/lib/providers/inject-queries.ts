@@ -323,6 +323,7 @@ export function injectQueries<Definitions extends QueriesDefinition>(
     const isLoading = computed(() => Object.values(statuses()).some((status) => status === 'pending'));
 
     const refetch = () => {
+      // Stryker disable next-line ArithmeticOperator: the version only has to differ from earlier ones; counting down never repeats either.
       refetchVersion.update((version) => version + 1);
     };
 

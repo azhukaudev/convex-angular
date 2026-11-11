@@ -374,6 +374,7 @@ export function injectQuery<Query extends QueryReference>(
 
     // Refetch function
     const refetch = () => {
+      // Stryker disable next-line ArithmeticOperator: the version only has to differ from earlier ones; counting down never repeats either.
       refetchVersion.update((v) => v + 1);
     };
 

@@ -216,10 +216,13 @@ describe('Auth Guards', () => {
     it('redirects authenticated users to / by default', fakeAsync(() => {
       provider.signIn();
       const router = setupGuardTestBed(routes);
+      // '' and '/' parse to the same tree only under the default UrlSerializer; the documented default is '/'.
+      const parseUrl = jest.spyOn(router, 'parseUrl');
 
       authenticateAndNavigate(router, '/login');
 
       expect(router.url).toBe('/');
+      expect(parseUrl).toHaveBeenCalledWith('/');
     }));
 
     it('redirects authenticated users while a rejected token is being refreshed', fakeAsync(() => {

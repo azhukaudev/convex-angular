@@ -189,6 +189,24 @@ describe('injectAuth', () => {
     );
   });
 
+  it('names the auth state token when the auth provider injects it while being created', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideConvexTesting(convex),
+        {
+          provide: CONVEX_AUTH,
+          useFactory: () => {
+            injectAuth();
+            return provider;
+          },
+        },
+        provideConvexAuth(),
+      ],
+    });
+
+    expect(() => TestBed.inject(EnvironmentInjector)).toThrow(/NG0200.*CONVEX_AUTH_STATE/);
+  });
+
   it('is loading while the auth provider is loading', fakeAsync(() => {
     provider.setLoading(true);
     configureTestingModule();

@@ -44,9 +44,11 @@ export const CONVEX = new InjectionToken<ConvexClient>('CONVEX');
 // provideConvex(...). The number of values in the current injector tells us
 // how many times provideConvex(...) was registered in that scope; the values
 // themselves are never inspected.
+// Stryker disable next-line StringLiteral: provided beside its only reader and never on an NG0200/NG0201 path.
 const CONVEX_PROVIDER_REGISTRATION = new InjectionToken<unknown[]>('CONVEX_PROVIDER_REGISTRATION');
 
 // Internal token whose factory performs provider placement validation.
+// Stryker disable next-line StringLiteral: its factory resolves only the marker and throws plain errors, so no DI path names it.
 const CONVEX_PROVIDER_GUARD = new InjectionToken<true>('CONVEX_PROVIDER_GUARD');
 
 function assertConvexProviderConfiguration() {
@@ -133,6 +135,7 @@ export function provideConvex(convexUrl: string, options?: ProvideConvexOptions)
   return makeEnvironmentProviders([
     // Registration marker for the current injector scope (multi so we can
     // detect accidental duplicates in the same providers array).
+    // Stryker disable next-line BooleanLiteral: a registration marker; only the number of values is read, never a value.
     { provide: CONVEX_PROVIDER_REGISTRATION, useValue: true, multi: true },
     // Guard provider executes shared validation logic.
     {
