@@ -95,18 +95,15 @@ A transferred entry is stored under:
 cva:<queryName>:<argsKey>
 ```
 
-where `argsKey` is `JSON.stringify(convexToJson(args))`.
+where `argsKey` is `JSON.stringify(convexToJson(args))`. `convexToJson` sorts object keys and drops fields set to
+`undefined`, so property order does not matter: `{ category: 'work', completed: false }` and
+`{ completed: false, category: 'work' }` produce the same key. Only the values matter.
 
-<Aside type="caution" title="The args key is property-order sensitive">
-  `JSON.stringify` serializes properties in insertion order, so
-  `{ category: 'work', completed: false }` and `{ completed: false, category: 'work' }` produce
-  **different keys** for identical arguments.
-
-If a route resolver builds the args one way during the server render and the component builds them
-the other way in the browser, the lookup misses. Nothing errors and nothing warns — the query
-silently falls back to a normal pending load, and you get exactly the loading flash SSR was
-supposed to remove.
-
+<Aside type="caution" title="A key mismatch fails silently">
+  If a route resolver builds the args with different values during the server render than the component builds in the
+  browser — a field with a value on one side and missing on the other, `1` on one side and `1n` on the other — the
+  lookup misses. Nothing errors and nothing warns — the query silently falls back to a normal pending load, and you get
+  exactly the loading flash SSR was supposed to remove.
 </Aside>
 
 Build query arguments the same way everywhere. The most reliable form is a single exported builder
@@ -114,7 +111,7 @@ used by the resolver and the component alike:
 
 <Code code={hydrationArgs} lang="ts" title="todo-search.ts" />
 
-The same discipline applies to values, not just order: an argument derived from `Date.now()`, a
+The same discipline applies to values computed at call time: an argument derived from `Date.now()`, a
 random value, or a locale that differs between server and browser produces a different key and
 misses the seed.
 
@@ -126,7 +123,7 @@ If a query hydrates with a loading flash, check in this order:
    entry per transferred query. No entry means the fetch failed, was skipped, `fetchOnServer` was
    `false`, or the transfer was suppressed by `transferAuthenticatedResults: false`.
 2. Does the key match character for character? Compare the `cva:<queryName>:<argsKey>` in the HTML
-   against the args your component builds — property order included.
+   against the args your component builds. Property order is irrelevant; every value counts.
 3. Is the query created during bootstrap? A component behind a lazy route or a deferred block may
    only mount after the window has closed.
 4. For paginated queries, does `initialNumItems` match the value used during the server render?

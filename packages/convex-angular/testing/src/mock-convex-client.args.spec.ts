@@ -89,3 +89,63 @@ describe('MockConvexClient argument validation', () => {
     expect(disabled.refusedSubscriptions).toHaveLength(2);
   });
 });
+
+describe('MockConvexClient warm-cache keys', () => {
+  let convex: MockConvexClient;
+
+  beforeEach(() => {
+    convex = new MockConvexClient();
+  });
+
+  function seedEach(seeds: ReadonlyArray<readonly [Record<string, unknown>, string]>): void {
+    for (const [args, marker] of seeds) {
+      convex.seedQueryResult('todos:list', args, marker);
+    }
+  }
+
+  it('finds a seed regardless of property order, at every depth', () => {
+    convex.seedQueryResult('todos:list', { c: 3, b: { z: 1, y: 2 }, a: [{ q: 1, p: 2 }] }, 'seeded');
+
+    expect(convex.client.localQueryResult('todos:list', { a: [{ p: 2, q: 1 }], b: { y: 2, z: 1 }, c: 3 })).toBe(
+      'seeded',
+    );
+  });
+
+  it('treats a field set to undefined as absent, like the real client', () => {
+    convex.seedQueryResult('todos:list', { status: undefined }, 'no-filter');
+
+    expect(convex.client.localQueryResult('todos:list', {})).toBe('no-filter');
+    expect(convex.client.localQueryResult('todos:list', { status: undefined, page: undefined })).toBe('no-filter');
+  });
+
+  it('finds a {} seed for a lookup without args and records the lookup as made', () => {
+    convex.seedQueryResult('todos:list', {}, 'seeded');
+
+    expect(convex.client.localQueryResult('todos:list')).toBe('seeded');
+    expect(convex.localQueryResultCalls).toEqual([{ queryName: 'todos:list', args: undefined }]);
+  });
+
+  it('keys bigint, byte and special-float args, and keeps them apart from look-alikes', () => {
+    const seeds = [
+      [{ n: BigInt(1) }, 'bigint'],
+      [{ n: 1 }, 'number'],
+      [{ bytes: new ArrayBuffer(1) }, 'one-byte'],
+      [{ bytes: new ArrayBuffer(2) }, 'two-bytes'],
+      [{ value: Number.NaN }, 'nan'],
+      [{ value: null }, 'null'],
+      [{ value: -0 }, 'negative-zero'],
+      [{ value: 0 }, 'zero'],
+    ] as const;
+    seedEach(seeds);
+
+    for (const [args, marker] of seeds) {
+      expect(convex.client.localQueryResult('todos:list', args)).toBe(marker);
+    }
+  });
+
+  it('rejects seeds whose args are not Convex values, as the real lookup does', () => {
+    expect(() => convex.seedQueryResult('todos:list', { since: new Date(0) }, 'x')).toThrow(Error);
+    expect(() => convex.seedQueryError('todos:list', { ids: new Set(['a']) }, new Error('boom'))).toThrow(Error);
+    expect(() => convex.client.localQueryResult('todos:list', { since: new Date(0) })).toThrow(Error);
+  });
+});

@@ -10,10 +10,10 @@ const searchTodos = {} as FunctionReference<'query', 'public', { category: strin
 /**
  * Build the args in exactly one place.
  *
- * The TransferState key is `JSON.stringify(convexToJson(args))`, so
- * `{ category, completed }` and `{ completed, category }` are different keys
- * even though they are the same arguments. A single builder makes the property
- * order identical everywhere and keeps hydration matching.
+ * The TransferState key is `JSON.stringify(convexToJson(args))`. Property
+ * order does not matter (`convexToJson` sorts keys), but every value does. A
+ * single builder keeps the resolver and the component passing the same values
+ * and keeps hydration matching.
  */
 export function searchTodosArgs(category: string): { category: string; completed: boolean } {
   return { category, completed: false };

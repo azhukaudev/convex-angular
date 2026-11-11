@@ -37,9 +37,10 @@ Two consequences follow directly:
   every effect run serializes to the same string as the previous one, so the live subscription is
   kept open. Structural identity is what matters, not reference identity — you never need
   `computed()` memoization or a custom equality function to avoid churn.
-- **Key order matters, because `JSON.stringify` preserves it.** `{ a: 1, b: 2 }` and `{ b: 2, a: 1 }`
-  serialize differently and therefore count as different subscriptions. Build args objects with a
-  stable key order; literal object expressions in source naturally have one.
+- **Property order does not matter, but values do.** `convexToJson` sorts object keys and drops fields
+  set to `undefined`, so `{ a: 1, b: 2 }` and `{ b: 2, a: 1 }` share a key, as do `{ a: 1, b: undefined }`
+  and `{ a: 1 }`. A real value difference — `1` versus `1n`, a field added with a value — is a new key
+  and a new subscription.
 
 Arguments are encoded with `convexToJson` before stringifying, so Convex value types (`Id`, `Bytes`,
 `Int64`, …) round-trip to a stable representation rather than to `{}`.

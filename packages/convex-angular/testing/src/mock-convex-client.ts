@@ -232,19 +232,13 @@ function assertConvexValueArgs(args: Record<string, unknown>): void {
   convexToJson(args as Record<string, Value>);
 }
 
-// Key-order-independent serialization so seeded results are found regardless
-// of the property order the component happens to build its args with.
-function stableStringify(value: unknown): string {
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(',')}]`;
-  }
-  if (value !== null && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([key, val]) => `${JSON.stringify(key)}:${stableStringify(val)}`);
-    return `{${entries.join(',')}}`;
-  }
-  return JSON.stringify(value);
+/**
+ * The real client's warm-cache key: missing args mean `{}` (its `parseArgs`), and `convexToJson` sorts object keys,
+ * skips fields set to `undefined` and encodes bigints, bytes and special floats. Throws, like the real lookup, for
+ * args that are not Convex values.
+ */
+function warmCacheKey(queryName: string, args: Record<string, unknown> | undefined): string {
+  return `${queryName}:${JSON.stringify(convexToJson((args ?? {}) as Record<string, Value>))}`;
 }
 
 const DEFAULT_CONNECTION_STATE: ConnectionState = {
@@ -319,7 +313,7 @@ export class MockConvexClient {
   private readonly lowLevelClient = {
     localQueryResult: (queryName: string, args?: Record<string, unknown>) => {
       this.localQueryResultCalls.push({ queryName, args });
-      const entry = this.warmCache.get(`${queryName}:${stableStringify(args)}`);
+      const entry = this.warmCache.get(warmCacheKey(queryName, args));
       if (entry === undefined) {
         return undefined;
       }
@@ -450,12 +444,14 @@ export class MockConvexClient {
 
   /**
    * Pre-seed the warm local cache consulted by injectQuery/injectQueries
-   * before their subscription delivers.
+   * before their subscription delivers. Args are matched the way the real
+   * client matches them (`convexToJson`): property order and fields set to
+   * `undefined` do not matter. Throws for args that are not Convex values.
    */
   seedQueryResult(queryName: string, args: Record<string, unknown>, result: unknown): void {
     // Public signature stays `unknown` (fixtures are often interface-typed);
     // the real client's cache only ever holds Convex values.
-    this.warmCache.set(`${queryName}:${stableStringify(args)}`, { ok: result as Value });
+    this.warmCache.set(warmCacheKey(queryName, args), { ok: result as Value });
   }
 
   /**
@@ -465,7 +461,7 @@ export class MockConvexClient {
    * this error instead of returning a value, and `query()` rejects with it.
    */
   seedQueryError(queryName: string, args: Record<string, unknown>, error: Error): void {
-    this.warmCache.set(`${queryName}:${stableStringify(args)}`, { err: error });
+    this.warmCache.set(warmCacheKey(queryName, args), { err: error });
   }
 
   /** Push a new connection state to injectConvexConnectionState consumers. */

@@ -386,13 +386,12 @@ says so rather than pretending.
   registers none of it. See [Authentication](/testing/driving-state/#authentication).
 </Aside>
 
-<Aside type="caution">
-  **The warm-cache key is order-independent; the real TransferState key is not.**
-  `seedQueryResult()` stores under a stable, key-sorted serialization, so `{ a: 1, b: 2 }` and
-  `{ b: 2, a: 1 }` resolve to the same entry. The library's hydration key is
-  `JSON.stringify(convexToJson(args))`, which preserves property insertion order and therefore
-  distinguishes those two arg objects. A hydration bug caused by args being built in a different key
-  order on the server than in the browser will not reproduce through the mock.
+<Aside type="note">
+  The warm cache is keyed the way the real client keys it: the query name plus
+  `JSON.stringify(convexToJson(args))`. `convexToJson` sorts object keys and skips fields set to `undefined`, so
+  `{ a: 1, b: 2 }`, `{ b: 2, a: 1 }` and `{ a: 1, b: 2, c: undefined }` find the same entry, while `BigInt(1)` and
+  `1`, or two different byte buffers, stay apart. `seedQueryResult()` and `seedQueryError()` throw for args that are
+  not Convex values, as the real client's lookup does.
 </Aside>
 
 <Aside type="caution">

@@ -336,8 +336,8 @@ Two things to get right.
 **The name must be the resolved function name**, the `"module:export"` string that
 `getFunctionName(query)` returns for the function reference the component passes — `'todos:list'`
 for `api.todos.list`, not the object itself. The args must match what the component's argument
-function produces, though the mock's key is order-independent, so `{ a: 1, b: 2 }` and `{ b: 2, a: 1 }`
-find the same entry.
+function produces, compared the way the real client compares them: property order and fields set to `undefined`
+do not matter, so `{ a: 1, b: 2 }` and `{ b: 2, a: 1, c: undefined }` find the same entry.
 
 **A cache hit is a prefill, not a settlement.** The helper shows the seeded data immediately and
 stays `'pending'`. In production the real client replays a cached value to a new listener one
