@@ -24,10 +24,19 @@ test('a spec mutates the source it tests, including a dotted spec name', () => {
   assert.deepEqual(decide([`${LIB}src/lib/providers/inject-query.ssr.spec.ts`]), { library: true, mutate: QUERY });
 });
 
-// Depends on `src/lib/internal/convex-internals.ts` NOT existing: only `convex-client-internals.ts`
-// does. If a source of that name is ever added, pick another spec that has no same-named source.
 test('a spec with no same-named source runs everything', () => {
-  assert.equal(decide([`${LIB}src/lib/internal/convex-internals.spec.ts`]).mutate, 'full');
+  const tree = new Set([`${LIB}src/lib/internal/convex-client-internals.ts`]);
+  assert.equal(decide([`${LIB}src/lib/internal/convex-internals.spec.ts`], (file) => tree.has(file)).mutate, 'full');
+});
+
+test('a spec mutates its source only when that source exists', () => {
+  const spec = `${LIB}src/lib/providers/inject-thing.spec.ts`;
+  const source = `${LIB}src/lib/providers/inject-thing.ts`;
+  assert.deepEqual(
+    decide([spec], (file) => file === source),
+    { library: true, mutate: source },
+  );
+  assert.equal(decide([spec], () => false).mutate, 'full');
 });
 
 test('barrels and files Stryker excludes are not mutated', () => {

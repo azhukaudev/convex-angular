@@ -60,18 +60,19 @@ const LIBRARY_AFFECTING_FILES = new Set([...FULL_RUN_FILES, '.github/workflows/c
 
 // The source a spec tests: `better-auth.service.spec.ts` → `better-auth.service.ts`, and
 // `inject-query.ssr.spec.ts` → `inject-query.ts` (the longest existing name wins).
-function sourceOfSpec(file) {
+function sourceOfSpec(file, exists) {
   const parts = basename(file, '.spec.ts').split('.');
   for (let length = parts.length; length > 0; length--) {
     const candidate = join(dirname(file), `${parts.slice(0, length).join('.')}.ts`);
-    if (existsSync(candidate)) {
+    if (exists(candidate)) {
       return candidate;
     }
   }
   return join(dirname(file), `${parts.join('.')}.ts`);
 }
 
-export function decide(changed) {
+// `exists` is injectable so the spec can describe a tree instead of depending on the real one.
+export function decide(changed, exists = existsSync) {
   const library = changed.some((file) => file.startsWith(LIBRARY) || LIBRARY_AFFECTING_FILES.has(file));
   const toMutate = new Set();
 
@@ -82,8 +83,8 @@ export function decide(changed) {
     if (isMutated(file)) {
       toMutate.add(file);
     } else if (file.endsWith('.spec.ts') && inMutateScope(file)) {
-      const source = sourceOfSpec(file);
-      if (isMutated(source) && existsSync(source)) {
+      const source = sourceOfSpec(file, exists);
+      if (isMutated(source) && exists(source)) {
         toMutate.add(source);
       } else if (basename(source) !== 'index.ts') {
         // A spec without a same-named source file can exercise anything.
@@ -93,7 +94,7 @@ export function decide(changed) {
   }
 
   // A deleted source file has nothing left to mutate.
-  const mutate = [...toMutate].filter((file) => existsSync(file)).sort();
+  const mutate = [...toMutate].filter((file) => exists(file)).sort();
   return { library, mutate: mutate.length ? mutate.join(',') : 'none' };
 }
 
