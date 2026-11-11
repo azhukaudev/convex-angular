@@ -178,6 +178,9 @@ Behavior worth knowing:
   `options` is therefore always `undefined`. The mock records the object but never runs an optimistic
   update — there is no local store for one to write into. When `disabled` is true, both reject with
   `Error('ConvexClient is disabled')` instead of capturing the call, matching the real client.
+  Otherwise both validate `args` the way the subscription methods do (missing args count as `{}`, as in the real
+  client) and, for a value that is not a Convex value, reject with the real client's error and capture nothing —
+  a rejection rather than a throw, because the real methods are `async`.
 - `query()` is the one-shot read used by code that injects the client directly, and it follows the
   real client down both paths. Every call records the lookup on `localQueryResultCalls`. On a warm-cache
   **hit** (seeded by `seedQueryResult()`) it resolves immediately and opens no subscription. On a

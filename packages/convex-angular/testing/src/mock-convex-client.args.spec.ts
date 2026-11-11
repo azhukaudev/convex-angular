@@ -1,7 +1,15 @@
-import { type QueryReference } from 'convex-angular';
+import { Component } from '@angular/core';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import {
+  injectAction,
+  injectMutation,
+  type ActionReference,
+  type MutationReference,
+  type QueryReference,
+} from 'convex-angular';
 import { FunctionReference } from 'convex/server';
 
-import { MockConvexClient } from './mock-convex-client';
+import { MockConvexClient, provideConvexTesting } from './mock-convex-client';
 
 jest.mock('convex/server', () => ({
   ...jest.requireActual<typeof import('convex/server')>('convex/server'),
@@ -15,12 +23,27 @@ const mockQuery = (() => {}) as unknown as FunctionReference<
   Array<{ _id: string; title: string }>
 > as QueryReference;
 
+const mockMutation = (() => {}) as unknown as FunctionReference<
+  'mutation',
+  'public',
+  { since: number },
+  string
+> as MutationReference;
+const mockAction = (() => {}) as unknown as FunctionReference<
+  'action',
+  'public',
+  { since: number },
+  string
+> as ActionReference;
+
 describe('MockConvexClient argument validation', () => {
   let convex: MockConvexClient;
 
   beforeEach(() => {
     convex = new MockConvexClient();
   });
+
+  afterEach(() => TestBed.resetTestingModule());
 
   class Owner {
     readonly id = 'u1';
@@ -88,6 +111,59 @@ describe('MockConvexClient argument validation', () => {
     ).not.toThrow();
     expect(disabled.refusedSubscriptions).toHaveLength(2);
   });
+
+  it.each(unsupportedArgs)('mutation() rejects for %s and records no call', async (_label, args) => {
+    await expect(convex.mutation(mockMutation, args)).rejects.toThrow(Error);
+    expect(convex.mutationCalls).toHaveLength(0);
+  });
+
+  it.each(unsupportedArgs)('action() rejects for %s and records no call', async (_label, args) => {
+    await expect(convex.action(mockAction, args)).rejects.toThrow(Error);
+    expect(convex.actionCalls).toHaveLength(0);
+  });
+
+  it('captures calls with missing args, which the real client treats as {}', () => {
+    void convex.mutation(mockMutation, undefined as never);
+    void convex.action(mockAction, undefined as never);
+
+    expect(convex.mutationCalls).toHaveLength(1);
+    expect(convex.actionCalls).toHaveLength(1);
+  });
+
+  it('rejects with the disabled error before looking at the args, like the real client', async () => {
+    const disabled = new MockConvexClient({ disabled: true });
+
+    await expect(disabled.mutation(mockMutation, { since: new Date(0) })).rejects.toThrow(/^ConvexClient is disabled$/);
+    await expect(disabled.action(mockAction, { since: new Date(0) })).rejects.toThrow(/^ConvexClient is disabled$/);
+  });
+
+  it('drives injectMutation() and injectAction() to error for args the real client rejects', fakeAsync(() => {
+    TestBed.configureTestingModule({ providers: [provideConvexTesting(convex)] });
+
+    @Component({ template: '', standalone: true })
+    class TestComponent {
+      readonly save = injectMutation(mockMutation);
+      readonly sync = injectAction(mockAction);
+    }
+
+    const fixture = TestBed.createComponent(TestComponent);
+    fixture.detectChanges();
+    const { save, sync } = fixture.componentInstance;
+
+    let mutationRejection: unknown;
+    let actionRejection: unknown;
+    save.mutate({ since: new Date(0) } as never).catch((error: unknown) => (mutationRejection = error));
+    sync.run({ since: new Date(0) } as never).catch((error: unknown) => (actionRejection = error));
+    tick();
+
+    expect(save.status()).toBe('error');
+    expect(save.error()).toBe(mutationRejection);
+    expect(sync.status()).toBe('error');
+    expect(sync.error()).toBe(actionRejection);
+    expect(mutationRejection).toBeInstanceOf(Error);
+    expect(convex.mutationCalls).toHaveLength(0);
+    expect(convex.actionCalls).toHaveLength(0);
+  }));
 });
 
 describe('MockConvexClient warm-cache keys', () => {

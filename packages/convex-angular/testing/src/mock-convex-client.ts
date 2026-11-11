@@ -224,8 +224,9 @@ export interface MockConvexClientOptions {
 
 /**
  * Throws what the real client throws for args that are not Convex values (a `Set`, a `Map`, a `Date`, a class
- * instance, an `undefined` inside an array, a `$`-prefixed field name, …). Both real subscribe paths serialize
- * the args with `convexToJson` before registering anything, so nothing is recorded when this throws.
+ * instance, an `undefined` inside an array, a `$`-prefixed field name, …). The real subscribe, mutation and action
+ * paths all serialize the args with `convexToJson` before registering or sending anything, so nothing is recorded
+ * when this throws.
  */
 function assertConvexValueArgs(args: Record<string, unknown>): void {
   // The public signature stays `unknown`-typed on purpose (see `seedQueryResult`); the check is the point.
@@ -557,17 +558,11 @@ export class MockConvexClient {
   }
 
   mutation(fn: unknown, args: Record<string, unknown>, options?: Record<string, unknown>): Promise<unknown> {
-    if (this.disabled) {
-      return Promise.reject(new Error('ConvexClient is disabled'));
-    }
     return this.capture(this.mutationCalls, fn, args, options);
   }
 
   // Mirrors ConvexClient.action, which takes no options object.
   action(fn: unknown, args: Record<string, unknown>): Promise<unknown> {
-    if (this.disabled) {
-      return Promise.reject(new Error('ConvexClient is disabled'));
-    }
     return this.capture(this.actionCalls, fn, args, undefined);
   }
 
@@ -645,12 +640,23 @@ export class MockConvexClient {
     return Promise.resolve();
   }
 
+  // Shared by mutation() and action(), which the real client implements as `async`: the disabled check comes first,
+  // then the args are serialized (missing args mean `{}`), and either failure is a rejection, never a throw.
   private capture(
     calls: MockCallableCall[],
     fn: unknown,
     args: Record<string, unknown>,
     options: Record<string, unknown> | undefined,
   ): Promise<unknown> {
+    if (this.disabled) {
+      return Promise.reject(new Error('ConvexClient is disabled'));
+    }
+    try {
+      assertConvexValueArgs(args ?? {});
+    } catch (err) {
+      return Promise.reject(err);
+    }
+
     let resolve!: (result: unknown) => void;
     let reject!: (err: unknown) => void;
     const promise = new Promise<unknown>((res, rej) => {
