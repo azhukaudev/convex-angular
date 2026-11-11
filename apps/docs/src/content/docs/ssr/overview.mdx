@@ -93,14 +93,15 @@ key-matching footgun are covered in [Hydration semantics](/ssr/hydration-semanti
 | `injectPaginatedQuery()`              | Fetches the first page over HTTP with `paginationOpts: { numItems: initialNumItems, cursor: null }`.      | Seeds the first page; `loadMore()` stays inert until a real emission arrives.                            |
 | `convexQueryResolver()`               | Fetches over HTTP through the same loader; a failure resolves `undefined` instead of blocking navigation. | Subscribes live and keeps the subscription warm for the routed component.                                |
 | `injectPrewarmQuery()`                | `prewarm()` is a no-op and resolves `false` — a background subscription would only delay SSR stability.   | Normal prewarming.                                                                                       |
-| `injectMutation()` / `injectAction()` | Throw `ConvexClient is disabled` if invoked.                                                              | Normal.                                                                                                  |
+| `injectMutation()` / `injectAction()` | `mutate()` / `run()` reject with `ConvexClient is disabled` (also set on `error()`).                      | Normal.                                                                                                  |
 | `injectConvexConnectionState()`       | A static disconnected snapshot that never updates. See [Connection state](/reference/connection-state/).  | Live connection state.                                                                                   |
 | `injectAuth()`                        | Nothing is pushed to the (absent) socket; the disabled client is never touched.                           | Normal auth wiring.                                                                                      |
 
-<Aside type="caution" title="Mutations and actions throw during server rendering">
-  A disabled `ConvexClient` throws `ConvexClient is disabled` for mutations, actions, and one-shot client queries. That
-  is intentional: mutations and actions are user interactions and must not run as a side effect of rendering a page.
-  Keep them behind event handlers, or guard them with `isPlatformBrowser(inject(PLATFORM_ID))`.
+<Aside type="caution" title="Mutations and actions fail during server rendering">
+  A disabled `ConvexClient` rejects mutations, actions, and one-shot client queries with `ConvexClient is disabled` —
+  the returned promise rejects; nothing throws synchronously. That is intentional: mutations and actions are user
+  interactions and must not run as a side effect of rendering a page. Keep them behind event handlers, or guard them
+  with `isPlatformBrowser(inject(PLATFORM_ID))`.
 </Aside>
 
 ## When a fetch fails

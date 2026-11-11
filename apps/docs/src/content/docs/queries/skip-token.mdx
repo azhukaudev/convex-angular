@@ -53,19 +53,7 @@ The derived signals follow: `status()` is `'skipped'`, `isSuccess()` is `false`,
 
 ## Handling the skipped state
 
-`'skipped'` is a first-class member of `QueryStatus`, so a `@switch` covers it exhaustively:
-
-```html
-@switch (todo.status()) { @case ('skipped') {
-<p>Select a todo.</p>
-} @case ('pending') {
-<p>Loading…</p>
-} @case ('error') {
-<p role="alert">{{ todo.error()?.message }}</p>
-} @case ('success') {
-<p>{{ todo.data()?.title }}</p>
-} }
-```
+`'skipped'` is a first-class member of `QueryStatus`, so a `@switch` covers it exhaustively — the example above branches on it alongside `'pending'`, `'error'`, and `'success'`.
 
 ## A skip round trip bypasses args dedup
 

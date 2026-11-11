@@ -213,19 +213,22 @@ see [MockConvexClient](/testing/mock-convex-client/). Non-paginated helpers
 ConvexClient is disabled
 ```
 
-**When it happens.** `MockConvexClient` was constructed with
-`{ disabled: true }`, and the code under test reached its `client` getter or its
-`connectionState()` method. This deliberately mirrors the real `ConvexClient`,
-whose low-level accessors throw when the client is disabled — which is exactly
-the state `provideConvex(...)` puts it in during server-side rendering, where no
-WebSocket is opened.
+**When it happens.** The Convex client is disabled. In an application that means a server render:
+`provideConvex(...)` constructs the real `ConvexClient` with `disabled: true` on the server, so no
+WebSocket is opened (see [Server-side rendering](/ssr/overview/)). There, `convex.mutation()`,
+`convex.action()`, and `convex.query()` return a promise that rejects with this error — so do
+`injectMutation().mutate()` and `injectAction().run()`, which also put it on their `error()` — and
+the `convex.client` getter and `convex.connectionState()` throw it synchronously. In a test,
+`MockConvexClient` constructed with `{ disabled: true }` mirrors that state: its `mutation()`,
+`action()`, and `query()` reject, and its `client` getter and `connectionState()` throw.
 
-**How to fix.** If you are testing the server-side-rendering path, the throw is
-the behavior under test: assert that your code handles it, the way the library's
-own helpers do (`injectConvexConnectionState()` returns a static disconnected
-state, and `injectAuth()` skips token wiring, when the client is disabled). If
-you are not testing that path, construct the mock without options —
-`new MockConvexClient()` — so it behaves like a connected client. See
+**How to fix.** In application code, keep mutations, actions, and one-shot `convex.query()` calls in
+event handlers, or guard them with `isPlatformBrowser(inject(PLATFORM_ID))` or `convex.disabled`, so
+they never run during a server render. If you are testing the server-side-rendering path, the error
+is the behavior under test: assert that your code handles it, the way the library's own helpers do
+(`injectConvexConnectionState()` returns a static disconnected state, and `injectAuth()` skips token
+wiring, when the client is disabled). If you are not testing that path, construct the mock without
+options — `new MockConvexClient()` — so it behaves like a connected client. See
 [MockConvexClient](/testing/mock-convex-client/) and [hydration
 semantics](/ssr/hydration-semantics/).
 

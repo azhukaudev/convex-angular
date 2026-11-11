@@ -45,8 +45,9 @@ export class TodoListComponent {
   // tears down the old subscription and opens a new one. `data()` keeps the
   // previous page until the new one arrives.
   readonly todos = injectQuery(api.todos.list, () => ({ count: this.count() }), {
-    // Fires for real emissions only — never for a warm-cache seed, data
-    // transferred from a server render, or `placeholderData`.
+    // Fires for every value the client emits — including the replay of a
+    // warm-cache value one macrotask after subscribe — but never for data
+    // transferred from a server render or `placeholderData`.
     onSuccess: (todos) => console.log('loaded', todos.length, 'todos'),
     onError: (error) => {
       // Errors thrown by the Convex function with `ConvexError` carry a

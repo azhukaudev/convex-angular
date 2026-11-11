@@ -37,9 +37,11 @@ from an injection context or pass an explicit `injectRef`.
 | `onError`   | `(err: Error) => void`                       | —       | Called after `error` is written, for the latest call only. Receives the normalized `Error`.                                                              |
 
 <Aside type="caution" title="No optimisticUpdate">
-  `ActionOptions` deliberately omits `optimisticUpdate`. Actions do not write to the database transactionally, so there
-  is nothing for Convex to overlay and roll back. Put the optimistic update on a mutation the action calls instead — see
-  [Optimistic updates](/mutations/optimistic-updates/).
+  `ActionOptions` deliberately omits `optimisticUpdate`. The Convex client applies an optimistic update to a mutation it
+  sends itself; a mutation that an action calls with `ctx.runMutation` runs on the server, out of its reach. For
+  optimistic feedback, call a mutation from the client with an `optimisticUpdate`, have that mutation write the change
+  and schedule the action with `ctx.scheduler.runAfter(0, …)`, or render a pending state from the action's
+  `isLoading()`. See [Optimistic updates](/mutations/optimistic-updates/).
 </Aside>
 
 ## Result

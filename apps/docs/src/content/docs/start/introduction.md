@@ -27,8 +27,9 @@ ties the subscriptions to Angular's injector lifecycle.
 
 - Signal-first query, mutation, action, pagination, auth, and connection state.
 - Argument and return types fully inferred from your generated Convex function references.
-- Reactive arguments: any Signal read inside a query's argument function resubscribes the query when
-  it changes, and `skipToken` skips the subscription entirely without losing type safety.
+- Reactive arguments: a query's argument function re-runs whenever a Signal it reads changes, and the
+  query resubscribes only when the resulting arguments differ. `skipToken` skips the subscription
+  entirely without losing type safety.
 - Automatic cleanup — every helper registers its teardown on the owning scope's `DestroyRef`, and
   guards stale asynchronous work so a slow response can never overwrite a newer one.
 - Angular SSR and hydration through `TransferState`: queries fetch over HTTP during the server render

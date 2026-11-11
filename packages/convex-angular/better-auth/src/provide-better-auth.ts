@@ -69,7 +69,7 @@ export interface InjectBetterAuthOptions {
  * };
  * ```
  *
- * @param clientFactory - Returns your Better Auth client; invoked lazily, browser-only
+ * @param clientFactory - Returns your Better Auth client; invoked once in the browser at bootstrap, never on the server
  * @returns EnvironmentProviders to add to your root application providers
  *
  * @public

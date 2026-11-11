@@ -1,4 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute, type ParamMap } from '@angular/router';
 import { convexQueryResolver, injectQuery } from 'convex-angular';
 import { FunctionReference } from 'convex/server';
 
@@ -19,8 +21,13 @@ export function searchTodosArgs(category: string): { category: string; completed
   return { category, completed: false };
 }
 
+/** The route's `:category`, read the same way by the resolver and the component. */
+function categoryFrom(paramMap: ParamMap): string {
+  return paramMap.get('category') ?? 'work';
+}
+
 export const searchTodosResolver = convexQueryResolver(searchTodos, (route) =>
-  searchTodosArgs(route.paramMap.get('category') ?? 'work'),
+  searchTodosArgs(categoryFrom(route.paramMap)),
 );
 
 @Component({
@@ -32,6 +39,10 @@ export const searchTodosResolver = convexQueryResolver(searchTodos, (route) =>
   `,
 })
 export class TodoSearchComponent {
-  // Same builder, same property order, same TransferState key.
-  readonly todos = injectQuery(searchTodos, () => searchTodosArgs('work'));
+  // A signal, not `route.snapshot`: the router reuses this component when only
+  // `:category` changes, and the args must follow it.
+  private readonly params = toSignal(inject(ActivatedRoute).paramMap, { requireSync: true });
+
+  // Same input, same builder, same values, same TransferState key.
+  readonly todos = injectQuery(searchTodos, () => searchTodosArgs(categoryFrom(this.params())));
 }

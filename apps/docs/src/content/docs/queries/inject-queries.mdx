@@ -32,7 +32,7 @@ interface QueryRequest<Query extends QueryReference = QueryReference> {
   args: FunctionArgs<Query>;
 }
 
-type QueriesDefinition = Record<string, QueryRequest<any> | SkipToken>;
+type QueriesDefinition = Record<string, QueryRequest | SkipToken>;
 ```
 
 The definitions function is reactive: it re-runs whenever a signal it reads changes, and the
@@ -51,8 +51,7 @@ helper reconciles the resulting key set against the live subscriptions.
 The callbacks are untyped in `data` because the group is heterogeneous — narrow on `key`, or
 read the typed value from `results()` instead.
 
-Like [`injectQuery`](/queries/inject-query/#when-onsuccess-fires), `onSuccess` fires only for
-real emissions. Warm-cache seeds and data transferred from a server render do not trigger it.
+Like [`injectQuery`](/queries/inject-query/#when-onsuccess-fires), `onSuccess` fires for every value the Convex client emits, including the replay of a warm-cache value one macrotask after subscribe. Data transferred from a server render does not trigger it.
 
 ## `QueriesResult`
 

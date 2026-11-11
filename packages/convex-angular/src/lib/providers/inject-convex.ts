@@ -28,8 +28,8 @@ export interface InjectConvexOptions {
  * ```
  *
  * @returns The ConvexClient instance configured via provideConvex
- * @throws Error if called outside of an injection context, if provideConvex was not called,
- * or if provideConvex was configured outside the root injector
+ * @throws Error if called outside of an injection context without `injectRef`, or if provideConvex was not called.
+ * (A registration outside the root injector is rejected earlier, by provideConvex's own validation.)
  */
 export function injectConvex(options?: InjectConvexOptions): ConvexClient {
   return runInResolvedInjectionContext(injectConvex, options?.injectRef, () => {

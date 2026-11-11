@@ -51,9 +51,11 @@ export class TodoListComponent {
     onSuccess: () => this.title.set(''),
   });
 
-  async add(event: Event): Promise<void> {
+  add(event: Event): void {
     event.preventDefault();
     // No manual refetch: the live query subscription pushes the new todo.
-    await this.createTodo.mutate({ title: this.title() });
+    // A failure is shown through `createTodo.error()`; the promise still
+    // rejects, so catch it to avoid an unhandled rejection.
+    void this.createTodo.mutate({ title: this.title() }).catch(() => undefined);
   }
 }

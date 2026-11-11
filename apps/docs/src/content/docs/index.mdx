@@ -28,8 +28,8 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     error, not a runtime surprise.
   </Card>
   <Card title="Reactive arguments" icon="random">
-    Any Signal read inside a query's argument function is tracked. Change it and the query resubscribes automatically —
-    or return `skipToken` to not subscribe at all.
+    Any Signal read inside a query's argument function is tracked. Change it and the function re-runs; the query
+    resubscribes only when the arguments differ — or return `skipToken` to not subscribe at all.
   </Card>
   <Card title="Cleans up after itself" icon="setting">
     Every helper ties its subscriptions to the owning Angular scope through `DestroyRef`, and guards stale asynchronous

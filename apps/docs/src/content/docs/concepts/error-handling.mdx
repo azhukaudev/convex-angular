@@ -9,8 +9,7 @@ import { Aside, Code } from '@astrojs/starlight/components';
 
 import errorHandling from '../../../examples/concepts-error-handling.ts?raw';
 
-Every helper exposes failures as an `error: Signal<Error | undefined>` and moves `status()` to
-`'error'`, with one exception: a failed page of [`injectPaginatedQuery()` in the browser](/queries/pagination/#in-the-browser-a-failed-page-query-is-not-reported) is not reported. Imperative helpers do that **and** reject their promise, so you can handle a failure
+Query, pagination, mutation, and action helpers expose failures as an `error: Signal<Error | undefined>` and move `status()` to `'error'` (`injectQueries()` does the same per key, in `errors()` and `statuses()`), with one exception: a failed page of [`injectPaginatedQuery()` in the browser](/queries/pagination/#in-the-browser-a-failed-page-query-is-not-reported) is not reported. Imperative helpers do that **and** reject their promise, so you can handle a failure
 declaratively in the template, imperatively at the call site, or both.
 
 ## Queries

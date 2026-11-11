@@ -82,7 +82,7 @@ This is a real leak. The pattern below looks harmless and is not:
 ```typescript
 @Injectable({ providedIn: 'root' })
 export class TodoService {
-  private readonly injector = inject(EnvironmentInjector); // the ROOT injector
+  readonly injector = inject(EnvironmentInjector); // the ROOT injector
 }
 
 @Component({

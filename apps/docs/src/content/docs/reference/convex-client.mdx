@@ -57,7 +57,7 @@ destroyed. Do not call `close()` on it yourself — the rest of the application 
 ## Server-side rendering
 
 During a server render the client is constructed with `disabled: true`. Direct calls to
-`convex.query()`, `convex.mutation()`, and `convex.action()` throw `ConvexClient is disabled` ([details](/reference/errors/#convexclient-is-disabled)).
+`convex.query()`, `convex.mutation()`, and `convex.action()` return a promise that rejects with `ConvexClient is disabled` ([details](/reference/errors/#convexclient-is-disabled)).
 
 `convex.onUpdate()` registration is a no-op there, and the `convex.client` getter throws. Check
 `convex.disabled` before using the client imperatively in code that can run on the server. See

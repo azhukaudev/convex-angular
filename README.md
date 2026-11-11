@@ -78,19 +78,23 @@ import { api } from '../convex/_generated/api';
     }
 
     <button (click)="add()" [disabled]="createTodo.isLoading()">Add todo</button>
+    @if (createTodo.error(); as error) {
+      <p role="alert">{{ error.message }}</p>
+    }
   `,
 })
 export class TodoListComponent {
   readonly todos = injectQuery(api.todos.list, () => ({}));
   readonly createTodo = injectMutation(api.todos.create);
 
-  async add() {
-    await this.createTodo.mutate({ title: 'Buy groceries' });
+  add() {
+    // The failure is shown through createTodo.error(); the promise still rejects, so catch it.
+    void this.createTodo.mutate({ title: 'Buy groceries' }).catch(() => undefined);
   }
 }
 ```
 
-Query arguments are reactive: any Signal read by the argument function automatically resubscribes the query when it changes.
+Query arguments are reactive: the argument function re-runs whenever a Signal it reads changes, and the query resubscribes only when the resulting arguments differ.
 
 ## API at a glance
 
@@ -109,7 +113,7 @@ Query arguments are reactive: any Signal read by the argument function automatic
 | `injectAuth()`                  | Read Convex authentication state.                          |
 | `skipToken`                     | Skip a query without losing type safety.                   |
 
-Reactive helpers expose readonly Signals and clean up their own subscriptions. Query-like helpers expose `data()`, `error()`, `status()`, and focused state Signals. Mutations and actions expose `mutate()` or `run()` plus `data()`, `error()`, `isLoading()`, `isSuccess()`, `status()`, and `reset()`.
+Reactive helpers expose readonly Signals and clean up their own subscriptions. `injectQuery()` exposes `data()`, `error()`, `status()`, and focused state Signals; `injectPaginatedQuery()` exposes `results()` in place of `data()`, and `injectQueries()` exposes `results()`, `errors()`, and `statuses()` keyed by definition. Mutations and actions expose `mutate()` or `run()` plus `data()`, `error()`, `isLoading()`, `isSuccess()`, `status()`, and `reset()`.
 
 ## Common patterns
 
@@ -288,7 +292,7 @@ provideConvex(environment.convexUrl, {
 
 Authenticated HTML is private data. If `authToken` returns a token, serve the response with `Cache-Control: private` or `no-store`; never place it in a shared cache.
 
-Mutations and actions are user interactions and throw if invoked during server rendering. Prewarming is a server-side no-op.
+Mutations and actions are user interactions: during server rendering `mutate()` and `run()` reject with `ConvexClient is disabled`. Prewarming is a server-side no-op.
 
 ## Testing
 

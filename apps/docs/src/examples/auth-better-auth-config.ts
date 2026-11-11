@@ -13,8 +13,8 @@ declare const authClient: BetterAuthClientLike;
 export const appConfig: ApplicationConfig = {
   providers: [
     provideConvex('https://example-123.convex.cloud'),
-    // The factory is invoked lazily and only in the browser — it never runs
-    // during server-side rendering. Already includes provideConvexAuth().
+    // The factory runs once, in the browser, at bootstrap — never during
+    // server-side rendering. Already includes provideConvexAuth().
     provideBetterAuth(() => authClient),
   ],
 };

@@ -32,8 +32,7 @@ session change.
 function provideBetterAuth(clientFactory: () => BetterAuthClientLike): EnvironmentProviders;
 ```
 
-Pass a factory that returns your Better Auth client. The factory is invoked **lazily** — only when
-the session is first needed — and **only in the browser**. It never runs on the server; for
+Pass a factory that returns your Better Auth client. The factory is invoked **once, in the browser, at application bootstrap** — `provideBetterAuth()` reads the session at startup — and the client is reused afterwards. It never runs on the server; for
 authenticated SSR use `provideConvex(...)`'s `ssr.authToken` option instead.
 
 <Aside type="danger" title="provideBetterAuth() already includes provideConvexAuth()">
@@ -174,12 +173,12 @@ interface BetterAuthClientLike {
 }
 ```
 
-| Member           | Required | Used for                                                                                                                                                                                  |
-| ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getSession`     | yes      | Reading the session on startup and on every `refreshSession()`.                                                                                                                           |
-| `convex.token`   | yes      | Exchanging the session for the JWT Convex validates. Comes from the `convexClient()` plugin.                                                                                              |
-| `getSessionData` | no       | Fallback session snapshot when `getSession()` returns no data and no error. Skipped on 401/403. Validated: a value that is not a `{ session: { id }, user: { id } }` snapshot is ignored. |
-| `updateSession`  | no       | Notifying the client's own session listeners during `clearSession()`.                                                                                                                     |
+| Member           | Required | Used for                                                                                                                                                                                                                                                                             |
+| ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `getSession`     | yes      | Reading the session on startup and on every `refreshSession()`.                                                                                                                                                                                                                      |
+| `convex.token`   | yes      | Exchanging the session for the JWT Convex validates. Comes from the `convexClient()` plugin.                                                                                                                                                                                         |
+| `getSessionData` | no       | Fallback session snapshot when `getSession()` returns no data — with no error, or with an error other than 401/403 (for example a 500). Skipped on 401/403 and when `getSession()` throws. Validated: a value that is not a `{ session: { id }, user: { id } }` snapshot is ignored. |
+| `updateSession`  | no       | Notifying the client's own session listeners during `clearSession()`.                                                                                                                                                                                                                |
 
 ### `BetterAuthSessionData`
 

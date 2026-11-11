@@ -9,7 +9,7 @@ import { Aside, Code } from '@astrojs/starlight/components';
 
 import statusTemplate from '../../../examples/concepts-status-template.ts?raw';
 
-Every helper exposes a single `status()` Signal alongside its narrower boolean Signals. `status()` is
+`injectQuery()`, `injectPaginatedQuery()`, `injectMutation()`, and `injectAction()` each expose a single `status()` Signal alongside their narrower boolean Signals; `injectQueries()` exposes one status per key in `statuses()`. `status()` is
 the value to branch on in templates: it is a string union, so `@switch` over it is exhaustive and
 type-checked.
 

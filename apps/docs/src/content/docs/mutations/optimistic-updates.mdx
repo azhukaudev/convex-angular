@@ -87,6 +87,8 @@ rules. The library ships helpers for this — `insertAtTop`,
 
 <Aside type="caution">
   `ActionOptions` has no `optimisticUpdate` field. Actions are not transactions over the database, so Convex has nothing
-  to commit or roll back locally. To give an action optimistic feedback, have it call a mutation, and put the optimistic
-  update on that mutation. See [`injectAction()`](/mutations/inject-action/).
+  to commit or roll back locally, and a mutation the action calls with `ctx.runMutation` runs on the server, where no
+  optimistic update applies. To give an action optimistic feedback, call a mutation from the client with an
+  `optimisticUpdate`, have it write the change and schedule the action with `ctx.scheduler.runAfter(0, …)`, or show a
+  pending state from the action's `isLoading()`. See [`injectAction()`](/mutations/inject-action/).
 </Aside>

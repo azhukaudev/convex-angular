@@ -6,7 +6,7 @@ import { BetterAuthClientLike, BetterAuthSessionData } from './better-auth-clien
 
 /**
  * Factory producing the consumer's Better Auth client. Registered by
- * provideBetterAuth(); invoked lazily and only in the browser.
+ * provideBetterAuth(); invoked once, in the browser, when this service is constructed at bootstrap.
  *
  * @internal
  */
@@ -155,7 +155,8 @@ export class BetterAuthService {
       // The cross-domain plugin's getSessionData() cache is only written on a
       // successful (2xx) get-session response, so on an expected auth
       // rejection (401/403) it can still hold a stale, now-invalid session.
-      // Skip the fallback in that case; keep it for the no-error-no-data case.
+      // Skip the fallback in that case; keep it when there is no data and
+      // either no error or an unexpected one (for example a 5xx).
       const sessionData =
         result.error && isExpectedAuthStatus(result.error.status) ? null : (result.data ?? this.readCachedSession());
       this.applySession(sessionData);
