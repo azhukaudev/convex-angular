@@ -93,7 +93,7 @@ scaffold, `app.config.server.ts` merges a server-only config into the shared one
 ```typescript title="app.config.server.ts — does NOT work"
 const serverConfig: ApplicationConfig = {
   providers: [
-    provideServerRendering(),
+    provideServerRendering(withRoutes(serverRoutes)),
     // Both configs are merged into the SAME root injector, so this is a
     // second registration and throws at bootstrap.
     provideConvex(environment.convexUrl, { ssr: { authToken } }),
@@ -123,14 +123,19 @@ import { provideServerRendering, renderApplication } from '@angular/platform-ser
 import { App } from './app/app';
 import { createAppConfig } from './app/app.config';
 
-app.get('**', async (req, res) => {
+// `app` is your Express 5 app and `indexHtml` the built index.html, read once at startup.
+// Register this after express.static(), or it renders the app for asset requests too.
+app.get('/{*splat}', async (req, res) => {
   const token = readTokenFromCookies(req);
 
   const html = await renderApplication(
-    () =>
-      bootstrapApplication(App, {
-        providers: [provideServerRendering(), ...createAppConfig({ authToken: () => token }).providers],
-      }),
+    // Forward the context: on the server, bootstrapApplication needs the platform it carries.
+    (context) =>
+      bootstrapApplication(
+        App,
+        { providers: [provideServerRendering(), ...createAppConfig({ authToken: () => token }).providers] },
+        context,
+      ),
     { document: indexHtml, url: req.originalUrl },
   );
 
@@ -139,6 +144,10 @@ app.get('**', async (req, res) => {
   res.send(html);
 });
 ```
+
+Without the `context` argument, Angular 22 throws NG0401 ("Missing Platform") on the server. The
+route uses Express 5 syntax: Express 5, which the Angular CLI's SSR scaffold installs, rejects `'**'`
+when the route is registered.
 
 ### Approach 2 — a request-scoped store
 
@@ -152,7 +161,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 export const requestStore = new AsyncLocalStorage<{ token: string | null }>();
 
-app.use('**', (req, res, next) => {
+// Replaces the scaffold's own catch-all handler; register it after express.static().
+app.use((req, res, next) => {
   requestStore.run({ token: readTokenFromCookies(req) }, () => {
     if (requestStore.getStore()?.token) {
       res.set('Cache-Control', 'private, no-store');
@@ -168,8 +178,8 @@ app.use('**', (req, res, next) => {
 ```typescript title="app.config.ts"
 provideConvex(environment.convexUrl, {
   ssr: {
-    // Stable closure, per-request value. Never call inject() here — the
-    // factory runs outside any injection context.
+    // Stable closure, per-request value. Never call inject() here: the
+    // factory is not guaranteed to run in an injection context.
     authToken: () => requestStore.getStore()?.token ?? null,
   },
 });

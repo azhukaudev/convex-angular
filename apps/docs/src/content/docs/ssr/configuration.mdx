@@ -64,8 +64,11 @@ the memoized outcome without calling the factory again.
   goes out unauthenticated.
 - If the factory throws or rejects, the memoized failure propagates: every query fetch of that render
   fails and renders its error branch, and nothing is transferred.
-- The factory runs **outside** any Angular injection context, so `inject()` inside it will throw.
-  Capture whatever it needs (the request, a cookie parser) when you build the configuration.
+- The factory is **not guaranteed** to run in an Angular injection context. It runs synchronously
+  inside the first query fetch of the render: in context when a route resolver
+  (`convexQueryResolver()`) triggers that fetch, and outside any context when a query helper's
+  effect does. Never call `inject()` in it; capture whatever it needs (the request, a cookie parser)
+  when you build the configuration.
 
 Since a truthy token also gates `transferAuthenticatedResults`, read
 [Authenticated SSR](/ssr/authenticated-ssr/) before shipping this — authenticated HTML is private

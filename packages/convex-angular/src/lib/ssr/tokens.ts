@@ -23,6 +23,8 @@ export interface ConvexSsrOptions {
    * Optional factory producing a JWT for authenticated server-side query
    * fetches, for example read from the request cookies. Resolved once per
    * server render. Returning null or undefined fetches unauthenticated.
+   * It is not guaranteed to run in an Angular injection context, so never
+   * call `inject()` in it; capture what it needs when building the config.
    * Whenever a token is applied, the rendered markup contains that user's
    * data, so the response must be served `Cache-Control: private` (or
    * `no-store`) whether or not results are transferred — see
